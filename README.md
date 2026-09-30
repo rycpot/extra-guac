@@ -12,6 +12,8 @@ A ✓ / ✕ badge flashes briefly to show the result.
 
 ## Install
 
+Download the zip from [Releases](../../releases) and unzip it (or clone this repo), then:
+
 1. Open `chrome://extensions` and enable **Developer mode**.
 2. Click **Load unpacked** and pick this folder.
 3. Pin the icon to the toolbar.
@@ -24,5 +26,5 @@ A ✓ / ✕ badge flashes briefly to show the result.
 
 ## Releasing
 
-Bump `version` in `manifest.json`, then push a matching tag (e.g. `git tag v1.0.1 && git push origin v1.0.1`).
-The Release workflow zips the extension and attaches it to a GitHub Release.
+Bump `version` in `manifest.json` and push. The Release workflow zips the extension and
+publishes it as a `v<version>` GitHub Release (skipped if that release already exists).
