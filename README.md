@@ -21,3 +21,8 @@ A ✓ / ✕ badge flashes briefly to show the result.
 - Only works on `http(s)` pages (not `chrome://` pages or the Web Store).
 - Subdomain storage is cleared for the current host, the root domain, `www.`, and every
   subdomain that has cookies. Chrome offers no way to list other subdomains that only hold storage.
+
+## Releasing
+
+Bump `version` in `manifest.json`, then push a matching tag (e.g. `git tag v1.0.1 && git push origin v1.0.1`).
+The Release workflow zips the extension and attaches it to a GitHub Release.
