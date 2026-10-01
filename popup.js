@@ -2,12 +2,19 @@ const $ = (id) => document.getElementById(id);
 let tab = null;
 let settings = null;
 
+// The same page runs as the toolbar popup or in the side panel. The popup closes after
+// actions that hand over to the page; the panel stays open and follows the active tab.
+const inPopup = chrome.extension.getViews({ type: "popup" }).includes(window);
+const closePopup = () => inPopup && window.close();
+
 TT.applyTheme();
 init();
 
 async function init() {
   [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   settings = await TT.getSettings();
+  document.body.classList.toggle("side-panel", !inPopup);
+  if (!inPopup) followActiveTab();
   const isWeb = /^https?:/i.test(tab?.url || "");
 
   initTopBar();
@@ -25,6 +32,12 @@ async function init() {
   initFont(isWeb);
   initRedirect();
   initUploads();
+}
+
+// Side panel: start over for the tab you switch to, or when this tab goes to another page.
+function followActiveTab() {
+  chrome.tabs.onActivated.addListener(({ windowId }) => windowId === tab?.windowId && location.reload());
+  chrome.tabs.onUpdated.addListener((id, info) => id === tab?.id && info.url && location.reload());
 }
 
 // Sends a message to the background worker; rejects with its error message.
@@ -65,7 +78,7 @@ function onSession(key, fn) {
 // ---- Top bar ----------------------------------------------------------------
 
 function initTopBar() {
-  $("settingsBtn").onclick = () => send("openSettings", { section: "general" }).then(() => window.close(), fail);
+  $("settingsBtn").onclick = () => send("openSettings", { section: "general" }).then(() => closePopup(), fail);
   $("stopAllBtn").onclick = () => send("stopAll").then(() => toast("Stopped everything"), fail);
 }
 
@@ -98,7 +111,7 @@ function initScreenshot() {
       if (mode === "full") toast("Capturing the full page…");
       try {
         const res = await send("shot", { mode });
-        if (mode === "area") return window.close(); // the page shows the selection overlay
+        if (mode === "area") return closePopup(); // the page shows the selection overlay
         const n = res.files.length;
         toast(n > 1 ? `Saved ${n} parts to Downloads` : `Saved ${res.files[0].split("/").pop()}`);
       } catch (err) {
@@ -126,13 +139,13 @@ async function initBlur() {
   chrome.storage.onChanged.addListener((c, area) => {
     if (area === "local" && c.pii) setSwitch(toggle, !!c.pii.newValue?.enabled);
   });
-  $("blurSettings").onclick = () => send("openSettings", { section: "blur" }).then(() => window.close(), fail);
+  $("blurSettings").onclick = () => send("openSettings", { section: "blur" }).then(() => closePopup(), fail);
 }
 
 // ---- Hard refresh / nuke ----------------------------------------------------
 
 function initRefresh() {
-  $("hardRefresh").onclick = () => send("hardRefresh").then(() => window.close(), fail);
+  $("hardRefresh").onclick = () => send("hardRefresh").then(() => closePopup(), fail);
 
   // Nuke asks for a second click within 3 seconds.
   const nuke = $("nukeBtn");
@@ -149,7 +162,7 @@ function initRefresh() {
     showProgress({ step: 0, total: 4, label: "starting" });
     try {
       await send("nuke");
-      setTimeout(() => window.close(), 900);
+      setTimeout(() => closePopup(), 900);
     } catch (err) {
       showProgress(null);
       fail(err);
@@ -560,7 +573,7 @@ async function initColor(isWeb) {
   render((await chrome.storage.local.get("lastColor")).lastColor);
   chrome.storage.onChanged.addListener((c, area) => area === "local" && c.lastColor && render(c.lastColor.newValue));
   $("pickColor").disabled = !isWeb;
-  $("pickColor").onclick = () => send("pickColor").then(() => window.close(), fail);
+  $("pickColor").onclick = () => send("pickColor").then(() => closePopup(), fail);
 }
 
 async function initElement(isWeb) {
@@ -575,7 +588,7 @@ async function initElement(isWeb) {
   render((await chrome.storage.local.get("lastSelector")).lastSelector);
   chrome.storage.onChanged.addListener((c, area) => area === "local" && c.lastSelector && render(c.lastSelector.newValue));
   $("pickElement").disabled = !isWeb;
-  $("pickElement").onclick = () => send("pickElement").then(() => window.close(), fail);
+  $("pickElement").onclick = () => send("pickElement").then(() => closePopup(), fail);
 }
 
 async function initFont(isWeb) {
@@ -586,7 +599,7 @@ async function initFont(isWeb) {
   render((await chrome.storage.local.get("lastFont")).lastFont);
   chrome.storage.onChanged.addListener((c, area) => area === "local" && c.lastFont && render(c.lastFont.newValue));
   $("pickFont").disabled = !isWeb;
-  $("pickFont").onclick = () => send("pickFont").then(() => window.close(), fail);
+  $("pickFont").onclick = () => send("pickFont").then(() => closePopup(), fail);
 }
 
 // ---- Page tools: auto redirect ------------------------------------------------
@@ -601,8 +614,8 @@ function initRedirect() {
   };
   render(settings);
   toggle.onclick = async () => render(await TT.updateSettings({ redirect: { enabled: toggle.getAttribute("aria-checked") !== "true" } }));
-  $("redirectSettings").onclick = () => send("openSettings", { section: "redirect" }).then(() => window.close(), fail);
-  $("redirectNow").onclick = () => send("redirectNow").then(() => window.close(), fail);
+  $("redirectSettings").onclick = () => send("openSettings", { section: "redirect" }).then(() => closePopup(), fail);
+  $("redirectNow").onclick = () => send("redirectNow").then(() => closePopup(), fail);
   chrome.storage.onChanged.addListener((c, area) => area === "local" && c.tt && render(TT.merge(TT.DEFAULTS, c.tt.newValue)));
 }
 
@@ -628,7 +641,7 @@ async function initUploads() {
     const id = b.dataset.host;
     render(await TT.updateSettings({ upload: { [id]: b.getAttribute("aria-pressed") !== "true" } }));
   }));
-  $("uploadSettings").onclick = () => send("openSettings", { section: "upload" }).then(() => window.close(), fail);
+  $("uploadSettings").onclick = () => send("openSettings", { section: "upload" }).then(() => closePopup(), fail);
   $("uploadHistoryBtn").onclick = () => openSheet("upload");
   chrome.storage.onChanged.addListener(async (c, area) => {
     if (area === "local" && (c.tt || c.uploadHistory)) render(await TT.getSettings());

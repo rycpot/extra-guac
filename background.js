@@ -250,9 +250,18 @@ async function syncBlurScript(s, injectOpenTabs = false) {
   }
 }
 
+// ---- Toolbar icon: side panel or popup ----------------------------------------
+// The tools open in the side panel, which (unlike the popup) stays open while you
+// use other tabs or the settings window. Set to false to go back to the popup.
+const USE_SIDE_PANEL = true;
+
+chrome.action.setPopup({ popup: USE_SIDE_PANEL ? "" : "popup.html" });
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: USE_SIDE_PANEL }).catch(() => {});
+
 // ---- Settings window --------------------------------------------------------
-// A tall window docked to the right edge of the browser, so the page stays visible
-// (blur rules apply live). `section` picks the left-nav entry, e.g. "blur".
+// A tall window docked to one edge of the browser, so the page stays visible (blur
+// rules apply live): the left edge with the side panel (which sits on the right),
+// otherwise the right. `section` picks the left-nav entry, e.g. "blur".
 async function openSettings(section = "general") {
   const url = chrome.runtime.getURL(`settings.html#${section}`);
   const { settingsWindowId } = await chrome.storage.session.get("settingsWindowId");
@@ -271,7 +280,7 @@ async function openSettings(section = "general") {
     width,
     height: cur.height ?? 900,
     top: cur.top ?? 0,
-    left: Math.max(0, (cur.left ?? 0) + (cur.width ?? width) - width),
+    left: USE_SIDE_PANEL ? cur.left ?? 0 : Math.max(0, (cur.left ?? 0) + (cur.width ?? width) - width),
   });
   await chrome.storage.session.set({ settingsWindowId: win.id });
 }
