@@ -1,3 +1,5 @@
+@font-face { font-family: "Riforma"; src: url("fonts/RiformaLLTT-Regular.ttf") format("truetype"); font-weight: 400; font-display: block; }
+
 /* Settings window — same look as the popup (Hop-style): dark grain panel, monospaced type. */
 :root {
   --bg: #0b0b0b; --fg: rgba(255,255,255,.92); --muted: rgba(255,255,255,.5); --line: rgba(255,255,255,.08);
@@ -20,7 +22,7 @@
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body { margin: 0; display: flex; background: var(--bg); color: var(--fg);
-  font: 500 12.5px/1.5 ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace; -webkit-font-smoothing: antialiased; }
+  font: 400 12.5px/1.5 "Riforma", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 body::after { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: var(--grain);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
 
