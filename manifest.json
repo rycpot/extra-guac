@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tab Toolkit: Hard Refresh, Site Data Nuke, PII Blur & More",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Handy page tools: click for a hard refresh; right-click to nuke site data or blur sensitive info while screen sharing.",
   "permissions": [
     "browsingData",

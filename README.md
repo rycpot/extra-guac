@@ -26,7 +26,8 @@ so nothing leaks during screen sharing.
 (checksum), MAC addresses, API keys/tokens (AWS, GitHub, Stripe, Slack, OpenAI/Anthropic, Google,
 JWTs), passwords in URLs, IPv4, IPv6, US SSNs (dashed).
 
-**Custom rules**, one per line (`#` comments a line out):
+**Custom rules** are shown as chips: type a rule and press Enter (or paste several lines at once),
+click a chip to edit it, ● to switch it off, × to remove it:
 
 | Rule | Effect |
 |---|---|
@@ -38,7 +39,8 @@ JWTs), passwords in URLs, IPv4, IPv6, US SSNs (dashed).
 | `/order #(?<blur>\d+)/i` | JavaScript regex: hides the whole match, or only the `blur` group |
 
 Labels and values split across elements (`<b>Phone number:</b> <span>99…</span>`) still match.
-The settings window has a test box that previews your rules, and a list of sites to never blur on.
+The settings window has a test box that previews your rules (including the one you're typing),
+and a list of sites to never blur on.
 
 Limits: text inside images, canvas and shadow DOM isn't covered; in mask mode, copying text
 copies the masks.

@@ -1,7 +1,9 @@
-// Hides sensitive text on the page. "blur" and "bars" paint over text with the
-// CSS Custom Highlight API (the DOM is untouched); "mask" swaps characters in the
-// page's own text nodes (so the page's font/size/colour apply) and restores them
-// on hover or when turned off. Form fields get an attribute styled by CSS.
+// Hides sensitive text on the page:
+// - "blur" wraps each match in a <tt-pii> element blurred with CSS filter (hover is pure CSS);
+// - "bars" paints over matches with the CSS Custom Highlight API (DOM untouched);
+// - "mask" swaps characters in the page's own text nodes (so the page's font/size/colour
+//   apply) and restores them on hover or when turned off.
+// Form fields get an attribute styled by CSS. Everything is undone when turned off.
 (() => {
   if (window.__piiBlur) return;
   window.__piiBlur = true;
@@ -10,6 +12,7 @@
   const root = document.documentElement;
   const PENDING = "data-pii-pending"; // hides the page until the first scan (see pii.css)
   const FIELD = "data-pii-field";
+  const WRAP = "TT-PII";
   const BLOCKS = new Set([
     "ADDRESS", "ARTICLE", "ASIDE", "BLOCKQUOTE", "BODY", "BUTTON", "CAPTION", "DD", "DETAILS", "DIALOG",
     "DIV", "DL", "DT", "FIELDSET", "FIGCAPTION", "FIGURE", "FOOTER", "FORM", "H1", "H2", "H3", "H4",
@@ -62,11 +65,15 @@
     const color = /^#[0-9a-f]{6}$/i.test(s.barColor) ? s.barColor : "#000000";
     const px = Math.min(Math.max(+s.blurPx || 8, 1), 30);
     if (s.style === "mask") return `[${FIELD}]:not(:hover){-webkit-text-security:disc!important}`;
-    return s.style === "bars"
-      ? `::highlight(pii){color:${color};background-color:${color}}
-         [${FIELD}]:not(:hover){color:transparent!important;-webkit-text-fill-color:transparent!important;background:${color}!important}`
-      : `::highlight(pii){color:transparent;text-shadow:0 0 ${px}px rgba(128,128,128,.95)}
-         [${FIELD}]:not(:hover){filter:blur(${Math.max(px / 2, 1.5)}px)!important}`;
+    if (s.style === "bars") {
+      return `::highlight(pii){color:${color};background-color:${color};text-shadow:none;text-decoration-color:transparent}
+         [${FIELD}]:not(:hover){color:transparent!important;-webkit-text-fill-color:transparent!important;background:${color}!important}`;
+    }
+    const blur = `filter:blur(${Math.max(px / 2, 1.5)}px)!important;transition:filter .15s ease!important`;
+    return `tt-pii{display:inline-block!important;${blur}}
+       tt-pii:hover{filter:none!important}
+       [${FIELD}]{${blur}}
+       [${FIELD}]:hover{filter:none!important}`;
   }
 
   function start() {
@@ -92,6 +99,7 @@
     blockMatches.clear();
     revealed = null;
     unmaskAll();
+    unwrapAll();
     CSS.highlights.delete("pii");
     styleEl.remove();
     document.querySelectorAll(`[${FIELD}]`).forEach((el) => el.removeAttribute(FIELD));
@@ -101,7 +109,7 @@
 
   function isBlock(el) {
     if (BLOCKS.has(el.tagName)) return true;
-    if (!el.tagName.includes("-")) return false;
+    if (!el.tagName.includes("-") || el.tagName === WRAP) return false;
     let b = customBlock.get(el);
     if (b === undefined) customBlock.set(el, (b = !getComputedStyle(el).display.startsWith("inline")));
     return b;
@@ -122,6 +130,7 @@
     blockMatches.clear();
     revealed = null;
     unmaskAll();
+    if (settings.style !== "blur") unwrapAll();
     if (document.body) scan(document.body);
   }
 
@@ -179,10 +188,45 @@
         const a = Math.max(s, starts[k]), b = Math.min(e, starts[k] + n.length);
         if (a < b) segs.push([n, a - starts[k], b - starts[k]]);
       });
-      return { segs, range: settings.style === "mask" ? null : rangeOf(segs) };
+      return { segs, range: settings.style === "bars" ? rangeOf(segs) : null };
     });
     if (settings.style === "mask") maskNodes(nodes, matches);
+    if (settings.style === "blur") wrapMatches(nodes, matches);
     return matches;
+  }
+
+  // ---- Blur mode ----------------------------------------------------------
+
+  // Wraps each match in <tt-pii>, leaving already-correct wrappers untouched so a
+  // rescan of unchanged text changes nothing on the page.
+  function wrapMatches(nodes, matches) {
+    const whole = new Set();
+    for (const m of matches) for (const [n, a, b] of m.segs) if (a === 0 && b === n.length) whole.add(n);
+    for (const n of nodes) {
+      if (n.parentElement?.tagName === WRAP && !whole.has(n)) unwrap(n.parentElement);
+    }
+    // Last match first: splitting a text node keeps the offsets before the split valid.
+    for (let i = matches.length - 1; i >= 0; i--) {
+      matches[i].segs = matches[i].segs.map(([n, a, b]) => {
+        if (n.parentElement?.tagName === WRAP && a === 0 && b === n.length) return [n, a, b];
+        const r = new Range();
+        r.setStart(n, a);
+        r.setEnd(n, b);
+        const w = document.createElement("tt-pii");
+        r.surroundContents(w);
+        observer?.takeRecords(); // our own edits must not trigger a rescan
+        return [w.firstChild, 0, w.firstChild.length];
+      });
+    }
+  }
+
+  function unwrap(w) {
+    w.replaceWith(...w.childNodes);
+    observer?.takeRecords();
+  }
+
+  function unwrapAll() {
+    document.querySelectorAll("tt-pii").forEach(unwrap);
   }
 
   function rangeOf(segs) {
@@ -280,11 +324,22 @@
 
   function onMutations(records) {
     if (document.readyState === "loading" && settings?.hideUntilScanned) return; // full scan at DOMContentLoaded
+    // Re-scan only what changed: an added block is scanned on its own; the
+    // surrounding block only when inline text inside it was added or removed.
     const roots = new Set();
     for (const r of records) {
-      if (r.type === "childList" && [...r.addedNodes, ...r.removedNodes].every(isInert)) continue;
-      const n = r.type === "characterData" ? r.target.parentElement : r.target;
-      if (n && n !== styleEl) roots.add(blockOf(n));
+      if (r.type === "characterData") { roots.add(blockOf(r.target)); continue; }
+      if (r.target === styleEl) continue;
+      let inlineChanged = false;
+      for (const n of r.addedNodes) {
+        if (isInert(n)) continue;
+        if (n.nodeType === 1 && isBlock(n)) roots.add(n);
+        else inlineChanged = true;
+      }
+      for (const n of r.removedNodes) {
+        if (!isInert(n) && !(n.nodeType === 1 && isBlock(n))) inlineChanged = true;
+      }
+      if (inlineChanged) roots.add(blockOf(r.target));
     }
     for (const b of roots) {
       if (!b.isConnected) continue;
@@ -333,6 +388,7 @@
   // ---- Hover to reveal ----------------------------------------------------
 
   function onMove(e) {
+    if (settings?.style === "blur") return; // CSS :hover handles blur
     pointer = { x: e.clientX, y: e.clientY, target: e.target };
     if (!moveQueued) { moveQueued = true; requestAnimationFrame(updateReveal); }
   }

@@ -42,9 +42,13 @@
   </section>
 
   <section>
-    <h2>Custom rules <span class="hint">one per line · <code>#</code> comments a line out</span></h2>
-    <textarea id="rules" class="code" rows="12" wrap="off" spellcheck="false"
-      placeholder="Phone number: {number}&#10;John Appleseed&#10;Address: {line}&#10;/order #(?<blur>\d+)/i"></textarea>
+    <h2>Custom rules <span class="hint">click a rule to edit · ● turns it on/off</span></h2>
+    <div class="chips" id="ruleChips"></div>
+    <div class="adder">
+      <input id="ruleInput" class="code" data-chips="rules" spellcheck="false" autocomplete="off"
+        placeholder="Add a rule, e.g. Phone number: {number}">
+      <button type="button" data-add="rules">Add</button>
+    </div>
     <ul class="errors" id="ruleErrors"></ul>
     <details>
       <summary>Rule syntax</summary>
@@ -69,8 +73,12 @@ Card 4111 1111 1111 1111</textarea>
   </section>
 
   <section>
-    <h2>Never blur on <span class="hint">one site per line, includes subdomains</span></h2>
-    <textarea id="excludedSites" class="code" rows="4" wrap="off" spellcheck="false" placeholder="mybank.com"></textarea>
+    <h2>Never blur on <span class="hint">includes subdomains</span></h2>
+    <div class="chips" id="siteChips"></div>
+    <div class="adder">
+      <input id="siteInput" data-chips="excludedSites" spellcheck="false" autocomplete="off" placeholder="Add a site, e.g. mybank.com">
+      <button type="button" data-add="excludedSites">Add</button>
+    </div>
     <ul class="errors" id="siteErrors"></ul>
   </section>
 
