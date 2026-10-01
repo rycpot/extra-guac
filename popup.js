@@ -180,7 +180,7 @@ function initRefresh() {
 async function initAutoRefresh(isWeb) {
   const box = $("autoRefresh");
   const toggle = $("arToggle");
-  const fields = [$("arFixed"), $("arMin"), $("arMax"), $("arKeyword")];
+  const fields = [$("arFixed"), $("arMin"), $("arMax")];
   const modeBtns = box.querySelectorAll("[data-mode]");
   const prefs = settings.refresh;
   let mode = prefs.mode;
@@ -190,7 +190,7 @@ async function initAutoRefresh(isWeb) {
   $("arFixed").value = prefs.fixed;
   $("arMin").value = prefs.min;
   $("arMax").value = prefs.max;
-  $("arKeyword").value = prefs.keyword;
+  initKeywords(() => run);
 
   const setMode = (m) => {
     mode = m;
@@ -238,11 +238,103 @@ async function initAutoRefresh(isWeb) {
       await chrome.storage.session.remove(`refreshFound:${tab.id}`);
       found = null;
       await send("refreshStart", {
-        config: { mode, fixed: +$("arFixed").value, min: +$("arMin").value, max: +$("arMax").value, keyword: $("arKeyword").value },
+        config: { mode, fixed: +$("arFixed").value, min: +$("arMin").value, max: +$("arMax").value, keywords: enabledKeywords() },
       });
     } catch (err) {
       fail(err);
     }
+  };
+}
+
+// ---- Auto-refresh keywords ---------------------------------------------------
+// Pills in one sideways-scrolling line, saved as they change (settings.refresh.keywords,
+// { text, enabled }). Click toggles a pill, a second click within DOUBLE_CLICK_MS
+// deletes it instead; + opens a sheet with one keyword per line. Changes reach a
+// refresh already running on this tab straight away.
+
+const DOUBLE_CLICK_MS = 300;
+let keywords = [];
+
+const enabledKeywords = () => keywords.filter((k) => k.enabled).map((k) => k.text);
+
+function initKeywords(getRun) {
+  const prefs = settings.refresh;
+  const legacy = prefs.keyword?.trim() ? [{ text: prefs.keyword.trim(), enabled: true }] : [];
+  keywords = (prefs.keywords?.length ? prefs.keywords : legacy).map((k) => ({ text: k.text, enabled: k.enabled !== false }));
+
+  const save = () => {
+    TT.updateSettings({ refresh: { keywords, keyword: "" } });
+    if (getRun()) send("refreshKeywords", { keywords: enabledKeywords() }).catch(fail);
+  };
+
+  const chips = $("arChips");
+  function render() {
+    const scroll = chips.scrollLeft; // rebuilding would jump a long list back to the start
+    chips.replaceChildren();
+    if (!keywords.length) {
+      const empty = document.createElement("span");
+      empty.className = "chips-empty";
+      empty.textContent = `no keywords · + to add up to ${TT.MAX_KEYWORDS}`;
+      chips.append(empty);
+    }
+    for (const k of keywords) {
+      const chip = document.createElement("span");
+      chip.className = "chip" + (k.enabled ? "" : " off");
+      chip.textContent = k.text;
+      chip.title = `${k.enabled ? "Click to turn off" : "Off · click to turn on"} · double-click to delete`;
+      let timer = 0;
+      chip.onclick = () => {
+        if (timer) {
+          clearTimeout(timer);
+          keywords = keywords.filter((x) => x !== k);
+        } else {
+          timer = setTimeout(() => {
+            k.enabled = !k.enabled;
+            render();
+            save();
+          }, DOUBLE_CLICK_MS);
+          return;
+        }
+        render();
+        save();
+      };
+      chips.append(chip);
+    }
+    chips.scrollLeft = scroll;
+    $("arKwCount").textContent = `${keywords.length}/${TT.MAX_KEYWORDS}`;
+  }
+  render();
+
+  // Editor sheet: one keyword per line. Keywords that stay keep their on/off state.
+  const sheet = $("kwSheet"), text = $("kwText"), counter = $("kwCounter");
+  const lines = () => {
+    const seen = new Set();
+    return text.value.split("\n").map((l) => l.trim())
+      .filter((l) => l && !seen.has(l.toLowerCase()) && seen.add(l.toLowerCase()));
+  };
+  const count = () => {
+    const n = lines().length;
+    counter.textContent = `${Math.min(n, TT.MAX_KEYWORDS)}/${TT.MAX_KEYWORDS}`;
+    counter.classList.toggle("over", n > TT.MAX_KEYWORDS);
+  };
+  const close = () => (sheet.hidden = true);
+  $("arKwAdd").onclick = () => {
+    text.value = keywords.map((k) => k.text).join("\n");
+    count();
+    sheet.hidden = false;
+    if (text.value) text.value += "\n"; // ready for the next one
+    text.focus();
+    text.setSelectionRange(text.value.length, text.value.length);
+  };
+  text.oninput = count;
+  $("kwClose").onclick = $("kwCancel").onclick = close;
+  sheet.addEventListener("keydown", (e) => e.key === "Escape" && (e.preventDefault(), close()));
+  $("kwSave").onclick = () => {
+    const was = new Map(keywords.map((k) => [k.text.toLowerCase(), k.enabled]));
+    keywords = lines().slice(0, TT.MAX_KEYWORDS).map((t) => ({ text: t, enabled: was.get(t.toLowerCase()) ?? true }));
+    close();
+    render();
+    save();
   };
 }
 

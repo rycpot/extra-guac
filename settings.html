@@ -147,10 +147,9 @@ Card 4111 1111 1111 1111</textarea>
   <div class="pane" id="refresh">
     <header class="pane-head"><h1>auto-refresh</h1></header>
     <section>
-      <h2>When the keyword is found</h2>
+      <h2>When a keyword is found</h2>
       <label class="row"><input type="checkbox" data-path="refresh.continueAfterMatch"> Keep refreshing <span class="hint">(off: stop refreshing that tab)</span></label>
       <label class="row"><input type="checkbox" data-path="refresh.notify"> Show a notification</label>
-      <label class="row"><input type="checkbox" data-path="refresh.focusTab"> Bring the tab to the front</label>
     </section>
     <section>
       <h2>Alert sound</h2>
@@ -164,7 +163,8 @@ Card 4111 1111 1111 1111</textarea>
     <section>
       <h2>How it works</h2>
       <p class="hint">Turn it on per tab in the popup: a fixed interval, or a random one between two values (seconds).
-        The keyword is matched against the page's visible text, ignoring case. The toolbar badge counts down on that tab.</p>
+        Keywords (up to 20, any one counts) are matched against the page's visible text, ignoring case; they're only
+        seen while the tab is in the foreground. The toolbar badge counts down on that tab.</p>
     </section>
   </div>
 

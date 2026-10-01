@@ -112,6 +112,29 @@ input:disabled, .seg button:disabled { opacity: .55; }
 .ar-config { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; color: var(--text2); }
 #autoRefresh[data-mode="fixed"] .ar-random, #autoRefresh[data-mode="random"] .ar-fixed { display: none; }
 #autoRefresh.running .status { color: var(--green); }
+
+/* Keywords: pills in one sideways-scrolling line. Click a pill to turn it off/on,
+   double-click to delete it; + opens the editor sheet. */
+.kw-row { display: flex; align-items: center; gap: 6px; min-height: 31px; }
+.chips { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 3px 0;
+  overflow-x: auto; overflow-y: hidden; white-space: nowrap; scrollbar-width: thin; scrollbar-color: var(--stroke) transparent; }
+.chips::-webkit-scrollbar { height: 3px; }
+.chips::-webkit-scrollbar-thumb { background: var(--stroke); border-radius: 3px; }
+.chip { flex: none; padding: 3px 10px; border-radius: 20px; font-size: 12px; cursor: pointer; user-select: none;
+  border: 1px solid color-mix(in srgb, var(--green) 55%, transparent); background: color-mix(in srgb, var(--green) 9%, transparent); color: var(--text); }
+.chip:hover { border-color: var(--green); }
+.chip.off { border-color: color-mix(in srgb, var(--red) 60%, transparent); background: color-mix(in srgb, var(--red) 8%, transparent);
+  color: var(--red); opacity: .75; text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--red) 55%, transparent); }
+.chip.off:hover { opacity: 1; }
+.chips-empty { color: var(--text3); font-size: 11px; }
+.kw-count { color: var(--text3); font-size: 11px; font-variant-numeric: tabular-nums; }
+.kw-count.over { color: var(--red); }
+.kw-note { margin: 3px 0 0; font-size: 10.5px; color: var(--yellow); }
+.kw-hint { margin: 10px 0 0; font-size: 11px; color: var(--text3); }
+.kw-text { flex: 1; margin-top: 8px; resize: none; line-height: 1.5; }
+.kw-foot { display: flex; align-items: center; justify-content: space-between; padding-top: 10px; }
+.text-btn.primary { background: var(--chip); }
+.text-btn.primary:hover { background: var(--stroke); }
 #autoRefresh.found .status { color: var(--yellow); }
 
 .short-go { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
