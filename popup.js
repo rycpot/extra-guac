@@ -268,6 +268,11 @@ function initKeywords(getRun) {
   };
 
   const chips = $("arChips");
+  const fade = () => {
+    chips.classList.toggle("fade-l", chips.scrollLeft > 1);
+    chips.classList.toggle("fade-r", chips.scrollLeft + chips.clientWidth < chips.scrollWidth - 1);
+  };
+  chips.addEventListener("scroll", fade, { passive: true });
   function render() {
     const scroll = chips.scrollLeft; // rebuilding would jump a long list back to the start
     chips.replaceChildren();
@@ -301,6 +306,7 @@ function initKeywords(getRun) {
       chips.append(chip);
     }
     chips.scrollLeft = scroll;
+    fade();
     $("arKwCount").textContent = `${keywords.length}/${TT.MAX_KEYWORDS}`;
   }
   render();

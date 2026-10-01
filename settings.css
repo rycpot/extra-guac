@@ -47,11 +47,11 @@ a { color: var(--accent); }
 .toggle input:checked { background: var(--green); }
 .toggle input:checked::after { transform: translateX(16px); }
 
-input.text { flex: 1; min-width: 0; padding: 7px 9px; border: 1px solid transparent; border-radius: 6px; background: var(--field);
+input.text { flex: 1; min-width: 0; padding: 7px 9px; border: 1px solid transparent; border-radius: 9px; background: var(--field);
   color: var(--fg); font: inherit; }
 input.text:focus { outline: none; border-color: var(--muted); }
 .folder .prefix { color: var(--muted); }
-.btn { padding: 7px 12px; border: 0; border-radius: 6px; background: var(--chip); color: var(--fg); font: inherit; cursor: pointer; }
+.btn { padding: 7px 12px; border: 0; border-radius: 9px; background: var(--chip); color: var(--fg); font: inherit; cursor: pointer; }
 .btn:hover { background: var(--hover); }
 .btn.ghost { background: none; color: var(--muted); }
 .service h2 .count { margin-left: 6px; }
@@ -69,7 +69,7 @@ output { width: 40px; text-align: right; font-variant-numeric: tabular-nums; col
 .hint, .saved { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
 .grid small { color: var(--muted); display: block; margin-left: 22px; }
-textarea { width: 100%; resize: vertical; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--field); color: var(--fg); font: 12.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; }
+textarea { width: 100%; resize: vertical; padding: 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--field); color: var(--fg); font: 12.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; }
 textarea.code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; overflow-x: auto; }
 textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .errors { list-style: none; margin: 6px 0 0; padding: 0; color: var(--error); font-size: 12px; }
@@ -79,7 +79,7 @@ table { border-collapse: collapse; margin-top: 6px; font-size: 12px; }
 td { padding: 4px 8px 4px 0; vertical-align: top; }
 td:first-child { white-space: nowrap; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
-.preview { margin-top: 8px; padding: 8px; border: 1px dashed var(--line); border-radius: 6px; white-space: pre-wrap; min-height: 40px; }
+.preview { margin-top: 8px; padding: 8px; border: 1px dashed var(--line); border-radius: 9px; white-space: pre-wrap; min-height: 40px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .chips:empty { display: none; }
 .chip { display: inline-flex; align-items: center; max-width: 100%; border: 1px solid var(--line); border-radius: 999px; background: var(--field); font: 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; }
@@ -92,10 +92,10 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .chip.off .chip-text { text-decoration: line-through; }
 .chip.bad { border-color: var(--error); color: var(--error); }
 .adder { display: flex; gap: 6px; }
-.adder input { flex: 1; min-width: 0; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--field); color: var(--fg); font: 12.5px ui-monospace, "SF Mono", Menlo, monospace; }
+.adder input { flex: 1; min-width: 0; padding: 7px 9px; border: 1px solid var(--line); border-radius: 9px; background: var(--field); color: var(--fg); font: 12.5px ui-monospace, "SF Mono", Menlo, monospace; }
 .adder input.code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .adder input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-.adder button { padding: 0 14px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; font: 600 12.5px ui-monospace, "SF Mono", Menlo, monospace; cursor: pointer; }
+.adder button { padding: 0 14px; border: 0; border-radius: 9px; background: var(--accent); color: #fff; font: 600 12.5px ui-monospace, "SF Mono", Menlo, monospace; cursor: pointer; }
 
 /* Redirect rules */
 .rules-grid { display: grid; grid-template-columns: 26px 1fr 1.4fr 14px 1.2fr 36px 26px; gap: 6px; align-items: center; margin-bottom: 6px; }
