@@ -44,13 +44,19 @@
     let choices = null; // the XPath card's options once an element is clicked
     const trail = []; // elements visited with ↑, for ↓
 
+    // In XPath mode a label (or anything inside one) stands for the control it labels,
+    // like the reference XPath extension, which sees the click the label forwards to it.
+    // The label stays highlighted, since the control is often a hidden radio or checkbox.
+    const target = (el) => (format === "xpath" && el.closest("label")?.control) || el;
+    const anchor = (el) => (target(el) === el ? el : el.closest("label"));
+
     function show(el) {
       current = el;
       if (!el) { box.hidden = tag.hidden = true; return; }
-      const r = el.getBoundingClientRect();
+      const r = anchor(el).getBoundingClientRect();
       Object.assign(box.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
       box.hidden = tag.hidden = false;
-      tag.textContent = selectorFor(el);
+      tag.textContent = selectorFor(target(el));
       tag.style.left = `${Math.max(4, Math.min(r.left, innerWidth - 300))}px`;
       tag.style.top = `${r.top > 30 ? r.top - 26 : Math.min(r.bottom + 4, innerHeight - 26)}px`;
     }
@@ -89,7 +95,7 @@
 
     function pick() {
       if (!current) return;
-      if (format === "xpath") return choose(current);
+      if (format === "xpath") return choose(target(current), anchor(current));
       copy(selectorFor(current));
     }
 
@@ -101,7 +107,7 @@
     }
 
     // Freeze the highlight and offer both XPaths (one row when they're the same).
-    function choose(el) {
+    function choose(el, near) {
       const path = xPath(el);
       const short = shortXPath(el) || path;
       choices = short === path ? [["XPath", path]] : [["Shortest", short], ["Path", path]];
@@ -121,7 +127,7 @@
       }
       card.querySelector(".x").onclick = cleanup;
       card.hidden = false;
-      const r = el.getBoundingClientRect(), w = card.offsetWidth, h = card.offsetHeight;
+      const r = near.getBoundingClientRect(), w = card.offsetWidth, h = card.offsetHeight;
       card.style.left = `${Math.max(8, Math.min(r.left, innerWidth - w - 8))}px`;
       card.style.top = `${r.bottom + 8 + h < innerHeight ? r.bottom + 8 : Math.max(8, r.top - h - 8)}px`;
     }
@@ -174,7 +180,9 @@
   }
 
   // Shortest XPath that matches only this element, trying the most stable kinds first:
-  // id, test ids, other meaningful attributes, single classes, then path suffixes.
+  // id, test ids, other meaningful attributes, single classes (not generated ones, nor
+  // state classes like hover/active that another highlighter may have just added), then
+  // path suffixes.
   // Within the first kind that has a hit, the shortest wins.
   const TEST_ATTRS = ["data-testid", "data-test-id", "data-test", "data-qa", "data-cy"];
   const ATTRS = ["name", "aria-label", "title", "alt", "placeholder", "for", "role", "type", "href", "src"];
@@ -193,7 +201,7 @@
       el.id && usable(el.id) ? [`//*[@id=${xpathString(el.id)}]`] : [],
       byAttr((n) => TEST_ATTRS.includes(n)),
       byAttr((n) => ATTRS.includes(n) || (n.startsWith("data-") && !TEST_ATTRS.includes(n))),
-      [...el.classList].filter((c) => usable(c) && !/\d{3}|^(css|sc|jsx|svelte)-/.test(c))
+      [...el.classList].filter((c) => usable(c) && !/\d{3}|^(css|sc|jsx|svelte)-|hover|focus|active|highlight|selected/i.test(c))
         .map((c) => `//${tag}[contains(@class, ${xpathString(c)})]`),
       suffixes,
     ];
