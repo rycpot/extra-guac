@@ -4,9 +4,15 @@
 // - "mask" swaps characters in the page's own text nodes (so the page's font/size/colour
 //   apply) and restores them on hover or when turned off.
 // Form fields get an attribute styled by CSS. Everything is undone when turned off.
+//
+// After the extension updates or reloads, a copy already running in a tab is cut off
+// from it (it can no longer hear "turned off"). So: a newly injected copy tells any
+// older one to stand down (it undoes everything first), and a copy that notices it
+// has been cut off undoes everything by itself.
 (() => {
-  if (window.__piiBlur) return;
-  window.__piiBlur = true;
+  document.dispatchEvent(new CustomEvent("tt-pii-takeover"));
+  let retired = false;
+  document.addEventListener("tt-pii-takeover", retire, { once: true });
 
   const R = globalThis.PIIRules;
   const root = document.documentElement;
@@ -35,9 +41,17 @@
   const reveal = () => root.removeAttribute(PENDING);
 
   chrome.storage.local.get("pii").then(({ pii }) => apply(pii), reveal);
-  chrome.storage.onChanged.addListener((changes, area) => {
+  const onStorage = (changes, area) => {
     if (area === "local" && changes.pii) apply(changes.pii.newValue);
-  });
+  };
+  chrome.storage.onChanged.addListener(onStorage);
+
+  function retire() {
+    if (retired) return;
+    retired = true;
+    try { chrome.storage.onChanged.removeListener(onStorage); } catch {}
+    stop();
+  }
   document.addEventListener("DOMContentLoaded", () => {
     if (!settings) return; // apply() will scan once settings arrive
     if (active) rescanAll();
@@ -45,6 +59,7 @@
   }, { once: true });
 
   function apply(raw) {
+    if (retired) return;
     try {
       settings = R.withDefaults(raw);
       if (!settings.enabled || R.isExcluded(location.hostname, settings.excludedSites)) return stop();
@@ -380,6 +395,7 @@
 
   // Catches values set by scripts (which fire no input event) and drops stale ranges.
   function tick() {
+    if (!chrome.runtime?.id) return retire(); // the extension was updated or removed
     document.querySelectorAll("input, textarea").forEach((el) => isField(el) && checkField(el));
     for (const block of blockMatches.keys()) if (!block.isConnected) clearBlock(block);
     for (const n of masked.keys()) if (!n.isConnected) masked.delete(n);

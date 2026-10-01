@@ -32,7 +32,10 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 });
 
 chrome.runtime.onInstalled.addListener(async () => {
-  syncBlurScript(await getBlurSettings());
+  // On an update, copies of the blur script in open tabs are cut off from the extension
+  // (they undo themselves); inject the new one right away so pages stay blurred.
+  const pii = await getBlurSettings();
+  syncBlurScript(pii, pii.enabled);
   syncMenus(await TT.getSettings());
 });
 

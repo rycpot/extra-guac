@@ -7,9 +7,12 @@
 // page loads and keyword hits all fire concurrently, and an unserialized
 // read-modify-write let a stale tick resurrect a run the keyword had stopped.
 //
-// The keyword is only looked for after the first refresh (text already on the
-// page when you start doesn't count), then every second until the next refresh,
-// in all frames and open shadow roots, so late-rendered content is caught.
+// The keyword is looked for every second between refreshes (in all frames and open
+// shadow roots, so late-rendered content counts), and once more right before each
+// refresh, which is skipped if it's there. Text already on the page when you start
+// is ignored until the first refresh; if it isn't there, watching starts at once.
+// A hit is never dropped because a refresh began meanwhile (background tabs answer
+// slowly, which used to lose every hit).
 
 const refreshHandlers = {
   refreshStart: ({ tabId, config }) => startRefresh(tabId, config),
@@ -59,11 +62,15 @@ async function startRefresh(tabId, config) {
     found: false,
   };
   if (run.max < run.min) [run.min, run.max] = [run.max, run.min];
+  run.presentAtStart = run.keyword ? await pageHas(tabId, run.keyword) : false;
   run.nextAt = Date.now() + nextDelay(run);
   await TT.updateSettings({ refresh: { mode: run.mode, fixed: run.fixed, min: run.min, max: run.max, keyword: run.keyword } });
   await updateRuns((runs) => { runs[tabId] = run; });
   updateBadge(tabId, run);
 }
+
+// Whether this run should be looking for its keyword right now.
+const watching = (run) => !!run?.keyword && !run.loadingSince && !run.matchedThisLoad && (run.count > 0 || !run.presentAtStart);
 
 async function stopRefresh(tabId) {
   await updateRuns((runs) => { delete runs[tabId]; });
@@ -80,14 +87,15 @@ async function stopAllRefresh() {
 }
 
 let ticking = false;
+const refreshing = new Set(); // tabs whose refresh is being prepared
+
 async function onTick() {
   if (ticking) return;
   ticking = true;
   try {
-    const watch = [];
-    const reloads = await updateRuns((runs) => {
+    const { due, watch } = await updateRuns((runs) => {
       const now = Date.now();
-      const due = [];
+      const due = [], watch = [];
       for (const [id, run] of Object.entries(runs)) {
         const tabId = +id;
         if (run.loadingSince && now - run.loadingSince >= LOAD_TIMEOUT_MS) {
@@ -95,20 +103,38 @@ async function onTick() {
           run.nextAt = now + nextDelay(run);
         }
         if (!run.loadingSince && now >= run.nextAt) {
-          run.loadingSince = now;
-          run.count++;
-          due.push(tabId);
-        } else if (!run.loadingSince && run.keyword && run.count > 0 && !run.matchedThisLoad) {
+          if (!refreshing.has(tabId)) due.push(tabId);
+        } else if (watching(run)) {
           watch.push(tabId);
         }
         updateBadge(tabId, run);
       }
-      return due;
+      return { due, watch };
     });
-    for (const tabId of reloads) chrome.tabs.reload(tabId).catch(() => stopRefresh(tabId));
     for (const tabId of watch) checkKeyword(tabId);
+    for (const tabId of due) refreshTab(tabId);
   } finally {
     ticking = false;
+  }
+}
+
+// One last look for the keyword, then reload (unless it was there).
+async function refreshTab(tabId) {
+  refreshing.add(tabId);
+  try {
+    const run = (await getRuns())[tabId];
+    if (!run) return;
+    if (watching(run) && (await checkKeyword(tabId))) return;
+    const go = await updateRuns((runs) => {
+      const r = runs[tabId];
+      if (!r) return false;
+      r.loadingSince = Date.now();
+      r.count++;
+      return true;
+    });
+    if (go) await chrome.tabs.reload(tabId).catch(() => stopRefresh(tabId));
+  } finally {
+    refreshing.delete(tabId);
   }
 }
 
@@ -129,21 +155,31 @@ chrome.tabs.onUpdated.addListener(async (tabId, info) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => stopRefresh(tabId));
 
-const checking = new Set();
+const checking = new Map(); // tabId -> in-flight check (joined, not repeated)
+const CHECK_TIMEOUT_MS = 5000;
 
-async function checkKeyword(tabId) {
-  if (checking.has(tabId)) return;
-  checking.add(tabId);
-  try {
+// Looks for the keyword now; reports a hit. Resolves to whether it was found.
+function checkKeyword(tabId) {
+  if (checking.has(tabId)) return checking.get(tabId);
+  const p = (async () => {
     const run = (await getRuns())[tabId];
-    if (!run?.keyword || run.loadingSince || run.count === 0) return;
-    const results = await chrome.scripting
-      .executeScript({ target: { tabId, allFrames: true }, func: pageHasText, args: [run.keyword] })
-      .catch(() => []);
-    if (results.some((r) => r?.result)) await keywordFound(tabId, run);
-  } finally {
-    checking.delete(tabId);
-  }
+    if (!watching(run)) return false;
+    const found = await pageHas(tabId, run.keyword);
+    if (found) await keywordFound(tabId, run);
+    return found;
+  })().finally(() => checking.delete(tabId));
+  checking.set(tabId, p);
+  return p;
+}
+
+// Whether the tab's page (any frame) shows the text. Background tabs can answer slowly;
+// give up after a few seconds rather than hold up the refresh.
+async function pageHas(tabId, keyword) {
+  const results = await Promise.race([
+    chrome.scripting.executeScript({ target: { tabId, allFrames: true }, func: pageHasText, args: [keyword] }).catch(() => []),
+    new Promise((r) => setTimeout(() => r([]), CHECK_TIMEOUT_MS)),
+  ]);
+  return results.some((r) => r?.result);
 }
 
 // Injected: visible text of the frame plus any open shadow roots, ignoring case.
@@ -164,7 +200,7 @@ function pageHasText(keyword) {
 async function keywordFound(tabId, run) {
   const { refresh: prefs } = await TT.getSettings();
   const stillRunning = await updateRuns((runs) => {
-    if (!runs[tabId] || runs[tabId].loadingSince) return false;
+    if (!runs[tabId]) return false;
     if (prefs.continueAfterMatch) {
       runs[tabId].lastFoundAt = Date.now();
       runs[tabId].matchedThisLoad = true; // alert once per load, not every second
