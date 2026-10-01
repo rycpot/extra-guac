@@ -2,7 +2,7 @@
 // Blur settings live separately under "pii" (see pii-rules.js).
 (() => {
   const DEFAULTS = {
-    theme: "auto", // "auto" | "dark" | "light"
+    theme: "dark", // "dark" | "light" | "auto" (follow the system)
     shot: { format: "png", quality: 92, folder: "" },
     refresh: {
       mode: "fixed", // "fixed" | "random"
@@ -21,6 +21,11 @@
       paid: { cuttly: false, tinyurl: false, dub: false },
     },
     awake: { lastAmount: 45, lastUnit: "min" },
+    picker: { selectorFormat: "css" }, // "css" | "xpath"
+    // Rules: { domain, find, replace, auto, on }. Auto rules redirect on navigation;
+    // manual ones run from the page's right-click menu.
+    redirect: { enabled: false, rules: [] },
+    upload: { catbox: false, x02: false, catboxUserhash: "", x02Key: "", x02Verified: false },
   };
 
   const SHORTENERS = {
@@ -58,12 +63,10 @@
       .join("/");
   }
 
-  // Applies the theme setting to a page: sets data-theme on <html> ("auto" follows the system).
+  // Applies the theme setting to a page: sets data-theme on <html>. Pages are dark
+  // until this runs; "auto" follows the system.
   async function applyTheme() {
-    const apply = (t) => {
-      if (t === "auto") document.documentElement.removeAttribute("data-theme");
-      else document.documentElement.dataset.theme = t;
-    };
+    const apply = (t) => (document.documentElement.dataset.theme = t);
     apply((await getSettings()).theme);
     chrome.storage.onChanged.addListener((c, area) => {
       if (area === "local" && c.tt) apply(merge(DEFAULTS, c.tt.newValue).theme);

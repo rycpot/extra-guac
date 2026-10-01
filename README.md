@@ -3,16 +3,26 @@
 **Tab Toolkit: Screenshots, Auto-Refresh, PII Blur, Nuke & More**: a Chrome (MV3) extension
 that puts handy page tools in one popup, styled after the [Hop](https://hop.tools) Mac app.
 Click the toolbar icon to open it; the gear opens settings, ⏻ stops everything that is running.
+The first tab holds the everyday tools, the second the page tools.
 
 | Tool | What it does |
 |---|---|
 | **Screenshot** | **area** (drag a box, adjust it, ✓ at its bottom-right or Enter), **tab** (the visible part), **full** (scrolls to the end and stitches; very long pages are saved in parts). PNG or JPEG, saved to Downloads or a folder inside it. |
 | **Privacy blur** | Hides personal data on every page while it's on (see below). |
-| **Refresh** | **hard** reloads bypassing the cache (Cmd/Ctrl+Shift+R). **nuke** (click twice) clears everything the site stored, for the whole domain, and reloads. Passwords, history, downloads and form data are kept. |
-| **Auto-refresh** | Per tab, every N seconds or a random time between two values. Optionally watches for a keyword: plays a sound, shows a notification and (optionally) brings the tab forward, then stops (or keeps going, per settings). The toolbar badge counts down. |
+| **Refresh** | **hard** reloads bypassing the cache (Cmd/Ctrl+Shift+R). **nuke** (click twice) clears everything the site stored, for the whole domain, and reloads, showing each step as it goes. Passwords, history, downloads and form data are kept. |
+| **Auto-refresh** | Per tab, every N seconds or a random time between two values. Optionally watches for a keyword, starting after the first refresh: it checks every second (so late-loading content and iframes count), then plays a sound, shows a notification and (optionally) brings the tab forward, and stops (or keeps going, per settings). The toolbar badge counts down. |
 | **Shorten** | Shortens the tab's URL with cutt.ly, TinyURL or dub.co (your API keys, in settings) and copies it. Shows this month's count against the free limit (30 / 30 / 25) unless you mark a paid plan; ⤢ opens the full history. |
 | **Volume** | Lowers this tab's volume (0–100%). |
 | **Awake** | Keeps the screen on for 15 min, 30 min, 1 h, 2 h, ∞ or a custom time (scroll the unit to switch min/h). A green dot on the toolbar icon shows it's active. |
+
+**Page tools** (second tab):
+
+| Tool | What it does |
+|---|---|
+| **What color?** | Freezes the page and shows a magnifier; click a pixel to copy its hex. |
+| **What element?** | Highlights elements as you hover; click (or Enter) copies its CSS selector or XPath. Clicks never reach the page, so buttons and links don't fire. ↑ selects the parent. |
+| **Auto redirect** | Find/replace rules on URLs, per domain (settings → auto redirect). Auto rules redirect as the page loads; the rest run from the page's right-click menu, *Redirect with rules*. Find takes plain text, `{line}` / `{word}` / `{number}` placeholders or a `/regex/`; the target can reuse parts with `{1}` or `$1`. A loop guard stops rules from bouncing a tab back and forth. |
+| **Upload images** | Turn on catbox and/or x02, then right-click any image → *Upload image to …*. The link is copied, a notification confirms it, and it's kept in the upload history. Catbox works anonymously or with your userhash; x02 unlocks once its API key is verified in settings. |
 
 ## Blur sensitive data
 

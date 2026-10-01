@@ -11,6 +11,8 @@ async function init() {
   const isWeb = /^https?:/i.test(tab?.url || "");
 
   initTopBar();
+  initTabs();
+  initHistorySheet();
   initScreenshot();
   initBlur();
   initRefresh();
@@ -18,6 +20,10 @@ async function init() {
   initShortener(isWeb);
   initVolume(isWeb);
   initAwake();
+  initColor(isWeb);
+  initElement(isWeb);
+  initRedirect();
+  initUploads();
 }
 
 // Sends a message to the background worker; rejects with its error message.
@@ -60,6 +66,25 @@ function onSession(key, fn) {
 function initTopBar() {
   $("settingsBtn").onclick = () => send("openSettings", { section: "general" }).then(() => window.close(), fail);
   $("stopAllBtn").onclick = () => send("stopAll").then(() => toast("Stopped everything"), fail);
+}
+
+// Remembers which tab of the popup was open last.
+function initTabs() {
+  const tabs = document.querySelectorAll(".tab[data-panel]");
+  const show = (name) => {
+    tabs.forEach((t) => {
+      const on = t.dataset.panel === name;
+      t.classList.toggle("active", on);
+      if (on) t.setAttribute("aria-current", "page");
+      else t.removeAttribute("aria-current");
+    });
+    document.querySelectorAll(".panel").forEach((p) => (p.hidden = p.id !== `panel-${name}`));
+    try { localStorage.setItem("panel", name); } catch {}
+  };
+  tabs.forEach((t) => (t.onclick = () => show(t.dataset.panel)));
+  let last = "tools";
+  try { last = localStorage.getItem("panel") || last; } catch {}
+  show(document.getElementById(`panel-${last}`) ? last : "tools");
 }
 
 // ---- Screenshot -------------------------------------------------------------
@@ -120,20 +145,33 @@ function initRefresh() {
     }
     clearTimeout(armedTimer);
     disarm();
-    nuke.classList.add("busy");
+    showProgress({ step: 0, total: 4, label: "starting" });
     try {
       await send("nuke");
-      window.close();
+      setTimeout(() => window.close(), 900);
     } catch (err) {
+      showProgress(null);
       fail(err);
-    } finally {
-      nuke.classList.remove("busy");
     }
   };
   function disarm() {
     nuke.classList.remove("armed");
     nuke.querySelector("span").textContent = "nuke";
   }
+
+  // While a nuke runs (even one started before the popup was opened), the
+  // buttons give way to "cookies… 2/4" and a thin bar.
+  function showProgress(p) {
+    $("refreshActions").hidden = !!p;
+    $("nukeProgress").hidden = !p;
+    if (!p) return;
+    $("nukeProgress").classList.toggle("done", !!p.done);
+    $("nukeLabel").textContent = p.done ? "nuked ✓ reloading" : `${p.label}… ${p.step}/${p.total}`;
+    $("nukeBar").style.width = `${((p.done ? p.total : Math.max(p.step - 0.5, 0.15)) / p.total) * 100}%`;
+  }
+  const key = `nuke:${tab.id}`;
+  chrome.storage.session.get(key).then((r) => r[key] && showProgress(r[key]));
+  onSession(key, (v) => v && showProgress(v));
 }
 
 // ---- Auto-refresh -----------------------------------------------------------
@@ -241,7 +279,7 @@ async function initShortener(isWeb) {
       $("latestLink").querySelector(".link-text").textContent = latest.short;
       $("latestLink").querySelector("[data-copy]").onclick = () => copy(latest.short);
     }
-    renderHistory(shortHistory);
+    if (sheetKind === "short") renderSheet();
   }
   render();
   chrome.storage.onChanged.addListener((c, area) => {
@@ -261,25 +299,68 @@ async function initShortener(isWeb) {
     }
   };
 
-  $("historyBtn").onclick = () => ($("historySheet").hidden = false);
-  $("closeSheet").onclick = () => ($("historySheet").hidden = true);
-  $("clearHistory").onclick = () => send("clearShortHistory").catch(fail);
+  $("historyBtn").onclick = () => openSheet("short");
 }
 
-function renderHistory(items) {
+// ---- History sheet (shortened links or image uploads) ----------------------
+
+const SHEETS = {
+  short: { title: "shortened links", key: "shortHistory", clear: "clearShortHistory", empty: "No shortened links yet",
+    line: (i) => [i.short, `${TT.SHORTENERS[i.service]?.label || i.service} · ${new Date(i.at).toLocaleDateString()} · ${i.url}`, i.url] },
+  upload: { title: "uploaded images", key: "uploadHistory", clear: "clearUploadHistory", empty: "No uploads yet",
+    line: (i) => [i.link, `${i.host} · ${new Date(i.at).toLocaleDateString()} · ${i.source}`, i.source] },
+};
+let sheetKind = null;
+
+function initHistorySheet() {
+  $("closeSheet").onclick = () => { $("historySheet").hidden = true; sheetKind = null; };
+  // Clearing asks for a second click: the button turns red first.
+  const clear = $("clearHistory");
+  let armed = 0;
+  clear.onclick = () => {
+    if (!clear.classList.contains("armed")) {
+      clear.classList.add("armed");
+      clear.textContent = "sure?";
+      armed = setTimeout(disarm, 3000);
+      return;
+    }
+    clearTimeout(armed);
+    disarm();
+    send(SHEETS[sheetKind].clear).catch(fail);
+  };
+  function disarm() {
+    clear.classList.remove("armed");
+    clear.textContent = "clear";
+  }
+  chrome.storage.onChanged.addListener((c, area) => {
+    if (area === "local" && sheetKind && c[SHEETS[sheetKind].key]) renderSheet();
+  });
+}
+
+function openSheet(kind) {
+  sheetKind = kind;
+  $("sheetTitle").textContent = SHEETS[kind].title;
+  $("historySheet").hidden = false;
+  renderSheet();
+}
+
+async function renderSheet() {
+  const cfg = SHEETS[sheetKind];
+  const items = (await chrome.storage.local.get(cfg.key))[cfg.key] || [];
   const list = $("historyList");
   if (!items.length) {
-    list.innerHTML = '<li class="empty">No shortened links yet</li>';
+    list.innerHTML = `<li class="empty">${cfg.empty}</li>`;
     return;
   }
   list.replaceChildren(...items.map((item) => {
+    const [main, meta, title] = cfg.line(item);
     const li = document.createElement("li");
     li.innerHTML = `<span class="meta"><span class="short"></span><span class="long"></span></span>
       <button class="icon-btn small" title="Copy"><svg><use href="#i-copy"/></svg></button>`;
-    li.querySelector(".short").textContent = item.short;
-    li.querySelector(".long").textContent = `${TT.SHORTENERS[item.service]?.label || item.service} · ${new Date(item.at).toLocaleDateString()} · ${item.url}`;
-    li.querySelector(".long").title = item.url;
-    li.querySelector("button").onclick = () => copy(item.short);
+    li.querySelector(".short").textContent = main;
+    li.querySelector(".long").textContent = meta;
+    li.querySelector(".long").title = title;
+    li.querySelector("button").onclick = () => copy(main);
     return li;
   }));
 }
@@ -362,4 +443,83 @@ async function initAwake() {
     if (!(n > 0)) return toast("Enter how long to stay awake", true);
     start(Math.round(unit.textContent === "h" ? n * 60 : n));
   };
+}
+
+// ---- Page tools: color & element pickers ------------------------------------
+
+function showCopyRow(row, value, extra) {
+  row.hidden = !value;
+  if (!value) return;
+  row.querySelector(".link-text").textContent = value;
+  row.querySelector(".link-text").title = value;
+  row.querySelector("[data-copy]").onclick = () => copy(value);
+  extra?.(row);
+}
+
+async function initColor(isWeb) {
+  const render = (hex) => showCopyRow($("lastColor"), hex, (row) => (row.querySelector(".swatch").style.background = hex));
+  render((await chrome.storage.local.get("lastColor")).lastColor);
+  chrome.storage.onChanged.addListener((c, area) => area === "local" && c.lastColor && render(c.lastColor.newValue));
+  $("pickColor").disabled = !isWeb;
+  $("pickColor").onclick = () => send("pickColor").then(() => window.close(), fail);
+}
+
+async function initElement(isWeb) {
+  const seg = $("selectorFormat");
+  const setFormat = (f) => seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.format === f)));
+  setFormat(settings.picker.selectorFormat);
+  seg.querySelectorAll("button").forEach((b) => (b.onclick = () => {
+    setFormat(b.dataset.format);
+    TT.updateSettings({ picker: { selectorFormat: b.dataset.format } });
+  }));
+  const render = (v) => showCopyRow($("lastSelector"), v?.value);
+  render((await chrome.storage.local.get("lastSelector")).lastSelector);
+  chrome.storage.onChanged.addListener((c, area) => area === "local" && c.lastSelector && render(c.lastSelector.newValue));
+  $("pickElement").disabled = !isWeb;
+  $("pickElement").onclick = () => send("pickElement").then(() => window.close(), fail);
+}
+
+// ---- Page tools: auto redirect ------------------------------------------------
+
+function initRedirect() {
+  const toggle = $("redirectToggle");
+  const render = (s) => {
+    setSwitch(toggle, s.redirect.enabled);
+    const rules = s.redirect.rules.filter((r) => r.on !== false && r.find);
+    const auto = rules.filter((r) => r.auto).length;
+    $("redirectStatus").textContent = rules.length ? `${auto} auto · ${rules.length - auto} manual` : "no rules yet";
+  };
+  render(settings);
+  toggle.onclick = async () => render(await TT.updateSettings({ redirect: { enabled: toggle.getAttribute("aria-checked") !== "true" } }));
+  $("redirectSettings").onclick = () => send("openSettings", { section: "redirect" }).then(() => window.close(), fail);
+  chrome.storage.onChanged.addListener((c, area) => area === "local" && c.tt && render(TT.merge(TT.DEFAULTS, c.tt.newValue)));
+}
+
+// ---- Page tools: image upload -------------------------------------------------
+
+async function initUploads() {
+  const hosts = $("uploadHosts").querySelectorAll(".host");
+  const render = async (s) => {
+    for (const b of hosts) {
+      const id = b.dataset.host;
+      const usable = id === "catbox" || s.upload.x02Verified;
+      b.disabled = !usable;
+      b.title = usable ? `Right-click an image → upload to ${id}` : "Save a working x02 API key in settings first";
+      b.setAttribute("aria-pressed", String(usable && !!s.upload[id]));
+    }
+    const on = [...hosts].filter((b) => b.getAttribute("aria-pressed") === "true").length;
+    $("uploadStatus").textContent = on ? "right-click an image" : "pick a host";
+    const latest = (await chrome.storage.local.get("uploadHistory")).uploadHistory?.[0];
+    showCopyRow($("latestUpload"), latest?.link);
+  };
+  render(settings);
+  hosts.forEach((b) => (b.onclick = async () => {
+    const id = b.dataset.host;
+    render(await TT.updateSettings({ upload: { [id]: b.getAttribute("aria-pressed") !== "true" } }));
+  }));
+  $("uploadSettings").onclick = () => send("openSettings", { section: "upload" }).then(() => window.close(), fail);
+  $("uploadHistoryBtn").onclick = () => openSheet("upload");
+  chrome.storage.onChanged.addListener(async (c, area) => {
+    if (area === "local" && (c.tt || c.uploadHistory)) render(await TT.getSettings());
+  });
 }

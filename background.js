@@ -1,4 +1,7 @@
-importScripts("pii-rules.js", "shared.js", "bg-capture.js", "bg-refresh.js", "bg-shortener.js", "bg-media.js");
+importScripts(
+  "pii-rules.js", "shared.js", "redirect-rules.js",
+  "bg-capture.js", "bg-refresh.js", "bg-shortener.js", "bg-media.js", "bg-pickers.js", "bg-redirect.js", "bg-upload.js",
+);
 
 // Messages from the popup, settings window, page overlays and the offscreen document.
 // Each handler returns a value (or throws); the sender gets { ok, ...result } or { ok: false, error }.
@@ -11,6 +14,8 @@ const handlers = {
   ...refreshHandlers,
   ...shortenerHandlers,
   ...mediaHandlers,
+  ...pickerHandlers,
+  ...uploadHandlers,
 };
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
@@ -27,13 +32,50 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
 });
 
 chrome.runtime.onInstalled.addListener(async () => {
-  chrome.contextMenus?.removeAll(); // the right-click menu from earlier versions is gone
   syncBlurScript(await getBlurSettings());
+  syncMenus(await TT.getSettings());
 });
 
 chrome.runtime.onStartup.addListener(async () => {
   syncBlurScript(await getBlurSettings());
+  syncMenus(await TT.getSettings());
   setAwakeIcon(false); // keep-awake doesn't survive a browser restart
+});
+
+// ---- Right-click menus --------------------------------------------------------
+// Pages get "Redirect with rules" while auto redirect is on and has manual rules.
+// Images get "Upload image to catbox/x02" for the hosts switched on in the popup;
+// with both on, the item branches into the two hosts.
+
+let menuSync = Promise.resolve();
+function syncMenus(s) {
+  menuSync = menuSync.then(async () => {
+    await chrome.contextMenus.removeAll();
+    const manual = s.redirect.enabled && s.redirect.rules.some((r) => !r.auto && r.on !== false && r.find);
+    if (manual) chrome.contextMenus.create({ id: "redirect", title: "Redirect with rules", contexts: ["page"] });
+    const hosts = ["catbox", "x02"].filter((h) => s.upload[h] && (h !== "x02" || s.upload.x02Verified));
+    if (hosts.length === 1) {
+      chrome.contextMenus.create({ id: `upload:${hosts[0]}`, title: `Upload image to ${hosts[0]}`, contexts: ["image"] });
+    } else if (hosts.length === 2) {
+      chrome.contextMenus.create({ id: "upload", title: "Upload image to", contexts: ["image"] });
+      for (const h of hosts) chrome.contextMenus.create({ id: `upload:${h}`, parentId: "upload", title: h, contexts: ["image"] });
+    }
+  }).catch((err) => console.error("menus", err));
+  return menuSync;
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local" || !changes.tt) return;
+  const before = TT.merge(TT.DEFAULTS, changes.tt.oldValue);
+  const after = TT.merge(TT.DEFAULTS, changes.tt.newValue);
+  if (JSON.stringify([before.redirect, before.upload]) !== JSON.stringify([after.redirect, after.upload])) syncMenus(after);
+});
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (!tab) return;
+  if (info.menuItemId === "redirect") return runManualRedirect(tab);
+  const m = String(info.menuItemId).match(/^upload:(\w+)$/);
+  if (m && info.srcUrl) uploadImage(m[1], info.srcUrl, tab);
 });
 
 // Turns off everything that is running: auto-refresh, keep awake, tab volume and blur.
@@ -56,8 +98,8 @@ async function ensureOffscreen() {
   offscreenCreating ??= chrome.offscreen
     .createDocument({
       url: "offscreen.html",
-      reasons: ["AUDIO_PLAYBACK", "USER_MEDIA", "BLOBS"],
-      justification: "Runs auto-refresh timers, plays the keyword alert sound and applies tab volume.",
+      reasons: ["AUDIO_PLAYBACK", "USER_MEDIA", "BLOBS", "CLIPBOARD"],
+      justification: "Runs auto-refresh timers, plays the keyword alert sound, applies tab volume and copies uploaded links.",
     })
     .finally(() => (offscreenCreating = null));
   await offscreenCreating;
@@ -81,12 +123,25 @@ const MULTI_PART_SUFFIXES = new Set([
   "github.io", "vercel.app", "netlify.app", "pages.dev", "herokuapp.com", "web.app", "firebaseapp.com",
 ]);
 
+// Progress for the popup: storage.session "nuke:<tabId>" = { step, total, label }.
+async function nukeProgress(tabId, step, label) {
+  await chrome.storage.session.set({ [`nuke:${tabId}`]: { step, total: 4, label } });
+}
+
 async function nuke(tab) {
   const url = new URL(tab.url);
-  if (!/^https?:$/.test(url.protocol)) throw new Error(`Unsupported page: ${tab.url}`);
+  if (!/^https?:$/.test(url.protocol)) throw new Error("Nuke only works on http(s) pages");
+  try {
+    await nukeSteps(tab, url);
+  } finally {
+    setTimeout(() => chrome.storage.session.remove(`nuke:${tab.id}`), 1500);
+  }
+}
 
+async function nukeSteps(tab, url) {
   const host = url.hostname;
   const domain = registrableDomain(host);
+  await nukeProgress(tab.id, 1, "page storage");
 
   // 1. sessionStorage isn't covered by browsingData; clear it (and localStorage) in-page.
   await chrome.scripting
@@ -99,6 +154,7 @@ async function nuke(tab) {
     })
     .catch(() => {});
 
+  await nukeProgress(tab.id, 2, "cookies");
   // 2. Every cookie on the domain and its subdomains. Their hosts also tell us
   //    which subdomain origins likely hold storage.
   const hosts = new Set([host, domain, `www.${domain}`]);
@@ -118,6 +174,7 @@ async function nuke(tab) {
     })
   );
 
+  await nukeProgress(tab.id, 3, "cache & site data");
   // 3. All per-origin storage for every known origin on the domain.
   const port = url.port ? `:${url.port}` : "";
   const origins = [...new Set([...hosts].flatMap((h) =>
@@ -138,7 +195,9 @@ async function nuke(tab) {
   );
 
   // 4. Hard reload.
+  await nukeProgress(tab.id, 4, "reloading");
   await chrome.tabs.reload(tab.id, { bypassCache: true });
+  await chrome.storage.session.set({ [`nuke:${tab.id}`]: { step: 4, total: 4, label: "done", done: true } });
 }
 
 function registrableDomain(host) {

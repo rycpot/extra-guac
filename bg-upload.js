@@ -1,0 +1,162 @@
+// Image upload to Catbox and/or x02 from the right-click menu on images.
+// Catbox works anonymously or with your userhash; x02 needs an API key and is only
+// offered once that key has been verified. The host is first asked to fetch the
+// image itself; if it can't (private, hot-link protected, data:/blob: images), the
+// image is downloaded here, with your cookies, and uploaded as a file.
+
+const uploadHandlers = {
+  verifyX02: ({ key }) => verifyX02(key),
+  clearUploadHistory: () => chrome.storage.local.set({ uploadHistory: [] }),
+};
+
+const UPLOAD_HISTORY_LIMIT = 100;
+
+const UPLOADERS = {
+  catbox: {
+    label: "catbox",
+    async fromUrl(url, s) {
+      const form = new FormData();
+      form.append("reqtype", "urlupload");
+      if (s.catboxUserhash.trim()) form.append("userhash", s.catboxUserhash.trim());
+      form.append("url", url);
+      return this.parse(await fetch("https://catbox.moe/user/api.php", { method: "POST", body: form }));
+    },
+    async fromFile(blob, name, s) {
+      const form = new FormData();
+      form.append("reqtype", "fileupload");
+      if (s.catboxUserhash.trim()) form.append("userhash", s.catboxUserhash.trim());
+      form.append("fileToUpload", blob, name);
+      return this.parse(await fetch("https://catbox.moe/user/api.php", { method: "POST", body: form }));
+    },
+    async parse(res) {
+      const text = (await res.text()).trim();
+      if (res.ok && /^https?:\/\//i.test(text)) return text;
+      throw new Error(`catbox: ${text.slice(0, 160) || `HTTP ${res.status}`}`);
+    },
+  },
+  x02: {
+    label: "x02",
+    async fromUrl(url, s) {
+      const res = await fetch("https://up.x02.me/api/upload/url", {
+        method: "POST",
+        headers: { "x-api-key": s.x02Key.trim(), "content-type": "application/json" },
+        body: JSON.stringify({ imageUrl: url }),
+      });
+      return this.parse(res);
+    },
+    async fromFile(blob, name, s) {
+      const form = new FormData();
+      form.append("file", blob, name);
+      const res = await fetch("https://up.x02.me/api/upload?format=json", {
+        method: "POST",
+        headers: { "x-api-key": s.x02Key.trim() },
+        body: form,
+      });
+      return this.parse(res);
+    },
+    async parse(res) {
+      const text = await res.text();
+      let body = null;
+      try { body = JSON.parse(text); } catch {}
+      if (res.ok && body?.success && body.data?.url) return body.data.url;
+      const why = body?.error || text.trim().slice(0, 160) || `HTTP ${res.status}`;
+      if (res.status === 401 || res.status === 403) throw new Error(`x02 refused the API key: ${why}`);
+      if (res.status === 413) throw new Error("x02: image is larger than your plan allows");
+      if (res.status === 429) throw new Error("x02: rate limit reached, try again shortly");
+      throw new Error(`x02: ${why}`);
+    },
+  },
+};
+
+async function verifyX02(key) {
+  key = (key || "").trim();
+  let ok = false, error = "";
+  if (key) {
+    try {
+      const res = await fetch("https://up.x02.me/api/user/dashboard?page=1&limit=1", { headers: { "x-api-key": key } });
+      const body = await res.json().catch(() => null);
+      ok = res.ok && body?.success !== false;
+      if (!ok) error = body?.error || `x02 answered HTTP ${res.status}`;
+    } catch (e) {
+      error = `Couldn't reach x02: ${e.message}`;
+    }
+  } else {
+    error = "Enter an API key";
+  }
+  await TT.updateSettings({ upload: { x02Key: key, x02Verified: ok, ...(ok ? {} : { x02: false }) } });
+  return { verified: ok, error };
+}
+
+async function uploadImage(host, srcUrl, tab) {
+  const { upload: s } = await TT.getSettings();
+  const up = UPLOADERS[host];
+  setBadge(tab.id, "↑", "#0a84ff");
+  try {
+    let link;
+    let firstError = null;
+    if (/^https?:/i.test(srcUrl)) {
+      try { link = await up.fromUrl(srcUrl, s); } catch (e) { firstError = e; }
+    }
+    if (!link) {
+      if (firstError && /API key|rate limit|larger/.test(firstError.message)) throw firstError;
+      const { blob, name } = await fetchImage(srcUrl, tab);
+      link = await up.fromFile(blob, name, s);
+    }
+    const { uploadHistory = [] } = await chrome.storage.local.get("uploadHistory");
+    uploadHistory.unshift({ host: up.label, link, source: srcUrl.startsWith("data:") ? "(embedded image)" : srcUrl, at: Date.now() });
+    await chrome.storage.local.set({ uploadHistory: uploadHistory.slice(0, UPLOAD_HISTORY_LIMIT) });
+    await toOffscreen({ type: "copy", text: link }).catch(() => {});
+    setBadge(tab.id, "✓");
+    chrome.notifications.create(`upload|${link}`, {
+      type: "basic",
+      iconUrl: "icons/icon128.png",
+      title: `Uploaded to ${up.label} · link copied`,
+      message: link,
+      contextMessage: "Click to open",
+    });
+  } catch (err) {
+    setBadge(tab.id, "✕", "#ff453a");
+    chrome.notifications.create(`upload-error-${Date.now()}`, {
+      type: "basic",
+      iconUrl: "icons/icon128.png",
+      title: `Upload to ${up.label} failed`,
+      message: err.message,
+    });
+  } finally {
+    setTimeout(() => setBadge(tab.id, ""), 2500);
+  }
+}
+
+// Downloads the image bytes: data: URLs directly, blob: URLs from inside the page,
+// everything else with the page's cookies so logged-in images work.
+async function fetchImage(srcUrl, tab) {
+  let blob;
+  if (srcUrl.startsWith("blob:")) {
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: async (u) => {
+        const b = await (await fetch(u)).blob();
+        return new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); });
+      },
+      args: [srcUrl],
+    });
+    blob = await (await fetch(result)).blob();
+  } else {
+    const res = await fetch(srcUrl, { credentials: "include" });
+    if (!res.ok) throw new Error(`Couldn't download the image (HTTP ${res.status})`);
+    blob = await res.blob();
+  }
+  if (!blob.type.startsWith("image/")) throw new Error("That doesn't look like an image");
+  const ext = (blob.type.split("/")[1] || "png").replace("jpeg", "jpg").replace(/\+.*/, "");
+  let base = "image";
+  if (/^https?:/i.test(srcUrl)) {
+    try { base = decodeURIComponent(new URL(srcUrl).pathname.split("/").pop()).replace(/\.[^.]+$/, "") || base; } catch {}
+  }
+  return { blob, name: `${base.replace(/[^\w.-]/g, "_").slice(0, 60)}.${ext}` };
+}
+
+chrome.notifications.onClicked.addListener((id) => {
+  if (!id.startsWith("upload|")) return;
+  chrome.tabs.create({ url: id.slice("upload|".length) });
+  chrome.notifications.clear(id);
+});

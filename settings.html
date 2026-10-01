@@ -13,6 +13,8 @@
     <a href="#blur">privacy blur</a>
     <a href="#refresh">auto-refresh</a>
     <a href="#shortener">url shortener</a>
+    <a href="#redirect">auto redirect</a>
+    <a href="#upload">image upload</a>
   </nav>
 
   <main>
@@ -21,9 +23,9 @@
     <section>
       <h2>Theme</h2>
       <div class="row">
-        <label><input type="radio" name="theme" value="auto" data-path="theme"> follow system</label>
         <label><input type="radio" name="theme" value="dark" data-path="theme"> dark</label>
         <label><input type="radio" name="theme" value="light" data-path="theme"> light</label>
+        <label><input type="radio" name="theme" value="auto" data-path="theme"> follow system</label>
       </div>
     </section>
     <section>
@@ -174,6 +176,70 @@ Card 4111 1111 1111 1111</textarea>
         the free-plan limits shown are cutt.ly 30, TinyURL 30 and dub.co 25 links a month.</p>
     </section>
   </div>
+
+  <div class="pane" id="redirect">
+    <header class="pane-head">
+      <h1>auto redirect</h1>
+      <label class="toggle"><input type="checkbox" role="switch" data-path="redirect.enabled"><span>on</span></label>
+    </header>
+    <section>
+      <h2>Rules <span class="hint">applied top to bottom</span></h2>
+      <div class="rules-grid head"><span>on</span><span>domain</span><span>find</span><span></span><span>replace with</span><span>auto</span><span></span></div>
+      <div id="ruleRows"></div>
+      <button type="button" class="btn" id="addRule">+ add rule</button>
+    </section>
+    <section>
+      <h2>Try a URL</h2>
+      <input type="url" class="text wide" id="tryUrl" placeholder="Paste a URL to see where the rules send it" spellcheck="false">
+      <p class="hint" id="tryResult"></p>
+    </section>
+    <section>
+      <h2>How rules work</h2>
+      <table>
+        <tr><td><code>docs.google.com</code></td><td><b>domain</b>: that site and its subdomains. Empty = every site. A path
+          (<code>docs.google.com/spreadsheets</code>) means "URL contains"; anything with <code>\ ( * |</code> is a regex.</td></tr>
+        <tr><td><code>SY500</code> → <code>SY1600</code></td><td><b>find</b> plain text: replaced as is (first match).</td></tr>
+        <tr><td><code>/edit{line}</code> → <code>/copy</code></td><td><code>{line}</code> = rest of the URL, <code>{word}</code> = one path part,
+          <code>{number}</code> = digits, <code>{[a-z-]}</code> = your own characters. Insert them in the target with <code>{1}</code>, <code>{2}</code>…</td></tr>
+        <tr><td><code>/www(\.)/</code> → <code>old$1</code></td><td><b>regex</b> in slashes, with flags after (<code>/…/gi</code>); use <code>$1</code> or <code>$&lt;name&gt;</code>.</td></tr>
+        <tr><td><b>auto</b> ✓ / ✗</td><td>Auto rules redirect as the page starts loading. The others run from the page's right-click menu,
+          <i>Redirect with rules</i>.</td></tr>
+        <tr><td>loops</td><td>A tab is never redirected again from a URL a rule just sent it to, and more than 4 redirects in 10 s
+          pauses redirecting that tab for a minute.</td></tr>
+      </table>
+    </section>
+  </div>
+
+  <div class="pane" id="upload">
+    <header class="pane-head"><h1>image upload</h1></header>
+    <section>
+      <h2>Catbox</h2>
+      <label class="row"><input type="checkbox" data-path="upload.catbox"> Offer "Upload image to catbox" when right-clicking images</label>
+      <div class="row">
+        <input type="password" class="text" data-path="upload.catboxUserhash" placeholder="userhash (optional)" spellcheck="false" autocomplete="off">
+        <button type="button" class="btn ghost" data-reveal>show</button>
+      </div>
+      <p class="hint">Without a userhash uploads are anonymous. With it they're saved to your account
+        (find it at <a href="https://catbox.moe/user/manage.php" target="_blank" rel="noopener">catbox.moe → Manage account</a>).</p>
+    </section>
+    <section>
+      <h2>x02 <span class="hint" id="x02State"></span></h2>
+      <div class="row">
+        <input type="password" class="text" id="x02Key" placeholder="x02 API key" spellcheck="false" autocomplete="off">
+        <button type="button" class="btn ghost" data-reveal>show</button>
+        <button type="button" class="btn" id="x02Save">save &amp; verify</button>
+      </div>
+      <label class="row" id="x02UseRow"><input type="checkbox" data-path="upload.x02"> Offer "Upload image to x02" when right-clicking images</label>
+      <p class="hint">x02 has no anonymous uploads, so it's only available once your key checks out.
+        Get a key at <a href="https://x02.me" target="_blank" rel="noopener">x02.me</a>.</p>
+    </section>
+    <section>
+      <h2>How it works</h2>
+      <p class="hint">Right-click any image → <i>Upload image to …</i> (with both hosts on, the item branches into the two).
+        The link is copied, a notification confirms it, and it's listed in the popup's upload history.
+        The host fetches the image itself; if it can't (private or embedded images), Tab Toolkit downloads it and uploads the file.</p>
+    </section>
+  </div>
   </main>
 
   <template id="serviceTpl">
@@ -192,6 +258,7 @@ Card 4111 1111 1111 1111</textarea>
 
   <script src="shared.js"></script>
   <script src="pii-rules.js"></script>
+  <script src="redirect-rules.js"></script>
   <script src="settings-blur.js"></script>
   <script src="settings.js"></script>
 </body>

@@ -12,7 +12,12 @@
       <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M9 20h6M12 16v4"/></symbol>
       <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
       <symbol id="i-tray" viewBox="0 0 24 24"><path d="M4 13 6.5 6h11L20 13v5H4z"/><path d="M4 13h4.5l1 2h5l1-2H20"/></symbol>
-      <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-dropper" viewBox="0 0 24 24"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4z"/></symbol>
+      <symbol id="i-pointer" viewBox="0 0 24 24"><path d="M4 4l6.5 16 2.3-6.7L19.5 11z"/><path d="M13 13l6 6"/></symbol>
+      <symbol id="i-redirect" viewBox="0 0 24 24"><path d="M4 7h11a4 4 0 0 1 0 8H8"/><path d="M11 12l-3 3 3 3"/></symbol>
+      <symbol id="i-open" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="3.5"/><path d="M10 14l5-5M10.5 9H15v4.5"/></symbol>
+      <symbol id="i-upload" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="2.5"/><circle cx="9" cy="9" r="1.6"/><path d="M20.5 15l-5-5L5 20.5"/></symbol>
       <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.6 6.9a8 8 0 1 0 10.8 0"/></symbol>
       <symbol id="i-camera" viewBox="0 0 24 24"><rect x="3" y="6.5" width="18" height="13" rx="2"/><path d="M8.5 6.5 10 4h4l1.5 2.5"/><circle cx="12" cy="13" r="3.2"/></symbol>
       <symbol id="i-area" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="1.5" stroke-dasharray="2.6 2.4"/></symbol>
@@ -37,8 +42,8 @@
   <main id="main">
     <header class="top">
       <nav class="tabs" aria-label="Sections">
-        <button class="tab active" aria-current="page" title="Tools"><svg><use href="#i-home"/></svg></button>
-        <button class="tab" disabled title="Coming soon"><svg><use href="#i-monitor"/></svg></button>
+        <button class="tab active" data-panel="tools" aria-current="page" title="Tools"><svg><use href="#i-home"/></svg></button>
+        <button class="tab" data-panel="page" title="Page tools"><svg><use href="#i-monitor"/></svg></button>
         <button class="tab" disabled title="Coming soon"><svg><use href="#i-clock"/></svg></button>
         <button class="tab" disabled title="Coming soon"><svg><use href="#i-tray"/></svg></button>
       </nav>
@@ -48,6 +53,7 @@
       </div>
     </header>
 
+    <div class="panel" id="panel-tools">
     <section class="row">
       <div class="label"><svg><use href="#i-camera"/></svg>screenshot</div>
       <div class="actions">
@@ -65,11 +71,15 @@
       </div>
     </section>
 
-    <section class="row">
+    <section class="row" id="refreshRow">
       <div class="label"><svg><use href="#i-refresh"/></svg>refresh</div>
-      <div class="actions">
+      <div class="actions" id="refreshActions">
         <button class="text-btn" id="hardRefresh" title="Reload bypassing the cache (Cmd/Ctrl+Shift+R)"><svg><use href="#i-refresh"/></svg>hard</button>
         <button class="text-btn danger" id="nukeBtn" title="Clear all of this site's data (keeps passwords) and reload"><svg><use href="#i-nuke"/></svg><span>nuke</span></button>
+      </div>
+      <div class="nuke-progress" id="nukeProgress" hidden>
+        <span class="status" id="nukeLabel"></span>
+        <div class="bar"><i id="nukeBar"></i></div>
       </div>
     </section>
 
@@ -139,11 +149,73 @@
         </span>
       </div>
     </section>
+    </div>
+
+    <div class="panel" id="panel-page" hidden>
+    <section class="block">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-dropper"/></svg>what color?</div>
+        <div class="actions"><button class="text-btn" id="pickColor">pick</button></div>
+      </div>
+      <div class="link-row" id="lastColor" hidden>
+        <i class="swatch"></i><span class="link-text"></span>
+        <button class="icon-btn small" data-copy title="Copy"><svg><use href="#i-copy"/></svg></button>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-pointer"/></svg>what element?</div>
+        <div class="actions">
+          <div class="seg" role="radiogroup" aria-label="Copy as" id="selectorFormat">
+            <button data-format="css" role="radio">css</button>
+            <button data-format="xpath" role="radio">xpath</button>
+          </div>
+          <button class="text-btn" id="pickElement">pick</button>
+        </div>
+      </div>
+      <div class="link-row" id="lastSelector" hidden>
+        <span class="link-text"></span>
+        <button class="icon-btn small" data-copy title="Copy"><svg><use href="#i-copy"/></svg></button>
+      </div>
+    </section>
+
+    <section class="row">
+      <div class="label"><svg><use href="#i-redirect"/></svg>auto redirect</div>
+      <div class="actions">
+        <span class="status" id="redirectStatus"></span>
+        <button class="icon-btn small" id="redirectSettings" title="Redirect rules"><svg><use href="#i-open"/></svg></button>
+        <button class="switch" id="redirectToggle" role="switch" aria-checked="false" aria-label="Auto redirect"></button>
+      </div>
+    </section>
+
+    <section class="block" id="uploader">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-upload"/></svg>upload images
+          <button class="icon-btn small" id="uploadHistoryBtn" title="All uploads"><svg><use href="#i-expand"/></svg></button>
+        </div>
+        <div class="actions">
+          <button class="icon-btn small" id="uploadSettings" title="Upload settings"><svg><use href="#i-open"/></svg></button>
+        </div>
+      </div>
+      <div class="short-go">
+        <div class="hosts" id="uploadHosts">
+          <button class="host" data-host="catbox" aria-pressed="false"><i></i>catbox</button>
+          <button class="host" data-host="x02" aria-pressed="false"><i></i>x02</button>
+        </div>
+        <span class="status" id="uploadStatus">right-click an image</span>
+      </div>
+      <div class="link-row" id="latestUpload" hidden>
+        <span class="link-text"></span>
+        <button class="icon-btn small" data-copy title="Copy"><svg><use href="#i-copy"/></svg></button>
+      </div>
+    </section>
+    </div>
   </main>
 
   <aside class="sheet" id="historySheet" hidden>
     <header class="sheet-head">
-      <div class="label"><svg><use href="#i-link"/></svg>shortened links</div>
+      <div class="label"><svg><use href="#i-link"/></svg><span id="sheetTitle">shortened links</span></div>
       <div class="actions">
         <button class="text-btn" id="clearHistory">clear</button>
         <button class="icon-btn" id="closeSheet" title="Close"><svg><use href="#i-close"/></svg></button>

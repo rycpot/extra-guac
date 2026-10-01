@@ -2,6 +2,14 @@
 // watch for a keyword. Running state lives in storage.session under "refresh"
 // ({ [tabId]: run }) so it survives the service worker being suspended. Timing
 // comes from once-a-second ticks sent by the offscreen document.
+//
+// Every change to the runs goes through updateRuns(), one at a time: the tick,
+// page loads and keyword hits all fire concurrently, and an unserialized
+// read-modify-write let a stale tick resurrect a run the keyword had stopped.
+//
+// The keyword is only looked for after the first refresh (text already on the
+// page when you start doesn't count), then every second until the next refresh,
+// in all frames and open shadow roots, so late-rendered content is caught.
 
 const refreshHandlers = {
   refreshStart: ({ tabId, config }) => startRefresh(tabId, config),
@@ -16,10 +24,19 @@ async function getRuns() {
   return refresh || {};
 }
 
-async function saveRuns(runs) {
-  await chrome.storage.session.set({ refresh: runs });
-  const running = Object.keys(runs).length > 0;
-  await toOffscreen({ type: "ticker", on: running }).catch(() => {});
+let runsQueue = Promise.resolve();
+
+// Runs `fn(runs)` exclusively; fn mutates runs and may return a value.
+function updateRuns(fn) {
+  const next = runsQueue.then(async () => {
+    const runs = await getRuns();
+    const result = await fn(runs);
+    await chrome.storage.session.set({ refresh: runs });
+    await toOffscreen({ type: "ticker", on: Object.keys(runs).length > 0 }).catch(() => {});
+    return result;
+  });
+  runsQueue = next.catch(() => {});
+  return next;
 }
 
 function nextDelay(run) {
@@ -44,26 +61,22 @@ async function startRefresh(tabId, config) {
   if (run.max < run.min) [run.min, run.max] = [run.max, run.min];
   run.nextAt = Date.now() + nextDelay(run);
   await TT.updateSettings({ refresh: { mode: run.mode, fixed: run.fixed, min: run.min, max: run.max, keyword: run.keyword } });
-  const runs = await getRuns();
-  runs[tabId] = run;
-  await saveRuns(runs);
-  // The keyword may already be on the page.
-  if (run.keyword) checkKeyword(tabId);
+  await updateRuns((runs) => { runs[tabId] = run; });
   updateBadge(tabId, run);
 }
 
 async function stopRefresh(tabId) {
-  const runs = await getRuns();
-  if (!runs[tabId]) return;
-  delete runs[tabId];
-  await saveRuns(runs);
+  await updateRuns((runs) => { delete runs[tabId]; });
   setBadge(+tabId, "");
 }
 
 async function stopAllRefresh() {
-  const runs = await getRuns();
-  for (const tabId of Object.keys(runs)) setBadge(+tabId, "");
-  await saveRuns({});
+  await updateRuns((runs) => {
+    for (const tabId of Object.keys(runs)) {
+      setBadge(+tabId, "");
+      delete runs[tabId];
+    }
+  });
 }
 
 let ticking = false;
@@ -71,77 +84,97 @@ async function onTick() {
   if (ticking) return;
   ticking = true;
   try {
-    const runs = await getRuns();
-    const now = Date.now();
-    const reloads = [];
-    let changed = false;
-    for (const [id, run] of Object.entries(runs)) {
-      const tabId = +id;
-      if (run.loadingSince) {
-        if (now - run.loadingSince < LOAD_TIMEOUT_MS) continue;
-        run.loadingSince = 0; // page never finished loading; carry on anyway
-        run.nextAt = now + nextDelay(run);
-        changed = true;
+    const watch = [];
+    const reloads = await updateRuns((runs) => {
+      const now = Date.now();
+      const due = [];
+      for (const [id, run] of Object.entries(runs)) {
+        const tabId = +id;
+        if (run.loadingSince && now - run.loadingSince >= LOAD_TIMEOUT_MS) {
+          run.loadingSince = 0; // page never finished loading; carry on anyway
+          run.nextAt = now + nextDelay(run);
+        }
+        if (!run.loadingSince && now >= run.nextAt) {
+          run.loadingSince = now;
+          run.count++;
+          due.push(tabId);
+        } else if (!run.loadingSince && run.keyword && run.count > 0 && !run.matchedThisLoad) {
+          watch.push(tabId);
+        }
+        updateBadge(tabId, run);
       }
-      if (now >= run.nextAt) {
-        run.loadingSince = now;
-        run.count++;
-        changed = true;
-        reloads.push(tabId);
-      }
-      updateBadge(tabId, run);
-    }
-    if (changed) await saveRuns(runs); // before reloading, so the load-complete handler sees it
+      return due;
+    });
     for (const tabId of reloads) chrome.tabs.reload(tabId).catch(() => stopRefresh(tabId));
+    for (const tabId of watch) checkKeyword(tabId);
   } finally {
     ticking = false;
   }
 }
 
-// When a refreshed page finishes loading: schedule the next refresh and look for the keyword.
+// A refreshed page finished loading: schedule the next refresh and look for the keyword now
+// (the tick keeps looking every second after this, for content that renders late).
 chrome.tabs.onUpdated.addListener(async (tabId, info) => {
   if (info.status !== "complete") return;
-  const runs = await getRuns();
-  const run = runs[tabId];
-  if (!run?.loadingSince) return;
-  run.loadingSince = 0;
-  run.nextAt = Date.now() + nextDelay(run);
-  await saveRuns(runs);
-  if (run.keyword) {
-    if (!(await checkKeyword(tabId))) setTimeout(() => checkKeyword(tabId), 2000); // late-loading content
-  }
+  const run = await updateRuns((runs) => {
+    const r = runs[tabId];
+    if (!r?.loadingSince) return null;
+    r.loadingSince = 0;
+    r.matchedThisLoad = false;
+    r.nextAt = Date.now() + nextDelay(r);
+    return r;
+  });
+  if (run?.keyword) checkKeyword(tabId);
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => stopRefresh(tabId));
 
+const checking = new Set();
+
 async function checkKeyword(tabId) {
-  const runs = await getRuns();
-  const run = runs[tabId];
-  if (!run?.keyword || run.found) return false;
-  const found = await chrome.scripting
-    .executeScript({
-      target: { tabId },
-      func: (kw) => (document.body?.innerText || "").toLowerCase().includes(kw.toLowerCase()),
-      args: [run.keyword],
-    })
-    .then((r) => r[0]?.result)
-    .catch(() => false);
-  if (found) await keywordFound(tabId, run);
-  return found;
+  if (checking.has(tabId)) return;
+  checking.add(tabId);
+  try {
+    const run = (await getRuns())[tabId];
+    if (!run?.keyword || run.loadingSince || run.count === 0) return;
+    const results = await chrome.scripting
+      .executeScript({ target: { tabId, allFrames: true }, func: pageHasText, args: [run.keyword] })
+      .catch(() => []);
+    if (results.some((r) => r?.result)) await keywordFound(tabId, run);
+  } finally {
+    checking.delete(tabId);
+  }
+}
+
+// Injected: visible text of the frame plus any open shadow roots, ignoring case.
+function pageHasText(keyword) {
+  const kw = keyword.toLowerCase();
+  if ((document.body?.innerText || "").toLowerCase().includes(kw)) return true;
+  const roots = [document];
+  while (roots.length) {
+    for (const el of roots.pop().querySelectorAll("*")) {
+      if (!el.shadowRoot) continue;
+      if ((el.shadowRoot.textContent || "").toLowerCase().includes(kw)) return true;
+      roots.push(el.shadowRoot);
+    }
+  }
+  return false;
 }
 
 async function keywordFound(tabId, run) {
   const { refresh: prefs } = await TT.getSettings();
-  const runs = await getRuns();
-  if (!runs[tabId]) return;
-  if (prefs.continueAfterMatch) {
-    runs[tabId] = { ...runs[tabId], lastFoundAt: Date.now() };
-    await saveRuns(runs);
-  } else {
-    delete runs[tabId];
-    await saveRuns(runs);
-    setBadge(tabId, "✓");
-  }
+  const stillRunning = await updateRuns((runs) => {
+    if (!runs[tabId] || runs[tabId].loadingSince) return false;
+    if (prefs.continueAfterMatch) {
+      runs[tabId].lastFoundAt = Date.now();
+      runs[tabId].matchedThisLoad = true; // alert once per load, not every second
+    } else {
+      delete runs[tabId];
+    }
+    return true;
+  });
+  if (!stillRunning) return;
+  if (!prefs.continueAfterMatch) setBadge(tabId, "✓");
   await chrome.storage.session.set({ [`refreshFound:${tabId}`]: { keyword: run.keyword, at: Date.now() } });
 
   if (prefs.sound) toOffscreen({ type: "play", url: prefs.sound }).catch(() => {});

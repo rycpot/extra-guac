@@ -6,7 +6,7 @@
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
+  :root[data-theme="auto"] {
     --bg: #f8f7f4; --fg: rgba(0,0,0,.88); --muted: rgba(0,0,0,.55); --line: rgba(0,0,0,.1);
     --field: rgba(0,0,0,.06); --chip: rgba(0,0,0,.11); --hover: rgba(0,0,0,.06);
     --switch-off: rgba(0,0,0,.15); --accent: #0066d6; --green: #28a745; --error: #d70015; --grain: .035; color-scheme: light;
@@ -94,3 +94,19 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .adder input.code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .adder input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .adder button { padding: 0 14px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; font: 600 12.5px ui-monospace, "SF Mono", Menlo, monospace; cursor: pointer; }
+
+/* Redirect rules */
+.rules-grid { display: grid; grid-template-columns: 26px 1fr 1.4fr 14px 1.2fr 36px 26px; gap: 6px; align-items: center; margin-bottom: 6px; }
+.rules-grid.head span { color: var(--muted); font-size: 11px; }
+.rules-grid input.text { width: 100%; font-size: 12px; padding: 6px 7px; }
+.rules-grid .arrow { color: var(--muted); text-align: center; }
+.rules-grid .del { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 16px; }
+.rules-grid .del:hover { color: var(--error); }
+.rule-error { grid-column: 2 / -1; color: var(--error); font-size: 11.5px; margin-top: -2px; }
+.rule.off input.text { opacity: .5; }
+input.text.wide { width: 100%; }
+#tryResult { word-break: break-all; }
+#tryResult b { color: var(--green); font-weight: 500; }
+.x02-ok { color: var(--green); }
+.x02-bad { color: var(--error); }
+.rule .rules-grid:has(.rule-error:empty) { display: none; }

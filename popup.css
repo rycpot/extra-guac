@@ -19,7 +19,7 @@
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
+  :root[data-theme="auto"] {
     --bg: #f8f7f4; --text: rgba(0,0,0,.88); --text2: rgba(0,0,0,.68); --text3: rgba(0,0,0,.52);
     --divider: rgba(0,0,0,.1); --chip: rgba(0,0,0,.11); --field: rgba(0,0,0,.06); --row: rgba(0,0,0,.032);
     --hover: rgba(0,0,0,.06); --stroke: rgba(0,0,0,.28); --switch-off: rgba(0,0,0,.15);
@@ -49,7 +49,7 @@ body::after {
   content: ""; position: fixed; inset: 0; pointer-events: none; opacity: var(--grain);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-main { height: 100%; overflow-y: auto; padding: 14px 16px 18px; scrollbar-width: thin; }
+main { height: 100%; overflow-y: auto; overflow-x: hidden; padding: 14px 16px 18px; scrollbar-width: thin; }
 
 svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
@@ -157,3 +157,25 @@ output { width: 38px; text-align: right; color: var(--text2); font-variant-numer
   background: var(--text); color: var(--bg); font-size: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.35); }
 .toast.error { background: var(--red); color: #fff; }
 [hidden] { display: none !important; }
+
+/* Nuke progress: replaces the refresh buttons while it runs */
+#refreshRow { position: relative; }
+.nuke-progress { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex: 1; min-width: 0; }
+.nuke-progress .status { overflow: hidden; text-overflow: ellipsis; }
+.nuke-progress .bar { width: 70px; flex: none; height: 3px; border-radius: 2px; background: var(--switch-off); overflow: hidden; }
+.nuke-progress .bar i { display: block; height: 100%; width: 0; background: var(--red); transition: width .35s ease; }
+.nuke-progress.done .bar i { background: var(--green); }
+.nuke-progress.done .status { color: var(--green); }
+
+/* Two-step clear */
+#clearHistory.armed { background: color-mix(in srgb, var(--red) 16%, transparent); color: var(--red); }
+
+/* Page tools tab */
+.swatch { width: 16px; height: 16px; border-radius: 4px; flex: none; box-shadow: inset 0 0 0 1px var(--stroke); }
+.hosts { display: flex; gap: 6px; }
+.host { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px 5px 8px; border-radius: 8px; background: var(--row); color: var(--text2); }
+.host i { width: 7px; height: 7px; border-radius: 50%; background: var(--switch-off); }
+.host[aria-pressed="true"] { background: var(--chip); color: var(--text); }
+.host[aria-pressed="true"] i { background: var(--green); }
+.host:disabled { opacity: .45; cursor: default; }
+.host:not(:disabled):hover { color: var(--text); }

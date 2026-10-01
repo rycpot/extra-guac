@@ -2,6 +2,7 @@
 // - sends a "tick" every second while an auto-refresh is running (a service worker's
 //   own timers stop when Chrome suspends it; a message from here wakes it up),
 // - plays the keyword alert sound,
+// - copies text to the clipboard (uploaded image links),
 // - holds one audio graph per tab whose volume was lowered: tab audio -> gain -> speakers.
 
 // Created with the BLOBS reason (which, unlike AUDIO_PLAYBACK alone, doesn't make
@@ -15,6 +16,15 @@ const actions = {
   ticker({ on }) {
     if (on && !ticker) ticker = setInterval(() => chrome.runtime.sendMessage({ type: "tick" }).catch(() => {}), 1000);
     if (!on && ticker) { clearInterval(ticker); ticker = 0; }
+  },
+
+  copy({ text }) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.append(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
   },
 
   async play({ url }) {
