@@ -1,6 +1,7 @@
-# Hard Refresh & Nuke
+# Tab Toolkit
 
-Minimal Chrome (MV3) extension.
+**Tab Toolkit: Hard Refresh, Site Data Nuke, PII Blur & More**: a lightweight Chrome (MV3)
+extension that bundles handy page tools into one toolbar icon.
 
 - **Left-click the icon** — hard refresh (same as Cmd/Ctrl+Shift+R, bypasses cache).
 - **Right-click the icon → Nuke** — wipes all data for the current site, then hard-reloads:

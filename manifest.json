@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Hard Refresh, Nuke & Blur",
-  "version": "1.1.1",
-  "description": "Click: hard refresh. Right-click: Nuke site data, or blur sensitive data (PII) on every page.",
+  "name": "Tab Toolkit: Hard Refresh, Site Data Nuke, PII Blur & More",
+  "version": "1.2.0",
+  "description": "Handy page tools: click for a hard refresh; right-click to nuke site data or blur sensitive info while screen sharing.",
   "permissions": [
     "browsingData",
     "contextMenus",
@@ -17,7 +17,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Hard refresh (right-click for Nuke & Blur)",
+    "default_title": "Tab Toolkit: click to hard refresh, right-click for more tools",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
@@ -31,5 +31,6 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "options_page": "options.html"
+  "options_page": "options.html",
+  "short_name": "Tab Toolkit"
 }
