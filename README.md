@@ -1,19 +1,18 @@
 # Tab Toolkit
 
-**Tab Toolkit: Hard Refresh, Site Data Nuke, PII Blur & More**: a lightweight Chrome (MV3)
-extension that bundles handy page tools into one toolbar icon.
+**Tab Toolkit: Screenshots, Auto-Refresh, PII Blur, Nuke & More**: a Chrome (MV3) extension
+that puts handy page tools in one popup, styled after the [Hop](https://hop.tools) Mac app.
+Click the toolbar icon to open it; the gear opens settings, ⏻ stops everything that is running.
 
-- **Left-click the icon** — hard refresh (same as Cmd/Ctrl+Shift+R, bypasses cache).
-- **Right-click the icon → Nuke** — wipes all data for the current site, then hard-reloads:
-  cookies, cache, Cache Storage, localStorage, sessionStorage, IndexedDB, service workers,
-  file systems and WebSQL — for the whole domain (e.g. on `app.example.com` it covers
-  `example.com` and its subdomains). **Passwords, history, downloads and form data are kept.**
-
-A ✓ / ✕ badge flashes briefly to show the result.
-
-- **Right-click → Blur sensitive data** (checkbox) — hides personal data on every page until you
-  untick it. **Right-click → Blur settings…** opens a tall settings window docked beside the page;
-  every change applies to open tabs instantly.
+| Tool | What it does |
+|---|---|
+| **Screenshot** | **area** (drag a box, adjust it, ✓ at its bottom-right or Enter), **tab** (the visible part), **full** (scrolls to the end and stitches; very long pages are saved in parts). PNG or JPEG, saved to Downloads or a folder inside it. |
+| **Privacy blur** | Hides personal data on every page while it's on (see below). |
+| **Refresh** | **hard** reloads bypassing the cache (Cmd/Ctrl+Shift+R). **nuke** (click twice) clears everything the site stored, for the whole domain, and reloads. Passwords, history, downloads and form data are kept. |
+| **Auto-refresh** | Per tab, every N seconds or a random time between two values. Optionally watches for a keyword: plays a sound, shows a notification and (optionally) brings the tab forward, then stops (or keeps going, per settings). The toolbar badge counts down. |
+| **Shorten** | Shortens the tab's URL with cutt.ly, TinyURL or dub.co (your API keys, in settings) and copies it. Shows this month's count against the free limit (30 / 30 / 25) unless you mark a paid plan; ⤢ opens the full history. |
+| **Volume** | Lowers this tab's volume (0–100%). |
+| **Awake** | Keeps the screen on for 15 min, 30 min, 1 h, 2 h, ∞ or a custom time (scroll the unit to switch min/h). A green dot on the toolbar icon shows it's active. |
 
 ## Blur sensitive data
 
@@ -53,11 +52,16 @@ Download the zip from [Releases](../../releases) and unzip it (or clone this rep
 2. Click **Load unpacked** and pick this folder.
 3. Pin the icon to the toolbar.
 
-## Notes (Nuke)
+## Notes
 
-- Only works on `http(s)` pages (not `chrome://` pages or the Web Store).
-- Subdomain storage is cleared for the current host, the root domain, `www.`, and every
-  subdomain that has cookies. Chrome offers no way to list other subdomains that only hold storage.
+- Page tools work on `http(s)` pages only (Chrome blocks extensions on `chrome://` pages and the Web Store).
+- Nuke clears storage for the current host, the root domain, `www.`, and every subdomain that has
+  cookies; Chrome offers no way to list other subdomains that only hold storage. Chrome can only
+  delete saved passwords for all sites at once, so Nuke never touches them.
+- Full-page screenshots follow the page's main scroll; pages that scroll inside an inner box
+  (some web apps) capture only what's visible. Infinite-scroll pages stop after 80 screens.
+- Screenshots can only be saved inside Downloads (a Chrome rule for extensions).
+- While a tab's volume is below 100%, Chrome shows its "tab is being captured" indicator.
 
 ## Releasing
 

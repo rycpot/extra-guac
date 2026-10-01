@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Settings · Tab Toolkit</title>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <nav class="side" aria-label="Settings sections">
+    <div class="brand">tab toolkit</div>
+    <a href="#general">general</a>
+    <a href="#screenshot">screenshot</a>
+    <a href="#blur">privacy blur</a>
+    <a href="#refresh">auto-refresh</a>
+    <a href="#shortener">url shortener</a>
+  </nav>
+
+  <main>
+  <div class="pane" id="general">
+    <header class="pane-head"><h1>general</h1></header>
+    <section>
+      <h2>Theme</h2>
+      <div class="row">
+        <label><input type="radio" name="theme" value="auto" data-path="theme"> follow system</label>
+        <label><input type="radio" name="theme" value="dark" data-path="theme"> dark</label>
+        <label><input type="radio" name="theme" value="light" data-path="theme"> light</label>
+      </div>
+    </section>
+    <section>
+      <h2>About</h2>
+      <p class="hint">Click the toolbar icon for the tools. ⏻ in the popup stops everything that is running:
+        auto-refresh, keep awake, tab volume and blur.</p>
+    </section>
+  </div>
+
+  <div class="pane" id="screenshot">
+    <header class="pane-head"><h1>screenshot</h1></header>
+    <section>
+      <h2>Format</h2>
+      <div class="row">
+        <label><input type="radio" name="format" value="png" data-path="shot.format"> PNG <span class="hint">lossless</span></label>
+        <label><input type="radio" name="format" value="jpeg" data-path="shot.format"> JPEG <span class="hint">smaller</span></label>
+      </div>
+      <div class="row" id="qualityRow">
+        <label for="quality">JPEG quality</label>
+        <input type="range" id="quality" min="40" max="100" step="1" data-path="shot.quality">
+        <output data-for="quality"></output>
+      </div>
+    </section>
+    <section>
+      <h2>Save to</h2>
+      <div class="row folder">
+        <span class="prefix">Downloads/</span>
+        <input type="text" class="text" data-path="shot.folder" placeholder="(Downloads itself)" spellcheck="false" autocomplete="off">
+      </div>
+      <p class="hint">A folder inside Downloads, e.g. <code>Screenshots</code> or <code>Work/Shots</code>. It's created if missing.
+        Chrome only lets extensions save inside Downloads.</p>
+    </section>
+    <section>
+      <h2>How it works</h2>
+      <p class="hint"><b>Area:</b> drag a box on the page, adjust it with the handles, then ✓ (or Enter) at its bottom-right.
+        <b>Tab:</b> what's visible in the tab. <b>Full:</b> scrolls to the end of the page and stitches it together;
+        very long pages are saved in numbered parts.</p>
+    </section>
+  </div>
+
+  <div class="pane" id="blur">
+    <header class="pane-head">
+      <h1>privacy blur</h1>
+      <label class="toggle"><input type="checkbox" id="enabled" role="switch"><span>on</span></label>
+    </header>
+    <p class="saved" id="saved" aria-live="polite">Changes apply to open tabs instantly.</p>
+
+    <section>
+      <h2>Style</h2>
+      <div class="row">
+        <label><input type="radio" name="style" value="blur"> Blur</label>
+        <input type="range" id="blurPx" min="2" max="20" step="1">
+        <output id="blurPxOut"></output>
+      </div>
+      <div class="row">
+        <label><input type="radio" name="style" value="bars"> Solid bars</label>
+        <input type="color" id="barColor">
+      </div>
+      <div class="row">
+        <label><input type="radio" name="style" value="mask"> Mask characters</label>
+        <select id="maskChar">
+          <option value="×">× cross</option><option value="✕">✕ heavy cross</option>
+          <option value="•">• dot</option><option value="*">* asterisk</option>
+          <option value="█">█ block</option><option value="▒">▒ shade</option>
+        </select>
+        <span class="hint">uses the page's own font</span>
+      </div>
+      <label class="row"><input type="checkbox" id="hideUntilScanned"> Hide page until it has been scanned (safest for screen sharing)</label>
+      <p class="hint">Hover over blurred text to reveal it.</p>
+    </section>
+
+    <section>
+      <h2>Built-in detectors</h2>
+      <div class="grid" id="detectors"></div>
+    </section>
+
+    <section>
+      <h2>Custom rules <span class="hint">click a rule to edit · ● turns it on/off</span></h2>
+      <div class="chips" id="ruleChips"></div>
+      <div class="adder">
+        <input id="ruleInput" class="code" data-chips="rules" spellcheck="false" autocomplete="off"
+          placeholder="Add a rule, e.g. Phone number: {number}">
+        <button type="button" data-add="rules">Add</button>
+      </div>
+      <ul class="errors" id="ruleErrors"></ul>
+      <details>
+        <summary>Rule syntax</summary>
+        <table>
+          <tr><td><code>John Appleseed</code></td><td>Plain text: blurs that exact text (any case).</td></tr>
+          <tr><td><code>Phone number: {number}</code></td><td>Label stays visible, only the <code>{…}</code> part is blurred.</td></tr>
+          <tr><td><code>{number}</code></td><td>Digits with spaces and <code>+ ( ) - .</code>, at least 4 digits. Stops at the first other character.</td></tr>
+          <tr><td><code>{word}</code></td><td>The next word.</td></tr>
+          <tr><td><code>{line}</code></td><td>Everything to the end of the line.</td></tr>
+          <tr><td><code>{[\d()\- ]}</code></td><td>Your own set of allowed characters.</td></tr>
+          <tr><td><code>/regex/flags</code></td><td>JavaScript regex. Blurs the whole match, or only the <code>(?&lt;blur&gt;…)</code> group if present.</td></tr>
+        </table>
+      </details>
+    </section>
+
+    <section>
+      <h2>Test</h2>
+      <textarea id="sample" rows="4" spellcheck="false">Phone number: (941)-555-0123
+Contact jane@site.com from 192.168.1.10
+Card 4111 1111 1111 1111</textarea>
+      <div id="preview" class="preview"></div>
+    </section>
+
+    <section>
+      <h2>Never blur on <span class="hint">includes subdomains</span></h2>
+      <div class="chips" id="siteChips"></div>
+      <div class="adder">
+        <input id="siteInput" data-chips="excludedSites" spellcheck="false" autocomplete="off" placeholder="Add a site, e.g. mybank.com">
+        <button type="button" data-add="excludedSites">Add</button>
+      </div>
+      <ul class="errors" id="siteErrors"></ul>
+    </section>
+  </div>
+
+  <div class="pane" id="refresh">
+    <header class="pane-head"><h1>auto-refresh</h1></header>
+    <section>
+      <h2>When the keyword is found</h2>
+      <label class="row"><input type="checkbox" data-path="refresh.continueAfterMatch"> Keep refreshing <span class="hint">(off: stop refreshing that tab)</span></label>
+      <label class="row"><input type="checkbox" data-path="refresh.notify"> Show a notification</label>
+      <label class="row"><input type="checkbox" data-path="refresh.focusTab"> Bring the tab to the front</label>
+    </section>
+    <section>
+      <h2>Alert sound</h2>
+      <div class="row">
+        <input type="url" class="text" data-path="refresh.sound" placeholder="https://… (.mp3, .wav, .ogg); empty = no sound" spellcheck="false">
+        <button type="button" class="btn" id="testSound">test</button>
+        <button type="button" class="btn ghost" id="resetSound">default</button>
+      </div>
+      <p class="hint" id="soundError"></p>
+    </section>
+    <section>
+      <h2>How it works</h2>
+      <p class="hint">Turn it on per tab in the popup: a fixed interval, or a random one between two values (seconds).
+        The keyword is matched against the page's visible text, ignoring case. The toolbar badge counts down on that tab.</p>
+    </section>
+  </div>
+
+  <div class="pane" id="shortener">
+    <header class="pane-head"><h1>url shortener</h1></header>
+    <div id="shortenerServices"></div>
+    <section>
+      <p class="hint">Keys are stored only in this browser. Links are counted per calendar month on this device;
+        the free-plan limits shown are cutt.ly 30, TinyURL 30 and dub.co 25 links a month.</p>
+    </section>
+  </div>
+  </main>
+
+  <template id="serviceTpl">
+    <section class="service">
+      <h2><span class="name"></span> <span class="hint count"></span></h2>
+      <div class="row">
+        <input type="password" class="text key" spellcheck="false" autocomplete="off">
+        <button type="button" class="btn ghost reveal">show</button>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" class="paid"> I'm on a paid plan <span class="hint">(hides the free-limit counter)</span></label>
+      </div>
+      <p class="hint">Get a key: <a class="keylink" target="_blank" rel="noopener"></a> · <a class="docs" target="_blank" rel="noopener">API docs</a></p>
+    </section>
+  </template>
+
+  <script src="shared.js"></script>
+  <script src="pii-rules.js"></script>
+  <script src="settings-blur.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>

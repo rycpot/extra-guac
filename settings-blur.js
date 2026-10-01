@@ -1,3 +1,5 @@
+// Blur section of the settings window (kept in its own scope; see settings.js for the rest).
+(() => {
 const R = PIIRules;
 const $ = (id) => document.getElementById(id);
 let settings;
@@ -18,7 +20,7 @@ async function init() {
   }
 
   render();
-  document.body.addEventListener("input", onInput);
+  $("blur").addEventListener("input", onInput);
   for (const input of document.querySelectorAll("[data-chips]")) {
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") addChips(input.dataset.chips); });
     input.addEventListener("paste", (e) => {
@@ -193,3 +195,4 @@ function renderPreview() {
     out.append(line.slice(pos));
   });
 }
+})();

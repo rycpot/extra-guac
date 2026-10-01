@@ -1,0 +1,149 @@
+// Settings window: left-nav sections and every setting except blur (settings-blur.js).
+// Inputs with data-path="a.b" are bound to that path in the "tt" settings object.
+(() => {
+  const $ = (id) => document.getElementById(id);
+  let settings;
+  let saveTimer = 0;
+
+  TT.applyTheme();
+  init();
+
+  async function init() {
+    settings = await TT.getSettings();
+    buildServices();
+    bindPaths();
+    showPane();
+    addEventListener("hashchange", showPane);
+    $("testSound").onclick = testSound;
+    $("resetSound").onclick = () => setPath("refresh.sound", TT.DEFAULTS.refresh.sound, true);
+    chrome.storage.onChanged.addListener((c, area) => {
+      if (area === "local" && c.tt && !saveTimer) {
+        settings = TT.merge(TT.DEFAULTS, c.tt.newValue);
+        fill();
+      }
+      if (area === "local" && c.shortCounts) fillCounts();
+    });
+  }
+
+  function showPane() {
+    const id = (location.hash || "#general").slice(1);
+    const pane = $(id)?.classList.contains("pane") ? id : "general";
+    document.querySelectorAll(".pane").forEach((p) => (p.hidden = p.id !== pane));
+    document.querySelectorAll(".side a").forEach((a) => a.classList.toggle("active", a.hash === `#${pane}`));
+  }
+
+  // ---- data-path binding ----
+
+  const getPath = (path) => path.split(".").reduce((o, k) => o?.[k], settings);
+
+  function setPath(path, value, refill = false) {
+    const keys = path.split(".");
+    let o = settings;
+    for (const k of keys.slice(0, -1)) o = o[k];
+    o[keys.at(-1)] = value;
+    save();
+    if (refill) fill();
+  }
+
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      await chrome.storage.local.set({ tt: settings });
+      saveTimer = 0;
+    }, 250);
+  }
+
+  function bindPaths() {
+    for (const el of document.querySelectorAll("[data-path]")) {
+      el.addEventListener(el.type === "text" || el.type === "url" ? "input" : "change", () => {
+        const value = el.type === "checkbox" ? el.checked
+          : el.type === "range" || el.type === "number" ? +el.value
+          : el.value;
+        if (el.type === "radio" && !el.checked) return;
+        setPath(el.dataset.path, value);
+        update();
+      });
+      if (el.type === "range") el.addEventListener("input", update);
+    }
+    fill();
+  }
+
+  function fill() {
+    for (const el of document.querySelectorAll("[data-path]")) {
+      const v = getPath(el.dataset.path);
+      if (el.type === "checkbox") el.checked = !!v;
+      else if (el.type === "radio") el.checked = el.value === v;
+      else if (document.activeElement !== el) el.value = v ?? "";
+    }
+    fillServices();
+    update();
+  }
+
+  function update() {
+    for (const out of document.querySelectorAll("output[data-for]")) out.textContent = $(out.dataset.for).value;
+    $("qualityRow").hidden = settings.shot.format !== "jpeg";
+  }
+
+  // ---- Alert sound ----
+
+  async function testSound() {
+    const err = $("soundError");
+    err.textContent = "";
+    const url = settings.refresh.sound;
+    if (!url) return (err.textContent = "No sound set.");
+    try {
+      await new Audio(url).play();
+    } catch (e) {
+      err.textContent = `Couldn't play that sound: ${e.message}`;
+    }
+  }
+
+  // ---- URL shortener services ----
+
+  function buildServices() {
+    const box = $("shortenerServices");
+    const tpl = $("serviceTpl");
+    for (const [id, info] of Object.entries(TT.SHORTENERS)) {
+      const node = tpl.content.cloneNode(true);
+      const section = node.querySelector(".service");
+      section.dataset.service = id;
+      section.querySelector(".name").textContent = info.label;
+      const key = section.querySelector(".key");
+      key.placeholder = `${info.label} API ${id === "tinyurl" ? "token" : "key"}`;
+      key.addEventListener("input", () => setPath(`shortener.keys.${id}`, key.value.trim()));
+      section.querySelector(".reveal").onclick = (e) => {
+        key.type = key.type === "password" ? "text" : "password";
+        e.target.textContent = key.type === "password" ? "show" : "hide";
+      };
+      const paid = section.querySelector(".paid");
+      paid.addEventListener("change", () => { setPath(`shortener.paid.${id}`, paid.checked); fillCounts(); });
+      const keyLink = section.querySelector(".keylink");
+      keyLink.href = info.keyHelp;
+      keyLink.textContent = new URL(info.keyHelp).host + new URL(info.keyHelp).pathname;
+      section.querySelector(".docs").href = info.docs;
+      box.append(node);
+    }
+  }
+
+  function fillServices() {
+    for (const section of document.querySelectorAll(".service")) {
+      const id = section.dataset.service;
+      const key = section.querySelector(".key");
+      if (document.activeElement !== key) key.value = settings.shortener.keys[id] || "";
+      section.querySelector(".paid").checked = !!settings.shortener.paid[id];
+    }
+    fillCounts();
+  }
+
+  async function fillCounts() {
+    const { shortCounts = {} } = await chrome.storage.local.get("shortCounts");
+    const thisMonth = shortCounts.month === TT.monthKey();
+    for (const section of document.querySelectorAll(".service")) {
+      const id = section.dataset.service;
+      const n = thisMonth ? shortCounts[id] || 0 : 0;
+      section.querySelector(".count").textContent = settings.shortener.paid[id]
+        ? `${n} links this month`
+        : `${n}/${TT.SHORTENERS[id].freeLimit} links this month`;
+    }
+  }
+})();

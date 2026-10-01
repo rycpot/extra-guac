@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Tab Toolkit</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h5v-5h4v5h5V9.5"/></symbol>
+      <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M9 20h6M12 16v4"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+      <symbol id="i-tray" viewBox="0 0 24 24"><path d="M4 13 6.5 6h11L20 13v5H4z"/><path d="M4 13h4.5l1 2h5l1-2H20"/></symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></symbol>
+      <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.6 6.9a8 8 0 1 0 10.8 0"/></symbol>
+      <symbol id="i-camera" viewBox="0 0 24 24"><rect x="3" y="6.5" width="18" height="13" rx="2"/><path d="M8.5 6.5 10 4h4l1.5 2.5"/><circle cx="12" cy="13" r="3.2"/></symbol>
+      <symbol id="i-area" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="1.5" stroke-dasharray="2.6 2.4"/></symbol>
+      <symbol id="i-tab" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="1.5"/><path d="M3.5 9h17"/></symbol>
+      <symbol id="i-page" viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="1.5"/><path d="M9 7h6M9 10.5h6M9 14h6M9 17.5h4"/></symbol>
+      <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 5.1A9.5 9.5 0 0 1 21 12a14 14 0 0 1-2.6 3.4M6.6 6.6A14 14 0 0 0 3 12a9.5 9.5 0 0 0 12.4 5.4"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></symbol>
+      <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></symbol>
+      <symbol id="i-nuke" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.8"/><path d="M12 10.2 9 5a8 8 0 0 1 6 0zM13.6 13l5.9.1a8 8 0 0 1-3 5.2zM10.4 13l-3 5.3a8 8 0 0 1-3-5.2z"/></symbol>
+      <symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 1.5M9.5 2.5h5"/></symbol>
+      <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></symbol>
+      <symbol id="i-expand" viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+      <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></symbol>
+    </defs>
+  </svg>
+
+  <main id="main">
+    <header class="top">
+      <nav class="tabs" aria-label="Sections">
+        <button class="tab active" aria-current="page" title="Tools"><svg><use href="#i-home"/></svg></button>
+        <button class="tab" disabled title="Coming soon"><svg><use href="#i-monitor"/></svg></button>
+        <button class="tab" disabled title="Coming soon"><svg><use href="#i-clock"/></svg></button>
+        <button class="tab" disabled title="Coming soon"><svg><use href="#i-tray"/></svg></button>
+      </nav>
+      <div class="top-actions">
+        <button class="icon-btn" id="settingsBtn" title="Settings"><svg><use href="#i-gear"/></svg></button>
+        <button class="icon-btn" id="stopAllBtn" title="Stop everything: auto-refresh, keep awake, volume, blur"><svg><use href="#i-power"/></svg></button>
+      </div>
+    </header>
+
+    <section class="row">
+      <div class="label"><svg><use href="#i-camera"/></svg>screenshot</div>
+      <div class="actions">
+        <button class="text-btn" data-shot="area"><svg><use href="#i-area"/></svg>area</button>
+        <button class="text-btn" data-shot="tab"><svg><use href="#i-tab"/></svg>tab</button>
+        <button class="text-btn" data-shot="full"><svg><use href="#i-page"/></svg>full</button>
+      </div>
+    </section>
+
+    <section class="row">
+      <div class="label"><svg><use href="#i-eye-off"/></svg>privacy blur</div>
+      <div class="actions">
+        <button class="icon-btn small" id="blurSettings" title="Blur rules & style"><svg><use href="#i-sliders"/></svg></button>
+        <button class="switch" id="blurToggle" role="switch" aria-checked="false" aria-label="Blur sensitive data"></button>
+      </div>
+    </section>
+
+    <section class="row">
+      <div class="label"><svg><use href="#i-refresh"/></svg>refresh</div>
+      <div class="actions">
+        <button class="text-btn" id="hardRefresh" title="Reload bypassing the cache (Cmd/Ctrl+Shift+R)"><svg><use href="#i-refresh"/></svg>hard</button>
+        <button class="text-btn danger" id="nukeBtn" title="Clear all of this site's data (keeps passwords) and reload"><svg><use href="#i-nuke"/></svg><span>nuke</span></button>
+      </div>
+    </section>
+
+    <section class="block" id="autoRefresh">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-timer"/></svg>auto-refresh</div>
+        <div class="actions">
+          <span class="status" id="arStatus"></span>
+          <button class="switch" id="arToggle" role="switch" aria-checked="false" aria-label="Auto-refresh this tab"></button>
+        </div>
+      </div>
+      <div class="ar-config">
+        <div class="seg" role="radiogroup" aria-label="Interval">
+          <button data-mode="fixed" role="radio">fixed</button>
+          <button data-mode="random" role="radio">random</button>
+        </div>
+        <span class="ar-fixed"><input type="number" id="arFixed" min="1" class="num"> s</span>
+        <span class="ar-random"><input type="number" id="arMin" min="1" class="num"> – <input type="number" id="arMax" min="1" class="num"> s</span>
+      </div>
+      <input type="text" id="arKeyword" class="field" placeholder="keyword to watch for (optional)" spellcheck="false" autocomplete="off">
+    </section>
+
+    <section class="block" id="shortener">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-link"/></svg>shorten
+          <button class="icon-btn small" id="historyBtn" title="All shortened links"><svg><use href="#i-expand"/></svg></button>
+        </div>
+        <div class="actions">
+          <span class="status" id="shortCount"></span>
+        </div>
+      </div>
+      <div class="short-go">
+        <div class="seg" role="radiogroup" aria-label="Service" id="shortServices"></div>
+        <button class="go" id="shortenBtn" title="Shorten this tab's URL"><svg><use href="#i-arrow"/></svg></button>
+      </div>
+      <div class="link-row" id="latestLink" hidden>
+        <span class="link-text"></span>
+        <button class="icon-btn small" data-copy title="Copy"><svg><use href="#i-copy"/></svg></button>
+      </div>
+    </section>
+
+    <section class="row">
+      <div class="label"><svg><use href="#i-volume"/></svg>volume</div>
+      <div class="actions volume">
+        <input type="range" id="volume" min="0" max="100" step="1" value="100" aria-label="Tab volume">
+        <output id="volumeOut">100%</output>
+      </div>
+    </section>
+
+    <section class="block" id="awake">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-moon"/></svg>awake</div>
+        <div class="actions presets" id="awakePresets">
+          <button data-min="15">15</button>
+          <button data-min="30">30</button>
+          <button data-min="60">1h</button>
+          <button data-min="120">2h</button>
+          <button data-min="0" title="Until turned off">∞</button>
+        </div>
+      </div>
+      <div class="awake-custom">
+        <span class="status" id="awakeStatus"></span>
+        <span class="custom">
+          <input type="number" id="awakeAmount" min="1" class="num" aria-label="Custom duration">
+          <button class="unit" id="awakeUnit" title="Scroll or click to switch minutes / hours">min</button>
+          <button class="go small" id="awakeGo" title="Keep awake for this long"><svg><use href="#i-play"/></svg></button>
+        </span>
+      </div>
+    </section>
+  </main>
+
+  <aside class="sheet" id="historySheet" hidden>
+    <header class="sheet-head">
+      <div class="label"><svg><use href="#i-link"/></svg>shortened links</div>
+      <div class="actions">
+        <button class="text-btn" id="clearHistory">clear</button>
+        <button class="icon-btn" id="closeSheet" title="Close"><svg><use href="#i-close"/></svg></button>
+      </div>
+    </header>
+    <ul class="history" id="historyList"></ul>
+  </aside>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <script src="shared.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

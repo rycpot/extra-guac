@@ -1,8 +1,76 @@
-importScripts("pii-rules.js");
+importScripts("pii-rules.js", "shared.js", "bg-capture.js", "bg-refresh.js", "bg-shortener.js", "bg-media.js");
 
-const NUKE_ID = "nuke";
-const BLUR_ID = "pii-toggle";
-const BLUR_SETTINGS_ID = "pii-settings";
+// Messages from the popup, settings window, page overlays and the offscreen document.
+// Each handler returns a value (or throws); the sender gets { ok, ...result } or { ok: false, error }.
+const handlers = {
+  hardRefresh: ({ tabId }) => chrome.tabs.reload(tabId, { bypassCache: true }),
+  nuke: async ({ tabId }) => { await nuke(await chrome.tabs.get(tabId)); },
+  openSettings: ({ section }) => openSettings(section),
+  stopAll: () => stopAll(),
+  ...captureHandlers,
+  ...refreshHandlers,
+  ...shortenerHandlers,
+  ...mediaHandlers,
+};
+
+chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  const handler = msg?.target !== "offscreen" && handlers[msg?.type];
+  if (!handler) return;
+  Promise.resolve()
+    .then(() => handler(msg, sender))
+    .then((r) => reply({ ok: true, ...(r && typeof r === "object" ? r : {}) }))
+    .catch((err) => {
+      console.error(`[${msg.type}]`, err);
+      reply({ ok: false, error: err?.message || String(err) });
+    });
+  return true;
+});
+
+chrome.runtime.onInstalled.addListener(async () => {
+  chrome.contextMenus?.removeAll(); // the right-click menu from earlier versions is gone
+  syncBlurScript(await getBlurSettings());
+});
+
+chrome.runtime.onStartup.addListener(async () => {
+  syncBlurScript(await getBlurSettings());
+  setAwakeIcon(false); // keep-awake doesn't survive a browser restart
+});
+
+// Turns off everything that is running: auto-refresh, keep awake, tab volume and blur.
+async function stopAll() {
+  await stopAllRefresh();
+  await stopAwake();
+  await stopAllVolume();
+  const { pii } = await chrome.storage.local.get("pii");
+  if (pii?.enabled) await chrome.storage.local.set({ pii: { ...pii, enabled: false } });
+}
+
+// ---- Offscreen document ----------------------------------------------------
+// One hidden page drives timers (service-worker timers die when it is suspended),
+// plays alert sounds and holds tab-volume audio graphs.
+
+let offscreenCreating = null;
+
+async function ensureOffscreen() {
+  if (await chrome.offscreen.hasDocument()) return;
+  offscreenCreating ??= chrome.offscreen
+    .createDocument({
+      url: "offscreen.html",
+      reasons: ["AUDIO_PLAYBACK", "USER_MEDIA", "BLOBS"],
+      justification: "Runs auto-refresh timers, plays the keyword alert sound and applies tab volume.",
+    })
+    .finally(() => (offscreenCreating = null));
+  await offscreenCreating;
+}
+
+async function toOffscreen(msg) {
+  await ensureOffscreen();
+  const res = await chrome.runtime.sendMessage({ target: "offscreen", ...msg });
+  if (res && res.ok === false) throw new Error(res.error);
+  return res;
+}
+
+// ---- Nuke ------------------------------------------------------------------
 
 // Suffixes where the registrable domain has three labels (e.g. foo.co.uk).
 const MULTI_PART_SUFFIXES = new Set([
@@ -12,44 +80,6 @@ const MULTI_PART_SUFFIXES = new Set([
   "com.br", "com.mx", "com.ar", "com.cn", "com.hk", "com.sg", "com.tw", "com.tr",
   "github.io", "vercel.app", "netlify.app", "pages.dev", "herokuapp.com", "web.app", "firebaseapp.com",
 ]);
-
-chrome.runtime.onInstalled.addListener(async () => {
-  chrome.contextMenus.removeAll();
-  chrome.contextMenus.create({ id: NUKE_ID, title: "Nuke (clear site data + reload)", contexts: ["action"] });
-  const s = await getBlurSettings();
-  chrome.contextMenus.create({
-    id: BLUR_ID, type: "checkbox", checked: s.enabled, title: "Blur sensitive data", contexts: ["action"],
-  });
-  chrome.contextMenus.create({ id: BLUR_SETTINGS_ID, title: "Blur settings…", contexts: ["action"] });
-  syncBlurScript(s);
-});
-
-chrome.runtime.onStartup.addListener(async () => {
-  const s = await getBlurSettings();
-  chrome.contextMenus.update(BLUR_ID, { checked: s.enabled });
-  syncBlurScript(s);
-});
-
-// Left click: hard refresh (same as Cmd/Ctrl+Shift+R).
-chrome.action.onClicked.addListener((tab) => {
-  chrome.tabs.reload(tab.id, { bypassCache: true });
-});
-
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId === BLUR_ID) {
-    const s = await getBlurSettings();
-    return chrome.storage.local.set({ pii: { ...s, enabled: info.checked } });
-  }
-  if (info.menuItemId === BLUR_SETTINGS_ID) return openBlurSettings();
-  if (info.menuItemId !== NUKE_ID || !tab) return;
-  try {
-    await nuke(tab);
-    flashBadge(tab.id, "✓", "#2e7d32");
-  } catch (err) {
-    console.error("Nuke failed:", err);
-    flashBadge(tab.id, "✕", "#c62828");
-  }
-});
 
 async function nuke(tab) {
   const url = new URL(tab.url);
@@ -118,12 +148,6 @@ function registrableDomain(host) {
   return parts.slice(-n).join(".");
 }
 
-function flashBadge(tabId, text, color) {
-  chrome.action.setBadgeBackgroundColor({ tabId, color });
-  chrome.action.setBadgeText({ tabId, text });
-  setTimeout(() => chrome.action.setBadgeText({ tabId, text: "" }), 1500);
-}
-
 // ---- Blur sensitive data ---------------------------------------------------
 
 async function getBlurSettings() {
@@ -135,7 +159,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local" || !changes.pii) return;
   const before = PIIRules.withDefaults(changes.pii.oldValue);
   const after = PIIRules.withDefaults(changes.pii.newValue);
-  if (before.enabled !== after.enabled) chrome.contextMenus.update(BLUR_ID, { checked: after.enabled });
   if (before.enabled !== after.enabled || before.excludedSites !== after.excludedSites) {
     syncBlurScript(after, after.enabled && !before.enabled);
   }
@@ -165,22 +188,28 @@ async function syncBlurScript(s, injectOpenTabs = false) {
   }
 }
 
-// Tall window docked to the right edge of the browser, so the page stays visible
-// while rules are edited (changes apply live).
-async function openBlurSettings() {
+// ---- Settings window --------------------------------------------------------
+// A tall window docked to the right edge of the browser, so the page stays visible
+// (blur rules apply live). `section` picks the left-nav entry, e.g. "blur".
+async function openSettings(section = "general") {
+  const url = chrome.runtime.getURL(`settings.html#${section}`);
   const { settingsWindowId } = await chrome.storage.session.get("settingsWindowId");
   if (settingsWindowId) {
-    try { return await chrome.windows.update(settingsWindowId, { focused: true }); } catch {}
+    try {
+      const [tab] = await chrome.tabs.query({ windowId: settingsWindowId });
+      await chrome.tabs.update(tab.id, { url });
+      return void (await chrome.windows.update(settingsWindowId, { focused: true }));
+    } catch {}
   }
   const cur = await chrome.windows.getLastFocused();
-  const width = 560;
+  const width = Math.min(900, cur.width ?? 900);
   const win = await chrome.windows.create({
-    url: "options.html",
+    url,
     type: "popup",
     width,
     height: cur.height ?? 900,
     top: cur.top ?? 0,
     left: Math.max(0, (cur.left ?? 0) + (cur.width ?? width) - width),
   });
-  chrome.storage.session.set({ settingsWindowId: win.id });
+  await chrome.storage.session.set({ settingsWindowId: win.id });
 }
