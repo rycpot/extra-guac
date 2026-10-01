@@ -13,13 +13,11 @@
 // the background also asks each frame (all frames and open shadow roots), and once
 // more right before each refresh, which is skipped if it's there.
 //
-// Background tabs: Chrome doesn't run requestAnimationFrame or IntersectionObserver in
-// tabs that aren't in front, so many pages never render their content there and the
-// keyword was only seen once you switched to the tab. refresh-shim.js makes a watched
-// page believe it's visible and runs those callbacks itself.
+// Keyword watching only works while the tab is in front: Chrome pauses rendering in
+// background tabs, so many pages never show their content there.
 //
-// Watched tabs are marked in sessionStorage (per tab, survives reloads). Both scripts
-// are registered for all pages while a keyword run exists and act only in marked tabs.
+// Watched tabs are marked in sessionStorage (per tab, survives reloads). The watcher
+// is registered for all pages while a keyword run exists and acts only in marked tabs.
 
 const refreshHandlers = {
   refreshStart: ({ tabId, config }) => startRefresh(tabId, config),
@@ -30,9 +28,8 @@ const refreshHandlers = {
 
 const WATCH_KEY = "__ttRefreshWatch";
 const WATCH_SCRIPTS = [
-  { id: "tt-refresh-watch", js: ["refresh-watch.js"] },
-  { id: "tt-refresh-shim", js: ["refresh-shim.js"], world: "MAIN" },
-].map((s) => ({ ...s, matches: ["<all_urls>"], allFrames: true, runAt: "document_start", persistAcrossSessions: false }));
+  { id: "tt-refresh-watch", js: ["refresh-watch.js"], matches: ["<all_urls>"], allFrames: true, runAt: "document_start", persistAcrossSessions: false },
+];
 
 const LOAD_TIMEOUT_MS = 60000;
 
@@ -59,16 +56,17 @@ function updateRuns(fn) {
 
 let watchScriptsOn = null; // unknown after the service worker restarts
 
-// After an update or browser restart the runs are gone; drop scripts left registered.
+// After an update or browser restart the runs are gone; drop scripts left registered
+// (including the page shim of 2.5.0, which tried to make background tabs render).
 getRuns().then((runs) => syncWatchScripts(Object.values(runs).some((r) => r.keyword)));
 
 let watchSync = Promise.resolve();
 
-// Registers or drops the watch scripts, one change at a time.
+// Registers or drops the watch script, one change at a time.
 function syncWatchScripts(on) {
   watchSync = watchSync.then(async () => {
     if (on === watchScriptsOn) return;
-    const ids = WATCH_SCRIPTS.map((s) => s.id);
+    const ids = [...WATCH_SCRIPTS.map((s) => s.id), "tt-refresh-shim"];
     const have = (await chrome.scripting.getRegisteredContentScripts({ ids })).map((s) => s.id);
     if (have.length) await chrome.scripting.unregisterContentScripts({ ids: have });
     if (on) await chrome.scripting.registerContentScripts(WATCH_SCRIPTS);
@@ -78,7 +76,7 @@ function syncWatchScripts(on) {
 }
 
 // Marks (or unmarks) every frame of the tab for watching. Unmarking also stops the
-// watcher and shim already running in the page.
+// watcher already running in the page.
 async function markTab(tabId, keyword) {
   await chrome.scripting.executeScript({
     target: { tabId, allFrames: true },
@@ -88,22 +86,14 @@ async function markTab(tabId, keyword) {
         if (kw) sessionStorage.setItem(key, JSON.stringify({ keyword: kw }));
         else sessionStorage.removeItem(key);
       } catch {}
-      if (!kw) {
-        window.__ttRefreshWatch?.stop();
-        document.dispatchEvent(new CustomEvent("tt-refresh-off"));
-      }
+      if (!kw) window.__ttRefreshWatch?.stop();
     },
   }).catch(() => {});
 }
 
-// Puts the watcher and shim into the page that's already loaded (later loads get the
-// registered copies).
+// Puts the watcher into the page that's already loaded (later loads get the registered copy).
 async function injectWatch(tabId) {
-  const target = { tabId, allFrames: true };
-  await Promise.all([
-    chrome.scripting.executeScript({ target, files: ["refresh-shim.js"], world: "MAIN" }),
-    chrome.scripting.executeScript({ target, files: ["refresh-watch.js"] }),
-  ]).catch(() => {});
+  await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: ["refresh-watch.js"] }).catch(() => {});
 }
 
 function nextDelay(run) {
@@ -128,7 +118,7 @@ async function startRefresh(tabId, config) {
   if (run.max < run.min) [run.min, run.max] = [run.max, run.min];
   run.nextAt = Date.now() + nextDelay(run);
   await TT.updateSettings({ refresh: { mode: run.mode, fixed: run.fixed, min: run.min, max: run.max, keyword: run.keyword } });
-  await updateRuns((runs) => { runs[tabId] = run; }); // also registers the watch scripts
+  await updateRuns((runs) => { runs[tabId] = run; }); // also registers the watch script
   updateBadge(tabId, run);
   if (!run.keyword) return;
   await markTab(tabId, run.keyword);

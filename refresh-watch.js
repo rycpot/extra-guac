@@ -40,7 +40,7 @@
     keyword = kw;
     observer?.disconnect();
     // Look right away, at most every 150 ms; changes in between are caught by a timer
-    // (slowed to once a second in background tabs) or the background's next check.
+    // or the background's next check.
     observer = new MutationObserver(() => {
       if (performance.now() - lastScan >= 150) scan();
       else if (!timer) timer = setTimeout(scan, 150);
@@ -57,13 +57,10 @@
     timer = 0;
   }
 
-  // Called by the background every second. The pulse lets refresh-shim.js run the
-  // page's pending animation frames first, so a background tab renders before we look.
+  // Called by the background every second.
   function check(kw) {
     if (kw) start(kw);
-    if (!keyword) return false;
-    document.dispatchEvent(new CustomEvent("tt-refresh-pulse"));
-    return has(keyword);
+    return !!keyword && has(keyword);
   }
 
   window.__ttRefreshWatch = { check, stop };
