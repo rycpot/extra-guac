@@ -3,6 +3,7 @@
 (() => {
   const DEFAULTS = {
     theme: "dark", // "dark" | "light" | "auto" (follow the system)
+    openIn: "popup", // what the toolbar icon opens: "popup" | "panel" (Chrome's side panel)
     shot: { format: "png", quality: 92, folder: "" },
     refresh: {
       mode: "fixed", // "fixed" | "random"
