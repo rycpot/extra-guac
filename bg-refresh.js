@@ -7,18 +7,32 @@
 // page loads and keyword hits all fire concurrently, and an unserialized
 // read-modify-write let a stale tick resurrect a run the keyword had stopped.
 //
-// The keyword is looked for every second between refreshes (in all frames and open
-// shadow roots, so late-rendered content counts), and once more right before each
-// refresh, which is skipped if it's there. Text already on the page when you start
-// is ignored until the first refresh; if it isn't there, watching starts at once.
-// A hit is never dropped because a refresh began meanwhile (background tabs answer
-// slowly, which used to lose every hit).
+// The keyword counts at any moment: already there when you start, while a page is
+// still loading, or between refreshes. refresh-watch.js runs in every frame of the
+// tab from the start of each load and reports it the moment it appears; every tick
+// the background also asks each frame (all frames and open shadow roots), and once
+// more right before each refresh, which is skipped if it's there.
+//
+// Background tabs: Chrome doesn't run requestAnimationFrame or IntersectionObserver in
+// tabs that aren't in front, so many pages never render their content there and the
+// keyword was only seen once you switched to the tab. refresh-shim.js makes a watched
+// page believe it's visible and runs those callbacks itself.
+//
+// Watched tabs are marked in sessionStorage (per tab, survives reloads). Both scripts
+// are registered for all pages while a keyword run exists and act only in marked tabs.
 
 const refreshHandlers = {
   refreshStart: ({ tabId, config }) => startRefresh(tabId, config),
   refreshStop: ({ tabId }) => stopRefresh(tabId),
+  refreshHit: ({ keyword }, sender) => onPageHit(sender.tab?.id, keyword),
   tick: () => onTick(),
 };
+
+const WATCH_KEY = "__ttRefreshWatch";
+const WATCH_SCRIPTS = [
+  { id: "tt-refresh-watch", js: ["refresh-watch.js"] },
+  { id: "tt-refresh-shim", js: ["refresh-shim.js"], world: "MAIN" },
+].map((s) => ({ ...s, matches: ["<all_urls>"], allFrames: true, runAt: "document_start", persistAcrossSessions: false }));
 
 const LOAD_TIMEOUT_MS = 60000;
 
@@ -36,10 +50,60 @@ function updateRuns(fn) {
     const result = await fn(runs);
     await chrome.storage.session.set({ refresh: runs });
     await toOffscreen({ type: "ticker", on: Object.keys(runs).length > 0 }).catch(() => {});
+    await syncWatchScripts(Object.values(runs).some((r) => r.keyword));
     return result;
   });
   runsQueue = next.catch(() => {});
   return next;
+}
+
+let watchScriptsOn = null; // unknown after the service worker restarts
+
+// After an update or browser restart the runs are gone; drop scripts left registered.
+getRuns().then((runs) => syncWatchScripts(Object.values(runs).some((r) => r.keyword)));
+
+let watchSync = Promise.resolve();
+
+// Registers or drops the watch scripts, one change at a time.
+function syncWatchScripts(on) {
+  watchSync = watchSync.then(async () => {
+    if (on === watchScriptsOn) return;
+    const ids = WATCH_SCRIPTS.map((s) => s.id);
+    const have = (await chrome.scripting.getRegisteredContentScripts({ ids })).map((s) => s.id);
+    if (have.length) await chrome.scripting.unregisterContentScripts({ ids: have });
+    if (on) await chrome.scripting.registerContentScripts(WATCH_SCRIPTS);
+    watchScriptsOn = on;
+  }).catch(() => {});
+  return watchSync;
+}
+
+// Marks (or unmarks) every frame of the tab for watching. Unmarking also stops the
+// watcher and shim already running in the page.
+async function markTab(tabId, keyword) {
+  await chrome.scripting.executeScript({
+    target: { tabId, allFrames: true },
+    args: [WATCH_KEY, keyword || ""],
+    func: (key, kw) => {
+      try {
+        if (kw) sessionStorage.setItem(key, JSON.stringify({ keyword: kw }));
+        else sessionStorage.removeItem(key);
+      } catch {}
+      if (!kw) {
+        window.__ttRefreshWatch?.stop();
+        document.dispatchEvent(new CustomEvent("tt-refresh-off"));
+      }
+    },
+  }).catch(() => {});
+}
+
+// Puts the watcher and shim into the page that's already loaded (later loads get the
+// registered copies).
+async function injectWatch(tabId) {
+  const target = { tabId, allFrames: true };
+  await Promise.all([
+    chrome.scripting.executeScript({ target, files: ["refresh-shim.js"], world: "MAIN" }),
+    chrome.scripting.executeScript({ target, files: ["refresh-watch.js"] }),
+  ]).catch(() => {});
 }
 
 function nextDelay(run) {
@@ -59,31 +123,42 @@ async function startRefresh(tabId, config) {
     count: 0,
     startedAt: Date.now(),
     loadingSince: 0,
-    found: false,
+    matchedThisLoad: false,
   };
   if (run.max < run.min) [run.min, run.max] = [run.max, run.min];
-  run.presentAtStart = run.keyword ? await pageHas(tabId, run.keyword) : false;
   run.nextAt = Date.now() + nextDelay(run);
   await TT.updateSettings({ refresh: { mode: run.mode, fixed: run.fixed, min: run.min, max: run.max, keyword: run.keyword } });
-  await updateRuns((runs) => { runs[tabId] = run; });
+  await updateRuns((runs) => { runs[tabId] = run; }); // also registers the watch scripts
   updateBadge(tabId, run);
+  if (!run.keyword) return;
+  await markTab(tabId, run.keyword);
+  await injectWatch(tabId);
+  checkKeyword(tabId); // already there counts too
 }
 
 // Whether this run should be looking for its keyword right now.
-const watching = (run) => !!run?.keyword && !run.loadingSince && !run.matchedThisLoad && (run.count > 0 || !run.presentAtStart);
+const watching = (run) => !!run?.keyword && !run.matchedThisLoad;
 
 async function stopRefresh(tabId) {
-  await updateRuns((runs) => { delete runs[tabId]; });
+  const run = await updateRuns((runs) => {
+    const r = runs[tabId];
+    delete runs[tabId];
+    return r;
+  });
   setBadge(+tabId, "");
+  if (run?.keyword) markTab(+tabId, null);
 }
 
 async function stopAllRefresh() {
-  await updateRuns((runs) => {
+  const stopped = await updateRuns((runs) => {
+    const ids = Object.keys(runs).filter((id) => runs[id].keyword);
     for (const tabId of Object.keys(runs)) {
       setBadge(+tabId, "");
       delete runs[tabId];
     }
+    return ids;
   });
+  for (const id of stopped) markTab(+id, null);
 }
 
 let ticking = false;
@@ -129,6 +204,7 @@ async function refreshTab(tabId) {
       const r = runs[tabId];
       if (!r) return false;
       r.loadingSince = Date.now();
+      r.matchedThisLoad = false;
       r.count++;
       return true;
     });
@@ -139,14 +215,13 @@ async function refreshTab(tabId) {
 }
 
 // A refreshed page finished loading: schedule the next refresh and look for the keyword now
-// (the tick keeps looking every second after this, for content that renders late).
+// (the page's watcher has been looking since the load started, and the tick keeps asking).
 chrome.tabs.onUpdated.addListener(async (tabId, info) => {
   if (info.status !== "complete") return;
   const run = await updateRuns((runs) => {
     const r = runs[tabId];
     if (!r?.loadingSince) return null;
     r.loadingSince = 0;
-    r.matchedThisLoad = false;
     r.nextAt = Date.now() + nextDelay(r);
     return r;
   });
@@ -154,6 +229,13 @@ chrome.tabs.onUpdated.addListener(async (tabId, info) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => stopRefresh(tabId));
+
+// The page's watcher saw the keyword.
+async function onPageHit(tabId, keyword) {
+  if (tabId == null) return;
+  const run = (await getRuns())[tabId];
+  if (watching(run) && run.keyword.toLowerCase() === String(keyword).toLowerCase()) await keywordFound(tabId, run);
+}
 
 const checking = new Map(); // tabId -> in-flight check (joined, not repeated)
 const CHECK_TIMEOUT_MS = 5000;
@@ -172,35 +254,30 @@ function checkKeyword(tabId) {
   return p;
 }
 
-// Whether the tab's page (any frame) shows the text. Background tabs can answer slowly;
-// give up after a few seconds rather than hold up the refresh.
+// Whether the tab's page (any frame) shows the text, asked of each frame's watcher;
+// frames without one (loaded before it was registered) get it injected. Frozen or
+// busy tabs can answer slowly; give up after a few seconds rather than hold up the refresh.
 async function pageHas(tabId, keyword) {
-  const results = await Promise.race([
-    chrome.scripting.executeScript({ target: { tabId, allFrames: true }, func: pageHasText, args: [keyword] }).catch(() => []),
+  const ask = () => Promise.race([
+    chrome.scripting.executeScript({
+      target: { tabId, allFrames: true },
+      args: [keyword],
+      func: (kw) => (window.__ttRefreshWatch ? window.__ttRefreshWatch.check(kw) : null),
+    }).catch(() => []),
     new Promise((r) => setTimeout(() => r([]), CHECK_TIMEOUT_MS)),
   ]);
-  return results.some((r) => r?.result);
-}
-
-// Injected: visible text of the frame plus any open shadow roots, ignoring case.
-function pageHasText(keyword) {
-  const kw = keyword.toLowerCase();
-  if ((document.body?.innerText || "").toLowerCase().includes(kw)) return true;
-  const roots = [document];
-  while (roots.length) {
-    for (const el of roots.pop().querySelectorAll("*")) {
-      if (!el.shadowRoot) continue;
-      if ((el.shadowRoot.textContent || "").toLowerCase().includes(kw)) return true;
-      roots.push(el.shadowRoot);
-    }
+  let results = await ask();
+  if (results.some((r) => r?.result === null)) {
+    await injectWatch(tabId);
+    results = await ask();
   }
-  return false;
+  return results.some((r) => r?.result === true);
 }
 
 async function keywordFound(tabId, run) {
   const { refresh: prefs } = await TT.getSettings();
   const stillRunning = await updateRuns((runs) => {
-    if (!runs[tabId]) return false;
+    if (!runs[tabId] || runs[tabId].matchedThisLoad) return false; // already reported
     if (prefs.continueAfterMatch) {
       runs[tabId].lastFoundAt = Date.now();
       runs[tabId].matchedThisLoad = true; // alert once per load, not every second
@@ -210,10 +287,12 @@ async function keywordFound(tabId, run) {
     return true;
   });
   if (!stillRunning) return;
-  if (!prefs.continueAfterMatch) setBadge(tabId, "✓");
-  await chrome.storage.session.set({ [`refreshFound:${tabId}`]: { keyword: run.keyword, at: Date.now() } });
-
   if (prefs.sound) toOffscreen({ type: "play", url: prefs.sound }).catch(() => {});
+  if (!prefs.continueAfterMatch) {
+    setBadge(tabId, "✓");
+    markTab(tabId, null);
+  }
+  await chrome.storage.session.set({ [`refreshFound:${tabId}`]: { keyword: run.keyword, at: Date.now() } });
   const tab = await chrome.tabs.get(tabId).catch(() => null);
   if (prefs.notify) {
     chrome.notifications.create(`refresh-${tabId}-${Date.now()}`, {
