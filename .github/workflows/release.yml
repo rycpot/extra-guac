@@ -27,5 +27,5 @@ jobs:
             exit 0
           fi
           ZIP="hard-refresh-nuke-$TAG.zip"
-          zip -r "$ZIP" manifest.json background.js icons
+          zip -r "$ZIP" manifest.json *.js *.html *.css icons
           gh release create "$TAG" "$ZIP" --target "$GITHUB_SHA" --title "$TAG" --generate-notes

@@ -1,4 +1,8 @@
+importScripts("pii-rules.js");
+
 const NUKE_ID = "nuke";
+const BLUR_ID = "pii-toggle";
+const BLUR_SETTINGS_ID = "pii-settings";
 
 // Suffixes where the registrable domain has three labels (e.g. foo.co.uk).
 const MULTI_PART_SUFFIXES = new Set([
@@ -9,12 +13,21 @@ const MULTI_PART_SUFFIXES = new Set([
   "github.io", "vercel.app", "netlify.app", "pages.dev", "herokuapp.com", "web.app", "firebaseapp.com",
 ]);
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async () => {
+  chrome.contextMenus.removeAll();
+  chrome.contextMenus.create({ id: NUKE_ID, title: "Nuke (clear site data + reload)", contexts: ["action"] });
+  const s = await getBlurSettings();
   chrome.contextMenus.create({
-    id: NUKE_ID,
-    title: "Nuke (clear site data + reload)",
-    contexts: ["action"],
+    id: BLUR_ID, type: "checkbox", checked: s.enabled, title: "Blur sensitive data", contexts: ["action"],
   });
+  chrome.contextMenus.create({ id: BLUR_SETTINGS_ID, title: "Blur settings…", contexts: ["action"] });
+  syncBlurScript(s);
+});
+
+chrome.runtime.onStartup.addListener(async () => {
+  const s = await getBlurSettings();
+  chrome.contextMenus.update(BLUR_ID, { checked: s.enabled });
+  syncBlurScript(s);
 });
 
 // Left click: hard refresh (same as Cmd/Ctrl+Shift+R).
@@ -23,6 +36,11 @@ chrome.action.onClicked.addListener((tab) => {
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId === BLUR_ID) {
+    const s = await getBlurSettings();
+    return chrome.storage.local.set({ pii: { ...s, enabled: info.checked } });
+  }
+  if (info.menuItemId === BLUR_SETTINGS_ID) return openBlurSettings();
   if (info.menuItemId !== NUKE_ID || !tab) return;
   try {
     await nuke(tab);
@@ -104,4 +122,65 @@ function flashBadge(tabId, text, color) {
   chrome.action.setBadgeBackgroundColor({ tabId, color });
   chrome.action.setBadgeText({ tabId, text });
   setTimeout(() => chrome.action.setBadgeText({ tabId, text: "" }), 1500);
+}
+
+// ---- Blur sensitive data ---------------------------------------------------
+
+async function getBlurSettings() {
+  const { pii } = await chrome.storage.local.get("pii");
+  return PIIRules.withDefaults(pii);
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "local" || !changes.pii) return;
+  const before = PIIRules.withDefaults(changes.pii.oldValue);
+  const after = PIIRules.withDefaults(changes.pii.newValue);
+  if (before.enabled !== after.enabled) chrome.contextMenus.update(BLUR_ID, { checked: after.enabled });
+  if (before.enabled !== after.enabled || before.excludedSites !== after.excludedSites) {
+    syncBlurScript(after, after.enabled && !before.enabled);
+  }
+});
+
+// The content script is registered only while blurring is on, so it costs nothing when off.
+// Tabs that already loaded it react to setting changes themselves (including turning off).
+async function syncBlurScript(s, injectOpenTabs = false) {
+  await chrome.scripting.unregisterContentScripts({ ids: ["pii"] }).catch(() => {});
+  if (!s.enabled) return;
+  await chrome.scripting.registerContentScripts([{
+    id: "pii",
+    js: ["pii-rules.js", "pii.js"],
+    css: ["pii.css"],
+    matches: ["<all_urls>"],
+    excludeMatches: PIIRules.sitePatterns(s.excludedSites),
+    runAt: "document_start",
+    allFrames: true,
+    matchOriginAsFallback: true,
+  }]).catch((err) => console.error("Registering blur script failed:", err));
+  if (!injectOpenTabs) return;
+  const tabs = await chrome.tabs.query({ url: ["http://*/*", "https://*/*", "file:///*"] });
+  for (const t of tabs) {
+    chrome.scripting
+      .executeScript({ target: { tabId: t.id, allFrames: true }, files: ["pii-rules.js", "pii.js"] })
+      .catch(() => {});
+  }
+}
+
+// Tall window docked to the right edge of the browser, so the page stays visible
+// while rules are edited (changes apply live).
+async function openBlurSettings() {
+  const { settingsWindowId } = await chrome.storage.session.get("settingsWindowId");
+  if (settingsWindowId) {
+    try { return await chrome.windows.update(settingsWindowId, { focused: true }); } catch {}
+  }
+  const cur = await chrome.windows.getLastFocused();
+  const width = 560;
+  const win = await chrome.windows.create({
+    url: "options.html",
+    type: "popup",
+    width,
+    height: cur.height ?? 900,
+    top: cur.top ?? 0,
+    left: Math.max(0, (cur.left ?? 0) + (cur.width ?? width) - width),
+  });
+  chrome.storage.session.set({ settingsWindowId: win.id });
 }

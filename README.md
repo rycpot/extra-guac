@@ -10,6 +10,38 @@ Minimal Chrome (MV3) extension.
 
 A ✓ / ✕ badge flashes briefly to show the result.
 
+- **Right-click → Blur sensitive data** (checkbox) — hides personal data on every page until you
+  untick it. **Right-click → Blur settings…** opens a tall settings window docked beside the page;
+  every change applies to open tabs instantly.
+
+## Blur sensitive data
+
+**Styles:** blur (adjustable strength), solid bars (pick a colour), or mask characters
+(`×××@××××.×××`, drawn in the page's own font). Hover to reveal. Form fields are covered too.
+"Hide page until it has been scanned" keeps pages blank for the moment it takes to scan them,
+so nothing leaks during screen sharing.
+
+**Built-in detectors** (each can be switched off): email, card numbers (Luhn-checked), IBANs
+(checksum), MAC addresses, API keys/tokens (AWS, GitHub, Stripe, Slack, OpenAI/Anthropic, Google,
+JWTs), passwords in URLs, IPv4, IPv6, US SSNs (dashed).
+
+**Custom rules**, one per line (`#` comments a line out):
+
+| Rule | Effect |
+|---|---|
+| `John Appleseed` | Plain text: blurs that text, any case |
+| `Phone number: {number}` | Label stays visible; only the `{…}` part is hidden |
+| `{number}` | Digits with spaces and `+ ( ) - .`, at least 4 digits |
+| `{word}` / `{line}` | The next word / the rest of the line |
+| `{[\d()\- ]}` | Your own set of allowed characters |
+| `/order #(?<blur>\d+)/i` | JavaScript regex: hides the whole match, or only the `blur` group |
+
+Labels and values split across elements (`<b>Phone number:</b> <span>99…</span>`) still match.
+The settings window has a test box that previews your rules, and a list of sites to never blur on.
+
+Limits: text inside images, canvas and shadow DOM isn't covered; in mask mode, copying text
+copies the masks.
+
 ## Install
 
 Download the zip from [Releases](../../releases) and unzip it (or clone this repo), then:
@@ -18,7 +50,7 @@ Download the zip from [Releases](../../releases) and unzip it (or clone this rep
 2. Click **Load unpacked** and pick this folder.
 3. Pin the icon to the toolbar.
 
-## Notes
+## Notes (Nuke)
 
 - Only works on `http(s)` pages (not `chrome://` pages or the Web Store).
 - Subdomain storage is cleared for the current host, the root domain, `www.`, and every
