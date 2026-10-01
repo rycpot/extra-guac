@@ -3,6 +3,7 @@
 //   own timers stop when Chrome suspends it; a message from here wakes it up),
 // - plays the keyword alert sound,
 // - copies text to the clipboard (uploaded image links),
+// - reads font files for "what font?" (font-names.js, loaded on first use),
 // - holds one audio graph per tab whose volume was lowered: tab audio -> gain -> speakers.
 
 // Created with the BLOBS reason (which, unlike AUDIO_PLAYBACK alone, doesn't make
@@ -62,12 +63,17 @@ const actions = {
   volumeStopAll() {
     for (const tabId of [...graphs.keys()]) actions.volumeStop({ tabId });
   },
+
+  async inspectFont(request) {
+    const { inspect } = await import("./font-names.js");
+    return inspect(request);
+  },
 };
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg?.target !== "offscreen" || !actions[msg.type]) return;
   Promise.resolve()
     .then(() => actions[msg.type](msg))
-    .then(() => reply({ ok: true }), (err) => reply({ ok: false, error: err?.message || String(err) }));
+    .then((result) => reply({ ok: true, result }), (err) => reply({ ok: false, error: err?.message || String(err) }));
   return true;
 });

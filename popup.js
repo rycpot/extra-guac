@@ -22,6 +22,7 @@ async function init() {
   initAwake();
   initColor(isWeb);
   initElement(isWeb);
+  initFont(isWeb);
   initRedirect();
   initUploads();
 }
@@ -477,6 +478,17 @@ async function initElement(isWeb) {
   chrome.storage.onChanged.addListener((c, area) => area === "local" && c.lastSelector && render(c.lastSelector.newValue));
   $("pickElement").disabled = !isWeb;
   $("pickElement").onclick = () => send("pickElement").then(() => window.close(), fail);
+}
+
+async function initFont(isWeb) {
+  // Copies just the family name (the stored value is "Inter · SemiBold · 16px").
+  const render = (v) => showCopyRow($("lastFont"), v, (row) => {
+    row.querySelector("[data-copy]").onclick = () => copy(v.split(" · ")[0]);
+  });
+  render((await chrome.storage.local.get("lastFont")).lastFont);
+  chrome.storage.onChanged.addListener((c, area) => area === "local" && c.lastFont && render(c.lastFont.newValue));
+  $("pickFont").disabled = !isWeb;
+  $("pickFont").onclick = () => send("pickFont").then(() => window.close(), fail);
 }
 
 // ---- Page tools: auto redirect ------------------------------------------------

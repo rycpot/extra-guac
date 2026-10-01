@@ -13,6 +13,7 @@
       <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
       <symbol id="i-tray" viewBox="0 0 24 24"><path d="M4 13 6.5 6h11L20 13v5H4z"/><path d="M4 13h4.5l1 2h5l1-2H20"/></symbol>
       <symbol id="i-gear" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-font" viewBox="0 0 24 24"><path d="M3 19 8.5 5h1L15 19M5.2 14.5h7.6"/><path d="M15.5 12.2a3 3 0 0 1 5.5 1.6V19M21 15.6c-3.8-.2-5.7.6-5.7 2 0 1 .8 1.6 1.9 1.6 1.8 0 3.8-1.3 3.8-3.6"/></symbol>
       <symbol id="i-dropper" viewBox="0 0 24 24"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4z"/></symbol>
       <symbol id="i-pointer" viewBox="0 0 24 24"><path d="M4 4l6.5 16 2.3-6.7L19.5 11z"/><path d="M13 13l6 6"/></symbol>
       <symbol id="i-redirect" viewBox="0 0 24 24"><path d="M4 7h11a4 4 0 0 1 0 8H8"/><path d="M11 12l-3 3 3 3"/></symbol>
@@ -175,6 +176,17 @@
         </div>
       </div>
       <div class="link-row" id="lastSelector" hidden>
+        <span class="link-text"></span>
+        <button class="icon-btn small" data-copy title="Copy"><svg><use href="#i-copy"/></svg></button>
+      </div>
+    </section>
+
+    <section class="block">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-font"/></svg>what font?</div>
+        <div class="actions"><button class="text-btn" id="pickFont">pick</button></div>
+      </div>
+      <div class="link-row" id="lastFont" hidden>
         <span class="link-text"></span>
         <button class="icon-btn small" data-copy title="Copy"><svg><use href="#i-copy"/></svg></button>
       </div>

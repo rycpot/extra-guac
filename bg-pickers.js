@@ -16,6 +16,13 @@ const pickerHandlers = {
       args: [picker.selectorFormat],
     });
   },
+  pickFont: async ({ tabId }) => {
+    await chrome.scripting.executeScript({ target: { tabId }, files: ["page-helpers.js", "picker-font.js"] });
+    await chrome.scripting.executeScript({ target: { tabId }, func: () => window.__ttFontPicker() });
+  },
+  // From picker-font.js: find and read the font file behind a CSS family.
+  fontInspect: async (request) => ({ info: (await toOffscreen({ ...request, type: "inspectFont" })).result }),
+  pickedFont: ({ value }) => chrome.storage.local.set({ lastFont: value }),
   // Popup "go" in the auto-redirect row: every enabled rule (auto and manual) on this tab.
   redirectNow: async ({ tabId }) => {
     const changed = await runManualRedirect(await chrome.tabs.get(tabId));
