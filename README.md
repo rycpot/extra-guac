@@ -2,7 +2,7 @@
 
 **Tab Toolkit: Screenshots, Auto-Refresh, PII Blur, Nuke & More**: a Chrome (MV3) extension
 that puts handy page tools in one popup, styled after the [Hop](https://hop.tools) Mac app.
-Click the toolbar icon to open it in Chrome's side panel, which stays open while you switch tabs or use the settings window and always shows the tools for the tab in front (set `USE_SIDE_PANEL` in `background.js` to `false` for the classic popup). The gear opens settings, ⏻ stops everything that is running.
+Click the toolbar icon to open it: a popup by default, or Chrome's side panel (settings → general), which stays open while you switch tabs or use the settings window and always shows the tools for the tab in front. The gear opens settings, ⏻ stops everything that is running.
 The first tab holds the everyday tools, the second the page tools.
 
 | Tool | What it does |

@@ -250,18 +250,25 @@ async function syncBlurScript(s, injectOpenTabs = false) {
   }
 }
 
-// ---- Toolbar icon: side panel or popup ----------------------------------------
-// The tools open in the side panel, which (unlike the popup) stays open while you
-// use other tabs or the settings window. Set to false to go back to the popup.
-const USE_SIDE_PANEL = true;
+// ---- Toolbar icon: popup or side panel (settings → general) ---------------------
+// The popup closes whenever it loses focus; the side panel stays open while you use
+// other tabs or the settings window. Both show popup.html.
 
-chrome.action.setPopup({ popup: USE_SIDE_PANEL ? "" : "popup.html" });
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: USE_SIDE_PANEL }).catch(() => {});
+function applyOpenIn(openIn) {
+  const panel = openIn === "panel";
+  chrome.action.setPopup({ popup: panel ? "" : "popup.html" });
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: panel }).catch(() => {});
+}
+
+TT.getSettings().then((s) => applyOpenIn(s.openIn));
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.tt) applyOpenIn(TT.merge(TT.DEFAULTS, changes.tt.newValue).openIn);
+});
 
 // ---- Settings window --------------------------------------------------------
 // A tall window docked to one edge of the browser, so the page stays visible (blur
-// rules apply live): the left edge with the side panel (which sits on the right),
-// otherwise the right. `section` picks the left-nav entry, e.g. "blur".
+// rules apply live): the left edge when the tools open in the side panel (which sits
+// on the right), otherwise the right. `section` picks the left-nav entry, e.g. "blur".
 async function openSettings(section = "general") {
   const url = chrome.runtime.getURL(`settings.html#${section}`);
   const { settingsWindowId } = await chrome.storage.session.get("settingsWindowId");
@@ -273,6 +280,7 @@ async function openSettings(section = "general") {
     } catch {}
   }
   const cur = await chrome.windows.getLastFocused();
+  const panel = (await TT.getSettings()).openIn === "panel";
   const width = Math.min(900, cur.width ?? 900);
   const win = await chrome.windows.create({
     url,
@@ -280,7 +288,7 @@ async function openSettings(section = "general") {
     width,
     height: cur.height ?? 900,
     top: cur.top ?? 0,
-    left: USE_SIDE_PANEL ? cur.left ?? 0 : Math.max(0, (cur.left ?? 0) + (cur.width ?? width) - width),
+    left: panel ? cur.left ?? 0 : Math.max(0, (cur.left ?? 0) + (cur.width ?? width) - width),
   });
   await chrome.storage.session.set({ settingsWindowId: win.id });
 }
