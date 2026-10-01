@@ -9,10 +9,11 @@
       fixed: 30,
       min: 20,
       max: 45,
-      keyword: "",
+      // { text, enabled }; any enabled one on the page counts. Older versions kept a
+      // single "keyword" string, which the popup turns into the first of these.
+      keywords: [],
       continueAfterMatch: false,
       notify: true,
-      focusTab: false,
       sound: "https://audio.jukehost.co.uk/sKgfWrjaHsuxPYeGQiFoGuWXg14F0xfV",
     },
     shortener: {
@@ -27,6 +28,8 @@
     redirect: { enabled: false, rules: [] },
     upload: { catbox: false, x02: false, catboxUserhash: "", x02Key: "", x02Verified: false },
   };
+
+  const MAX_KEYWORDS = 20;
 
   const SHORTENERS = {
     cuttly: { label: "cutt.ly", freeLimit: 30, keyHelp: "https://cutt.ly/edit", docs: "https://cutt.ly/api-documentation/regular-api" },
@@ -73,5 +76,5 @@
     });
   }
 
-  globalThis.TT = { DEFAULTS, SHORTENERS, merge, getSettings, updateSettings, monthKey, cleanFolder, applyTheme };
+  globalThis.TT = { DEFAULTS, MAX_KEYWORDS, SHORTENERS, merge, getSettings, updateSettings, monthKey, cleanFolder, applyTheme };
 })();
