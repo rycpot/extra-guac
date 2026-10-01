@@ -201,9 +201,10 @@ Card 4111 1111 1111 1111</textarea>
         <tr><td><code>SY500</code> → <code>SY1600</code></td><td><b>find</b> plain text: replaced as is (first match).</td></tr>
         <tr><td><code>/edit{line}</code> → <code>/copy</code></td><td><code>{line}</code> = rest of the URL, <code>{word}</code> = one path part,
           <code>{number}</code> = digits, <code>{[a-z-]}</code> = your own characters. Insert them in the target with <code>{1}</code>, <code>{2}</code>…</td></tr>
-        <tr><td><code>/www(\.)/</code> → <code>old$1</code></td><td><b>regex</b> in slashes, with flags after (<code>/…/gi</code>); use <code>$1</code> or <code>$&lt;name&gt;</code>.</td></tr>
+        <tr><td><code>(1306983.)7860$</code> → <code>$199999</code></td><td><b>regex</b>: text with <code>( ) [ ] \ ^ $ | * +</code> is a regex; or put it in slashes to add flags
+          (<code>/www(\.)/gi</code>). Use <code>$1</code> or <code>$&lt;name&gt;</code> in the target.</td></tr>
         <tr><td><b>auto</b> ✓ / ✗</td><td>Auto rules redirect as the page starts loading. The others run from the page's right-click menu,
-          <i>Redirect with rules</i>.</td></tr>
+          <i>Redirect with rules</i>, or <b>go</b> in the popup (for pages like Google Sheets that have their own right-click menu).</td></tr>
         <tr><td>loops</td><td>A tab is never redirected again from a URL a rule just sent it to, and more than 4 redirects in 10 s
           pauses redirecting that tab for a minute.</td></tr>
       </table>

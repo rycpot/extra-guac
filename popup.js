@@ -492,6 +492,7 @@ function initRedirect() {
   render(settings);
   toggle.onclick = async () => render(await TT.updateSettings({ redirect: { enabled: toggle.getAttribute("aria-checked") !== "true" } }));
   $("redirectSettings").onclick = () => send("openSettings", { section: "redirect" }).then(() => window.close(), fail);
+  $("redirectNow").onclick = () => send("redirectNow").then(() => window.close(), fail);
   chrome.storage.onChanged.addListener((c, area) => area === "local" && c.tt && render(TT.merge(TT.DEFAULTS, c.tt.newValue)));
 }
 

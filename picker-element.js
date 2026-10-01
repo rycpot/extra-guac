@@ -90,31 +90,15 @@
   };
 
   const unique = (sel) => { try { return document.querySelectorAll(sel).length === 1; } catch { return false; } };
-  // Generated-looking names (hashes, long numbers, state classes) make brittle selectors.
-  const stable = (name) => /^[a-zA-Z][\w-]*$/.test(name) && !/\d{3,}|[a-f0-9]{6,}|^(is|has)-|active|hover|focus|selected/i.test(name);
 
-  // Shortest unique CSS path, climbing from the element until the selector matches only it.
+  // Same library and options as the reference element-selector extension, so the
+  // selectors match what it produces (e.g. ".button--variant-primary.button--intent-primary:nth-child(1)").
   function cssPath(el) {
-    if (el.id && stable(el.id) && unique(`#${CSS.escape(el.id)}`)) return `#${CSS.escape(el.id)}`;
-    const parts = [];
-    for (let node = el; node && node.nodeType === 1 && node !== document.documentElement; node = node.parentElement) {
-      if (node !== el && node.id && stable(node.id) && unique(`#${CSS.escape(node.id)}`)) {
-        parts.unshift(`#${CSS.escape(node.id)}`);
-        return parts.join(" > ");
-      }
-      const tagName = node.localName;
-      const classes = [...node.classList].filter(stable).slice(0, 2);
-      let part = CSS.escape(tagName) + classes.map((c) => `.${CSS.escape(c)}`).join("");
-      const parent = node.parentElement;
-      if (parent) {
-        const sameTag = [...parent.children].filter((c) => c.localName === tagName);
-        const alike = sameTag.filter((c) => classes.every((cl) => c.classList.contains(cl)));
-        if (alike.length > 1) part += `:nth-of-type(${sameTag.indexOf(node) + 1})`;
-      }
-      parts.unshift(part);
-      if (unique(parts.join(" > "))) return parts.join(" > ");
+    try {
+      return CssSelectorGenerator.getCssSelector(el, { selectors: ["class", "tag", "nthchild", "nthoftype"] });
+    } catch {
+      return el.localName;
     }
-    return parts.join(" > ");
   }
 
   // XPath from the nearest ancestor with a unique id (or from the root), with indexes

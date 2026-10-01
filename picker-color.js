@@ -55,12 +55,12 @@
       zoom.drawImage(full, px - 5, py - 5, 11, 11, 0, 0, 11, 11);
       const [r, g, b] = ctx.getImageData(px, py, 1, 1).data;
       current = hex(r, g, b);
+      // The loupe is centred on the cursor: its middle square is the pixel being picked.
       loupe.hidden = tag.hidden = false;
-      const right = e.clientX + 150 > innerWidth, below = e.clientY + 170 > innerHeight;
-      loupe.style.left = `${right ? e.clientX - 150 : e.clientX + 18}px`;
-      loupe.style.top = `${below ? e.clientY - 150 : e.clientY + 18}px`;
-      tag.style.left = loupe.style.left;
-      tag.style.top = `${parseFloat(loupe.style.top) + 140}px`;
+      loupe.style.left = `${e.clientX - 66}px`;
+      loupe.style.top = `${e.clientY - 66}px`;
+      tag.style.left = `${e.clientX - 40}px`;
+      tag.style.top = `${e.clientY + 74 > innerHeight - 30 ? e.clientY - 104 : e.clientY + 74}px`;
       tag.querySelector("i").style.background = current;
       tag.querySelector("span").textContent = current;
     }

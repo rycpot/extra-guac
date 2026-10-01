@@ -2,7 +2,8 @@
 // A rule is { domain, find, replace, auto, on }:
 // - domain: where it applies. Empty = everywhere; "reddit.com" = that host and its
 //   subdomains; contains "/" = URL contains it; looks like a regex (\ ( * …) = regex test.
-// - find: plain text, a template with {line} {word} {number} {[chars]}, or /regex/flags.
+// - find: plain text, a template with {line} {word} {number} {[chars]}, /regex/flags, or
+//   bare text containing regex syntax ( ) [ ] \ ^ $ | * + (treated as a regex).
 // - replace: plain text; {1} {2}… insert template placeholders, $1 $<name> regex groups.
 (() => {
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -19,6 +20,11 @@
         last = m.index + m[0].length;
       }
       return new RegExp(src + esc(find.slice(last)));
+    }
+    // Text with regex syntax ( ) [ ] \ ^ $ | * + is a regex (like "(1306983.)7860$"),
+    // as in classic URL-replace extensions; anything else is matched literally.
+    if (/[()[\]\\^$|*+]/.test(find)) {
+      try { return new RegExp(find); } catch {}
     }
     return new RegExp(esc(find));
   }

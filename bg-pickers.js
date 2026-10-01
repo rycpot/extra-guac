@@ -9,12 +9,17 @@ const pickerHandlers = {
   },
   pickElement: async ({ tabId }) => {
     const { picker } = await TT.getSettings();
-    await chrome.scripting.executeScript({ target: { tabId }, files: ["page-helpers.js", "picker-element.js"] });
+    await chrome.scripting.executeScript({ target: { tabId }, files: ["vendor/css-selector-generator.js", "page-helpers.js", "picker-element.js"] });
     await chrome.scripting.executeScript({
       target: { tabId },
       func: (format) => window.__ttElementPicker(format),
       args: [picker.selectorFormat],
     });
+  },
+  // Popup "go" in the auto-redirect row: every enabled rule (auto and manual) on this tab.
+  redirectNow: async ({ tabId }) => {
+    const changed = await runManualRedirect(await chrome.tabs.get(tabId));
+    if (!changed) throw new Error("No redirect rule matches this page");
   },
   // Sent by the pickers after copying, so the popup can show the last value.
   pickedColor: ({ value }) => chrome.storage.local.set({ lastColor: value }),

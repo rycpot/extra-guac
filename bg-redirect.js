@@ -43,14 +43,16 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   pausedTabs.delete(tabId);
 });
 
-// Right-click → "Redirect with rules": every enabled rule (manual and auto) on this page.
+// Right-click → "Redirect with rules" (or "go" in the popup): every enabled rule,
+// manual and auto, on this page. Returns whether the tab was redirected.
 async function runManualRedirect(tab) {
   const { redirect } = await TT.getSettings();
   const result = Redirects.apply(tab.url || "", redirect.rules);
   if (result.url === tab.url) {
     setBadge(tab.id, "✕", "#ff453a");
     setTimeout(() => setBadge(tab.id, ""), 1500);
-    return;
+    return false;
   }
-  await redirectTab(tab.id, tab.url, result.url);
+  recentRedirects.delete(tab.id); // a manual run is deliberate: don't let the loop guard block it
+  return redirectTab(tab.id, tab.url, result.url);
 }

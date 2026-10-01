@@ -105,12 +105,12 @@ async function uploadImage(host, srcUrl, tab) {
     const { uploadHistory = [] } = await chrome.storage.local.get("uploadHistory");
     uploadHistory.unshift({ host: up.label, link, source: srcUrl.startsWith("data:") ? "(embedded image)" : srcUrl, at: Date.now() });
     await chrome.storage.local.set({ uploadHistory: uploadHistory.slice(0, UPLOAD_HISTORY_LIMIT) });
-    await toOffscreen({ type: "copy", text: link }).catch(() => {});
+    const copied = await copyToClipboard(link, tab);
     setBadge(tab.id, "✓");
     chrome.notifications.create(`upload|${link}`, {
       type: "basic",
       iconUrl: "icons/icon128.png",
-      title: `Uploaded to ${up.label} · link copied`,
+      title: `Uploaded to ${up.label}${copied ? " · link copied" : " · copy failed, click to open"}`,
       message: link,
       contextMessage: "Click to open",
     });
@@ -125,6 +125,31 @@ async function uploadImage(host, srcUrl, tab) {
   } finally {
     setTimeout(() => setBadge(tab.id, ""), 2500);
   }
+}
+
+// Copies text: first in the page that was right-clicked (it has focus), then through
+// the offscreen document. The clipboardWrite permission lets both work without a click.
+async function copyToClipboard(text, tab) {
+  const inPage = await chrome.scripting
+    .executeScript({
+      target: { tabId: tab.id },
+      func: (t) => {
+        const ta = document.createElement("textarea");
+        ta.value = t;
+        ta.style.cssText = "position:fixed;top:-100px;opacity:0;";
+        document.documentElement.append(ta);
+        ta.select();
+        let ok = false;
+        try { ok = document.execCommand("copy"); } catch {}
+        ta.remove();
+        return ok;
+      },
+      args: [text],
+    })
+    .then((r) => !!r[0]?.result)
+    .catch(() => false);
+  if (inPage) return true;
+  return toOffscreen({ type: "copy", text }).then(() => true, () => false);
 }
 
 // Downloads the image bytes: data: URLs directly, blob: URLs from inside the page,
