@@ -88,12 +88,16 @@
   // ---- Custom rules -------------------------------------------------------
 
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Whitespace plus invisible formatting characters pages wrap values in (e.g. Amazon
+  // writes phone numbers as "\u202A9415550123\u202C" to keep them left-to-right).
+  const GAP = "[\\s\\u00AD\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\uFEFF]";
+  const GAP_RE = new RegExp(GAP);
   // Literal label text: any whitespace (or none, since page markup may drop it) matches.
-  const literal = (s) => s.split(/\s+/).map(esc).join("\\s*");
+  const literal = (s) => s.split(/\s+/).map(esc).join(`${GAP}*`);
 
   const PLACEHOLDER = /\{(number|word|line|\[(?:\\.|[^\]\\])+\])\}/g;
   const PLACEHOLDER_SRC = {
-    number: "[+(]?\\d(?:[\\d().\\-]|\\s+(?=[\\d(+]))*\\d",
+    number: `[+(]?\\d(?:[\\d().\\-]|${GAP}+(?=[\\d(+]))*\\d`,
     word: "\\S+",
     line: "[\\s\\S]+",
   };
@@ -165,8 +169,8 @@
     }
     const trimmed = spans
       .map(([s, e]) => {
-        while (s < e && /\s/.test(text[s])) s++;
-        while (e > s && /\s/.test(text[e - 1])) e--;
+        while (s < e && GAP_RE.test(text[s])) s++;
+        while (e > s && GAP_RE.test(text[e - 1])) e--;
         return [s, e];
       })
       .filter(([s, e]) => e > s)
@@ -206,6 +210,6 @@
   }
 
   globalThis.PIIRules = {
-    DEFAULTS, DETECTORS, compile, parseRules, findMatches, parseSites, sitePatterns, isExcluded, withDefaults,
+    DEFAULTS, DETECTORS, compile, isGap: (ch) => GAP_RE.test(ch), parseRules, findMatches, parseSites, sitePatterns, isExcluded, withDefaults,
   };
 })();

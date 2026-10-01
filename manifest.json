@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Hard Refresh, Nuke & Blur",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Click: hard refresh. Right-click: Nuke site data, or blur sensitive data (PII) on every page.",
   "permissions": [
     "browsingData",

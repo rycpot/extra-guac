@@ -17,6 +17,7 @@
     "SUMMARY", "TABLE", "TBODY", "TD", "TFOOT", "TH", "THEAD", "TR", "UL",
   ]);
   const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "TEXTAREA", "SVG", "HEAD"]);
+  const INERT = new Set(["SCRIPT", "STYLE", "LINK", "META", "NOSCRIPT", "TEMPLATE", "IMG", "IFRAME", "SVG", "VIDEO", "CANVAS"]);
   const FIELD_TYPES = new Set(["text", "email", "tel", "number", "search", "url"]);
 
   const highlight = new Highlight();
@@ -137,10 +138,13 @@
   // Re-scans everything under `block`. Text is matched per visual block, so a
   // label and its value in separate inline elements still match together.
   function scan(block) {
-    clearBlock(block);
+    const fresh = new Map([[block, []]]); // every block re-scanned here -> its new matches
     let group = null;
     const flush = () => {
-      if (group) addMatches(group.block, matchGroup(group.nodes));
+      if (group) {
+        if (!fresh.has(group.block)) fresh.set(group.block, []);
+        fresh.get(group.block).push(...matchGroup(group.nodes));
+      }
       group = null;
     };
     const walker = document.createTreeWalker(block, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
@@ -153,7 +157,7 @@
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
       if (n.nodeType === 1) {
         if (n.tagName === "BR") flush();
-        else if (isBlock(n)) { flush(); clearBlock(n); }
+        else if (isBlock(n)) { flush(); fresh.set(n, []); }
         continue;
       }
       if (!n.data.trim() && !group) continue;
@@ -162,6 +166,7 @@
       (group ??= { block: b, nodes: [] }).nodes.push(n);
     }
     flush();
+    for (const [b, matches] of fresh) reconcile(b, matches);
   }
 
   function matchGroup(nodes) {
@@ -187,11 +192,27 @@
     return r;
   }
 
-  function addMatches(block, matches) {
-    if (!matches.length) return;
-    const list = blockMatches.get(block) || [];
-    for (const m of matches) { list.push(m); if (m.range) highlight.add(m.range); }
-    blockMatches.set(block, list);
+  const sameMatch = (a, b) =>
+    a.segs.length === b.segs.length && a.segs.every((s, i) => s.every((v, j) => v === b.segs[i][j]));
+
+  // Keeps matches that are unchanged instead of removing and re-adding them, so
+  // pages that change constantly don't make the highlight repaint (flicker).
+  function reconcile(block, matches) {
+    const old = blockMatches.get(block) || [];
+    const kept = matches.map((m) => {
+      const i = old.findIndex((o) => o && sameMatch(o, m));
+      if (i < 0) { if (m.range) highlight.add(m.range); return m; }
+      const o = old[i];
+      old[i] = null;
+      return o;
+    });
+    for (const o of old) {
+      if (!o) continue;
+      if (o.range) highlight.delete(o.range);
+      if (o === revealed) revealed = null;
+    }
+    if (kept.length) blockMatches.set(block, kept);
+    else blockMatches.delete(block);
   }
 
   // ---- Mask mode ----------------------------------------------------------
@@ -216,9 +237,11 @@
       const orig = textOf(n);
       const chars = orig.split("");
       for (const [a, b] of segsByNode.get(n) || []) {
-        for (let i = a; i < b; i++) if (!/\s/.test(chars[i])) chars[i] = ch;
+        for (let i = a; i < b; i++) if (!R.isGap(chars[i])) chars[i] = ch;
       }
       const out = chars.join("");
+      const prev = masked.get(n);
+      if (prev && prev.masked === out && n.data === prev.shown) continue; // being hovered: leave revealed
       if (out === orig) masked.delete(n);
       else masked.set(n, { orig, masked: out, shown: null });
       write(n, out);
@@ -259,6 +282,7 @@
     if (document.readyState === "loading" && settings?.hideUntilScanned) return; // full scan at DOMContentLoaded
     const roots = new Set();
     for (const r of records) {
+      if (r.type === "childList" && [...r.addedNodes, ...r.removedNodes].every(isInert)) continue;
       const n = r.type === "characterData" ? r.target.parentElement : r.target;
       if (n && n !== styleEl) roots.add(blockOf(n));
     }
@@ -268,6 +292,13 @@
       for (let p = b.parentElement; p && !covered; p = p.parentElement) covered = roots.has(p);
       if (!covered) scan(b);
     }
+  }
+
+  // Nodes that can't change any text: scripts, images, iframes, empty elements, whitespace.
+  function isInert(n) {
+    if (n.nodeType === 3) return !n.data.trim();
+    if (n.nodeType !== 1) return true;
+    return INERT.has(n.tagName.toUpperCase()) || (!n.firstChild && !isField(n));
   }
 
   // ---- Form fields --------------------------------------------------------
