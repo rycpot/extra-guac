@@ -13,7 +13,8 @@
 // Snapshots include API keys (shorteners, upload hosts), like the settings themselves.
 
 // "backup" is the Drive setup (OAuth client ID, auto-sync interval); the sign-in itself isn't saved.
-const BACKUP_KEYS = ["tt", "pii", "removed", "shortHistory", "shortCounts", "uploadHistory", "colorHistory", "selectorHistory", "fontHistory", "backup"];
+const BACKUP_KEYS = ["tt", "pii", "removed", "shortHistory", "shortCounts", "uploadHistory", "colorHistory", "selectorHistory", "fontHistory", "hl", "backup"];
+const ADDED_LATER = new Set(["hl"]);
 const BACKUP_FOLDER = "Tab Toolkit backups";
 const BACKUP_ALARM = "tt-backup";
 const BACKUP_INTERVALS = [0, 1, 2, 4, 6, 12, 24]; // hours; 0 = only when asked, 24 unless set
@@ -249,7 +250,7 @@ async function applyData(data) {
   for (const k of BACKUP_KEYS) {
     if (k === "backup") continue;
     if (data[k] !== undefined) set[k] = data[k];
-    else remove.push(k);
+    else if (!ADDED_LATER.has(k)) remove.push(k); // older snapshots don't have these: keep what's there
   }
   const { backup = {}, backupState = {} } = await chrome.storage.local.get(["backup", "backupState"]);
   const from = data.backup;

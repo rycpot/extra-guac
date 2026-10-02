@@ -18,6 +18,7 @@
     initDarkLists();
     initBackup();
     initLayout();
+    initHighlight();
     showPane();
     addEventListener("hashchange", showPane);
     $("testSound").onclick = testSound;
@@ -563,5 +564,208 @@
       if (JSON.stringify(layout) !== JSON.stringify(TT.layoutOf(settings.layout))) setPath("layout", layout);
     });
     $("layoutReset").onclick = () => setPath("layout", structuredClone(TT.DEFAULTS.layout), true);
+  }
+  // ---- Highlight words: global list, excluded sites, per-site lists ----
+
+  function initHighlight() {
+    const L = TT.HL_LIMITS;
+    let hl = TT.hlOf();
+    let importInto = null; // "global" or a site, for the file picker
+    const notes = {}; // last add/import result per list, shown under it
+
+    const siteName = (raw) => {
+      let v = String(raw || "").trim().toLowerCase();
+      try { if (/^[a-z]+:\/\//.test(v)) v = new URL(v).hostname; } catch {}
+      v = v.replace(/^www\./, "").replace(/[/?#].*$/, "");
+      return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(v) ? v : "";
+    };
+
+    async function edit(fn) {
+      const next = TT.hlOf((await chrome.storage.local.get("hl")).hl);
+      fn(next);
+      await chrome.storage.local.set({ hl: next });
+    }
+
+    // Adds words to a list: trimmed, one space between words, no duplicates (any case), within limits.
+    function addWords(list, incoming, max) {
+      const have = new Set(list.words.map((w) => w.toLowerCase()));
+      let added = 0, dup = 0, long = 0, over = 0;
+      for (const raw of incoming) {
+        const w = String(raw).replace(/\s+/g, " ").trim();
+        if (!w) continue;
+        if (w.length > L.length) { long++; continue; }
+        if (have.has(w.toLowerCase())) { dup++; continue; }
+        if (list.words.length >= max) { over++; continue; }
+        list.words.push(w);
+        have.add(w.toLowerCase());
+        added++;
+      }
+      return [`added ${added}`, dup && `${dup} already there`, long && `${long} too long`, over && `${over} over the limit of ${max}`].filter(Boolean).join(" · ");
+    }
+
+    // First column of each CSV row; quoted fields and a "word" header are fine.
+    function parseCsv(text) {
+      const rows = [];
+      let cell = "", row = [], q = false;
+      for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (q) {
+          if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+          else if (c === '"') q = false;
+          else cell += c;
+        } else if (c === '"') q = true;
+        else if (c === ",") { row.push(cell); cell = ""; }
+        else if (c === "\n" || c === "\r") {
+          if (c === "\r" && text[i + 1] === "\n") i++;
+          row.push(cell); rows.push(row); row = []; cell = "";
+        } else cell += c;
+      }
+      row.push(cell); rows.push(row);
+      const words = rows.map((r) => r[0].trim()).filter(Boolean);
+      if (/^words?$/i.test(words[0] || "")) words.shift();
+      return words;
+    }
+
+    function exportCsv(name, words) {
+      const cell = (w) => (/[",\n\r]/.test(w) ? `"${w.replace(/"/g, '""')}"` : w);
+      const blob = new Blob([["word", ...words.map(cell)].join("\n") + "\n"], { type: "text/csv" });
+      const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `highlight-${name}.csv` });
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }
+
+    function colorPicker(value, onPick) {
+      const box = document.createElement("span");
+      box.className = "hl-colors";
+      for (const c of TT.HL_COLORS) {
+        const sw = Object.assign(document.createElement("button"), { type: "button", className: `sw${c.toLowerCase() === value.toLowerCase() ? " on" : ""}`, title: c });
+        sw.style.background = c;
+        sw.onclick = () => onPick(c);
+        box.append(sw);
+      }
+      const pick = Object.assign(document.createElement("input"), { type: "color", value, title: "Any colour" });
+      pick.onchange = () => onPick(pick.value);
+      const hex = Object.assign(document.createElement("input"), { type: "text", className: "text hex", value, maxLength: 7, spellcheck: false, title: "Hex code" });
+      hex.onchange = () => {
+        const v = hex.value.trim().replace(/^#?/, "#");
+        if (/^#[0-9a-f]{6}$/i.test(v)) onPick(v.toLowerCase());
+        else hex.value = value;
+      };
+      box.append(pick, hex);
+      return box;
+    }
+
+    function pills(words, onRemove) {
+      const box = document.createElement("div");
+      box.className = "hl-pills";
+      box.append(...words.map((w) => {
+        const chip = document.createElement("span");
+        chip.className = "chip";
+        const text = Object.assign(document.createElement("span"), { className: "chip-text", textContent: w, title: w });
+        text.style.paddingLeft = "10px";
+        const x = Object.assign(document.createElement("button"), { type: "button", className: "chip-x", textContent: "×" });
+        x.setAttribute("aria-label", `Remove ${w}`);
+        x.onclick = () => onRemove(w);
+        chip.append(text, x);
+        return chip;
+      }));
+      return box;
+    }
+
+    // One list (global or a site): name, on/off, colour, count, CSV, words, add box.
+    function listCard(key, list) {
+      const isGlobal = key === "global";
+      const max = isGlobal ? L.global : L.site;
+      const at = (h) => (isGlobal ? h.global : h.sites[key]);
+      const card = document.createElement("div");
+      card.className = `hl-list${list.on ? "" : " off"}`;
+      const head = document.createElement("div");
+      head.className = "hl-head";
+      const title = isGlobal ? Object.assign(document.createElement("h2"), { textContent: "Global list" }) : Object.assign(document.createElement("b"), { textContent: key });
+      if (isGlobal) title.style.margin = "0";
+      const on = document.createElement("label");
+      on.className = "toggle";
+      on.innerHTML = `<input type="checkbox" role="switch"><span></span>`;
+      on.querySelector("input").checked = list.on;
+      on.querySelector("span").textContent = list.on ? "on" : "off";
+      on.querySelector("input").onchange = (e) => edit((h) => { if (at(h)) at(h).on = e.target.checked; });
+      const count = Object.assign(document.createElement("span"), { className: "hint", textContent: `${list.words.length} / ${max}` });
+      const grow = Object.assign(document.createElement("span"), { className: "grow" });
+      const btn = (label, fn, title = "") => Object.assign(document.createElement("button"), { type: "button", className: "btn ghost", textContent: label, title, onclick: fn });
+      head.append(title, on, count, grow,
+        btn("import CSV", () => { importInto = key; $("hlImportFile").click(); }, "Add words from a .csv file (first column)"),
+        btn("export CSV", () => exportCsv(isGlobal ? "global" : key, list.words)),
+        btn("clear", () => list.words.length && confirm(`Remove all ${list.words.length} words from ${isGlobal ? "the global list" : key}?`) && edit((h) => { if (at(h)) at(h).words = []; })));
+      if (!isGlobal) head.append(btn("delete site", () => confirm(`Delete the list for ${key}?`) && edit((h) => delete h.sites[key])));
+      const add = document.createElement("div");
+      add.className = "add-row";
+      add.innerHTML = `<input type="text" class="text" spellcheck="false" placeholder="add words or phrases, separated by commas"><button type="button" class="btn">add</button>`;
+      const input = add.querySelector("input");
+      const go = () => {
+        const words = input.value.split(/[,\n]/);
+        if (!input.value.trim()) return;
+        edit((h) => { if (at(h)) notes[key] = addWords(at(h), words, max); });
+        input.value = "";
+      };
+      add.querySelector("button").onclick = go;
+      input.onkeydown = (e) => e.key === "Enter" && go();
+      const note = Object.assign(document.createElement("div"), { className: "hl-note", textContent: notes[key] || "" });
+      const colors = document.createElement("div");
+      colors.className = "hl-head";
+      colors.append(Object.assign(document.createElement("span"), { className: "hint", textContent: "colour" }), colorPicker(list.color, (c) => edit((h) => { if (at(h)) at(h).color = c; })));
+      card.append(head, colors, pills(list.words, (w) => edit((h) => { if (at(h)) at(h).words = at(h).words.filter((x) => x !== w); })), add, note);
+      return card;
+    }
+
+    function render() {
+      $("hlEnabled").checked = hl.enabled;
+      $("hlEnabled").nextElementSibling.textContent = hl.enabled ? "on" : "off";
+      $("hlGlobal").replaceChildren(listCard("global", hl.global));
+      $("hlExcludePills").replaceWith(Object.assign(pills(hl.exclude, (s) => edit((h) => (h.exclude = h.exclude.filter((x) => x !== s)))), { id: "hlExcludePills", className: "rm-pills wrap" }));
+      const sites = Object.keys(hl.sites).sort();
+      $("hlSitesCount").textContent = `${sites.length} / ${L.sites}`;
+      $("hlSites").replaceChildren(...sites.map((site) => listCard(site, hl.sites[site])));
+    }
+
+    async function load() {
+      hl = TT.hlOf((await chrome.storage.local.get("hl")).hl);
+      render();
+    }
+
+    $("hlEnabled").onchange = (e) => edit((h) => (h.enabled = e.target.checked));
+    const addExclude = () => {
+      const site = siteName($("hlExcludeAdd").value);
+      if (!site) return void ($("hlExcludeAdd").value && alert("That doesn't look like a site, e.g. example.com"));
+      $("hlExcludeAdd").value = "";
+      edit((h) => (h.exclude = [...new Set([...h.exclude, site])].sort()));
+    };
+    $("hlExcludeBtn").onclick = addExclude;
+    $("hlExcludeAdd").onkeydown = (e) => e.key === "Enter" && addExclude();
+    const addSite = () => {
+      const site = siteName($("hlSiteAdd").value);
+      if (!site) return void ($("hlSiteAdd").value && alert("That doesn't look like a site, e.g. example.com"));
+      $("hlSiteAdd").value = "";
+      edit((h) => {
+        if (h.sites[site]) return;
+        if (Object.keys(h.sites).length >= L.sites) return alert(`Up to ${L.sites} sites can have their own list.`);
+        h.sites[site] = { on: true, color: TT.HL_COLORS[(Object.keys(h.sites).length + 2) % TT.HL_COLORS.length], words: [] };
+      });
+    };
+    $("hlSiteBtn").onclick = addSite;
+    $("hlSiteAdd").onkeydown = (e) => e.key === "Enter" && addSite();
+    $("hlImportFile").onchange = async () => {
+      const file = $("hlImportFile").files[0];
+      $("hlImportFile").value = "";
+      if (!file || !importInto) return;
+      const key = importInto;
+      const words = parseCsv(await file.text());
+      edit((h) => {
+        const list = key === "global" ? h.global : h.sites[key];
+        if (list) notes[key] = `${file.name}: ${addWords(list, words, key === "global" ? L.global : L.site)}`;
+      });
+    };
+
+    load();
+    chrome.storage.onChanged.addListener((c, area) => area === "local" && c.hl && load());
   }
 })();

@@ -38,6 +38,7 @@ async function init() {
   initElement(isWeb);
   initFont(isWeb);
   initRemove(isWeb);
+  initHighlight(isWeb);
   initRedirect();
   initUploads();
   initBackup();
@@ -729,6 +730,43 @@ async function initFont(isWeb) {
 // ---- Page tools: remove elements -----------------------------------------------
 // Counts this site's removed elements, starts the remove picker, and switches "show
 // removed" for the site (bg-remove.js).
+
+// Highlight words: main switch; "exclude <site>" while the global list applies here;
+// "<site> list" when the site has its own list (off keeps the list).
+function initHighlight(isWeb) {
+  const site = isWeb ? new URL(tab.url).hostname.toLowerCase().replace(/^www\./, "") : "";
+  const covers = (s) => site === s || site.endsWith(`.${s}`);
+  let hl = TT.hlOf();
+  async function render() {
+    hl = TT.hlOf((await chrome.storage.local.get("hl")).hl);
+    setSwitch($("hlToggle"), hl.enabled);
+    const globalOn = hl.enabled && hl.global.on && hl.global.words.length > 0;
+    const excluded = hl.exclude.some(covers);
+    $("hlExcludeRow").hidden = !isWeb || !globalOn;
+    $("hlExcludeLabel").textContent = `exclude ${site} from global`;
+    $("hlExclude").setAttribute("aria-label", $("hlExcludeLabel").textContent);
+    setSwitch($("hlExclude"), excluded);
+    const own = Object.keys(hl.sites).filter(covers).sort((a, b) => b.length - a.length)[0];
+    $("hlSiteRow").hidden = !isWeb || !hl.enabled || !own;
+    if (own) {
+      $("hlSiteLabel").textContent = `${own} list · ${hl.sites[own].words.length} word${hl.sites[own].words.length === 1 ? "" : "s"}`;
+      $("hlSite").setAttribute("aria-label", `${own} list on or off`);
+      setSwitch($("hlSite"), hl.sites[own].on);
+      $("hlSite").dataset.site = own;
+    }
+    const [res] = hl.enabled && isWeb
+      ? await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => window.__ttHlCount?.() ?? null }).catch(() => [])
+      : [];
+    const n = res?.result;
+    $("hlStatus").textContent = !hl.enabled ? "" : n == null ? (isWeb ? "" : "not on this page") : n >= 5000 ? "5,000+ found" : `${n} found`;
+  }
+  render();
+  chrome.storage.onChanged.addListener((c, area) => area === "local" && c.hl && setTimeout(render, 400));
+  $("hlToggle").onclick = () => send("hlEnable", { on: $("hlToggle").getAttribute("aria-checked") !== "true" }).catch(fail);
+  $("hlExclude").onclick = () => send("hlSite", { site, kind: "exclude", on: $("hlExclude").getAttribute("aria-checked") !== "true" }).catch(fail);
+  $("hlSite").onclick = () => send("hlSite", { site: $("hlSite").dataset.site, kind: "site", on: $("hlSite").getAttribute("aria-checked") !== "true" }).catch(fail);
+  $("hlSettings").onclick = () => send("openSettings", { section: "highlight" }).then(() => closePopup(), fail);
+}
 
 function initRemove(isWeb) {
   const site = isWeb ? new URL(tab.url).hostname.toLowerCase().replace(/^www\./, "") : "";
