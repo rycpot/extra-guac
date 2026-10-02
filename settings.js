@@ -17,6 +17,7 @@
     initRemoved();
     initDarkLists();
     initBackup();
+    initLayout();
     showPane();
     addEventListener("hashchange", showPane);
     $("testSound").onclick = testSound;
@@ -83,6 +84,7 @@
     fillServices();
     renderRules();
     fillUpload();
+    renderLayout();
     update();
   }
 
@@ -494,5 +496,65 @@
 
     render();
     chrome.storage.onChanged.addListener((c, area) => area === "local" && (c.backup || c.backupState) && render());
+  }
+  // ---- Tools layout: drag sections between the popup's tabs ----
+
+  let dragging = null;
+  function renderLayout() {
+    if (dragging) return;
+    const layout = TT.layoutOf(settings.layout);
+    $("layoutBoard").replaceChildren(...Object.entries(TT.PANELS).map(([panel, name]) => {
+      const col = document.createElement("div");
+      col.className = "col";
+      col.innerHTML = `<h3></h3><div class="cards"></div>`;
+      col.querySelector("h3").textContent = name;
+      const cards = col.querySelector(".cards");
+      cards.dataset.panel = panel;
+      for (const id of layout[panel]) {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.draggable = true;
+        card.dataset.id = id;
+        card.textContent = TT.SECTIONS[id];
+        cards.append(card);
+      }
+      return col;
+    }));
+  }
+
+  function initLayout() {
+    const board = $("layoutBoard");
+    renderLayout();
+    board.addEventListener("dragstart", (e) => {
+      const card = e.target.closest?.(".card");
+      if (!card) return;
+      dragging = card;
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", card.dataset.id);
+      requestAnimationFrame(() => card.classList.add("dragging"));
+    });
+    // The card moves as you drag: before the first card whose middle is below the pointer.
+    board.addEventListener("dragover", (e) => {
+      const cards = e.target.closest?.(".col")?.querySelector(".cards");
+      if (!dragging || !cards) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      const after = [...cards.querySelectorAll(".card:not(.dragging)")].find((c) => {
+        const r = c.getBoundingClientRect();
+        return e.clientY < r.top + r.height / 2;
+      });
+      if (after) { if (after.previousElementSibling !== dragging) cards.insertBefore(dragging, after); }
+      else if (cards.lastElementChild !== dragging) cards.append(dragging);
+    });
+    board.addEventListener("drop", (e) => e.preventDefault());
+    board.addEventListener("dragend", () => {
+      if (!dragging) return;
+      dragging.classList.remove("dragging");
+      dragging = null;
+      const layout = {};
+      for (const cards of board.querySelectorAll(".cards")) layout[cards.dataset.panel] = [...cards.children].map((c) => c.dataset.id);
+      if (JSON.stringify(layout) !== JSON.stringify(TT.layoutOf(settings.layout))) setPath("layout", layout);
+    });
+    $("layoutReset").onclick = () => setPath("layout", structuredClone(TT.DEFAULTS.layout), true);
   }
 })();

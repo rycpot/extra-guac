@@ -14,7 +14,7 @@
     <a href="#dark">dark mode</a>
     <a href="#refresh">auto-refresh</a>
     <a href="#shortener">url shortener</a>
-    <a href="#redirect">auto redirect</a>
+    <a href="#redirect">url auto redirect</a>
     <a href="#upload">image upload</a>
     <a href="#remove">remove elements</a>
     <a href="#backup">backup</a>
@@ -39,6 +39,11 @@
       </div>
       <p class="hint">The popup closes as soon as you click anywhere else, like a settings window or another tab.
         The side panel stays open beside the page and follows the tab you're on.</p>
+    </section>
+    <section>
+      <h2>Tools layout <button type="button" class="btn ghost" id="layoutReset">reset</button></h2>
+      <p class="hint">Drag a section to another tab, or up and down within one; the popup and side panel follow right away.</p>
+      <div class="board" id="layoutBoard"></div>
     </section>
     <section>
       <h2>About</h2>
@@ -229,7 +234,7 @@ Card 4111 1111 1111 1111</textarea>
 
   <div class="pane" id="redirect">
     <header class="pane-head">
-      <h1>auto redirect</h1>
+      <h1>url auto redirect</h1>
       <label class="toggle"><input type="checkbox" role="switch" data-path="redirect.enabled"><span>on</span></label>
     </header>
     <section>
