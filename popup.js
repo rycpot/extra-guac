@@ -166,9 +166,10 @@ function initDark(isWeb) {
     siteSwitch.setAttribute("aria-label", $("darkSiteLabel").textContent);
     setSwitch(siteSwitch, all ? !on : on);
     const [probe] = dark.enabled && isWeb && on && !covers(dark.force)
-      ? await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => window.__ttDarkPage === true }).catch(() => [])
+      ? await chrome.scripting.executeScript({ target: { tabId: tab.id },
+        func: () => (window.__ttNativeOn ? "site's dark theme" : window.__ttDarkPage === true ? "already dark" : "") }).catch(() => [])
       : [];
-    $("darkStatus").textContent = probe?.result ? "already dark" : "";
+    $("darkStatus").textContent = probe?.result || "";
     ready = true;
   }
   render();
