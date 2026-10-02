@@ -123,14 +123,6 @@ async function toOffscreen(msg) {
 // ---- Nuke ------------------------------------------------------------------
 
 // Suffixes where the registrable domain has three labels (e.g. foo.co.uk).
-const MULTI_PART_SUFFIXES = new Set([
-  "co.uk", "org.uk", "ac.uk", "gov.uk", "me.uk", "ltd.uk", "plc.uk",
-  "com.au", "net.au", "org.au", "edu.au", "gov.au",
-  "co.nz", "org.nz", "co.jp", "ne.jp", "or.jp", "co.kr", "co.in", "co.za",
-  "com.br", "com.mx", "com.ar", "com.cn", "com.hk", "com.sg", "com.tw", "com.tr",
-  "github.io", "vercel.app", "netlify.app", "pages.dev", "herokuapp.com", "web.app", "firebaseapp.com",
-]);
-
 // Progress for the popup: storage.session "nuke:<tabId>" = { step, total, label }.
 async function nukeProgress(tabId, step, label) {
   await chrome.storage.session.set({ [`nuke:${tabId}`]: { step, total: 4, label } });
@@ -148,7 +140,7 @@ async function nuke(tab) {
 
 async function nukeSteps(tab, url) {
   const host = url.hostname;
-  const domain = registrableDomain(host);
+  const scope = await siteScope(host);
   await nukeProgress(tab.id, 1, "page storage");
 
   // 1. sessionStorage isn't covered by browsingData; clear it (and localStorage) in-page.
@@ -163,10 +155,23 @@ async function nukeSteps(tab, url) {
     .catch(() => {});
 
   await nukeProgress(tab.id, 2, "cookies");
-  // 2. Every cookie on the domain and its subdomains. Their hosts also tell us
-  //    which subdomain origins likely hold storage.
-  const hosts = new Set([host, domain, `www.${domain}`]);
-  const cookies = await chrome.cookies.getAll({ domain });
+  // 2. The cookies this page gets, plus, when the site is known (see siteScope), every
+  //    cookie on that site and its subdomains. Their hosts also tell us which subdomain
+  //    origins likely hold storage.
+  const hosts = new Set([host]);
+  if (scope.known) hosts.add(scope.domain).add(`www.${scope.domain}`);
+  const inScope = (d) => {
+    const h = d.replace(/^\./, "").toLowerCase();
+    return scope.known ? h === scope.domain || h.endsWith(`.${scope.domain}`) : h === host;
+  };
+  // getAll({ url }) is exactly what this page is sent (the host's own cookies and its
+  // site's domain-wide ones); getAll({ domain }) adds the site's other subdomains.
+  const seen = new Map();
+  for (const c of [...await chrome.cookies.getAll({ url: url.href }), ...(scope.known ? await chrome.cookies.getAll({ domain: scope.domain }) : [])]) {
+    if (!inScope(c.domain)) continue;
+    seen.set(`${c.storeId}|${c.domain}|${c.path}|${c.name}|${JSON.stringify(c.partitionKey || null)}`, c);
+  }
+  const cookies = [...seen.values()];
   await Promise.all(
     cookies.map((c) => {
       const cHost = c.domain.replace(/^\./, "");
@@ -208,11 +213,27 @@ async function nukeSteps(tab, url) {
   await chrome.storage.session.set({ [`nuke:${tab.id}`]: { step: 4, total: 4, label: "done", done: true } });
 }
 
-function registrableDomain(host) {
-  if (/^[\d.]+$/.test(host) || host.includes(":") || !host.includes(".")) return host; // IP / localhost
-  const parts = host.split(".");
-  const n = MULTI_PART_SUFFIXES.has(parts.slice(-2).join(".")) ? 3 : 2;
-  return parts.slice(-n).join(".");
+// How far Nuke may reach beyond the page's own host. A site's subdomains can belong to
+// other people (alice.blogspot.com and bob.blogspot.com, a.example.com.de and
+// b.example.com.de), so guessing the site from the last two or three labels can wipe
+// other sites' data. Chrome itself never stores a domain-wide cookie for a public suffix
+// (it checks the full Public Suffix List), so a domain-wide cookie that exists on a parent
+// domain proves that parent is a real site run by one owner. Nuke goes up to the highest
+// such parent; with no such proof it stays on the exact host.
+async function siteScope(host) {
+  host = host.toLowerCase();
+  if (/^[\d.]+$/.test(host) || host.includes(":") || !host.includes(".")) return { domain: host, known: false }; // IP / localhost
+  // Domain-wide cookies this page is sent: they sit on the host or on one of its parents.
+  const proven = new Set((await chrome.cookies.getAll({ url: `https://${host}/` }).catch(() => []))
+    .concat(await chrome.cookies.getAll({ url: `http://${host}/` }).catch(() => []))
+    .filter((c) => !c.hostOnly)
+    .map((c) => c.domain.replace(/^\./, "").toLowerCase()));
+  const labels = host.split(".");
+  for (let i = labels.length - 2; i >= 0; i--) { // highest parent first, never a bare TLD
+    const candidate = labels.slice(i).join(".");
+    if (proven.has(candidate)) return { domain: candidate, known: true };
+  }
+  return { domain: host, known: false };
 }
 
 // ---- Blur sensitive data ---------------------------------------------------

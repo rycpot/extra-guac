@@ -212,13 +212,16 @@ async function onTick() {
 // One last look for the keyword, then reload (unless it was there).
 async function refreshTab(tabId) {
   refreshing.add(tabId);
+  const startedAt = Date.now();
   try {
     const run = (await getRuns())[tabId];
     if (!run) return;
     if (watching(run) && (await checkKeyword(tabId))) return;
     const go = await updateRuns((runs) => {
       const r = runs[tabId];
-      if (!r) return false;
+      // Gone (stopped on a match), or the page's watcher matched while this refresh was
+      // under way (then the next one waits a full interval): no reload now.
+      if (!r || (r.lastFoundAt && r.lastFoundAt >= startedAt)) return false;
       r.loadingSince = Date.now();
       r.matchedThisLoad = false;
       r.count++;
@@ -298,6 +301,9 @@ async function keywordFound(tabId, run, keyword) {
     if (prefs.continueAfterMatch) {
       runs[tabId].lastFoundAt = Date.now();
       runs[tabId].matchedThisLoad = true; // alert once per load, not every second
+      // Found right at refresh time, the due time is already past: without this the next
+      // tick would reload at once. Keep going, but only after a full interval.
+      runs[tabId].nextAt = Math.max(runs[tabId].nextAt || 0, Date.now() + nextDelay(runs[tabId]));
     } else {
       delete runs[tabId];
     }
