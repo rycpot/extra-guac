@@ -917,11 +917,14 @@ function initClipboard() {
     const { items } = await send("clipList").catch(() => ({ items: [] }));
     const unpinned = items.filter((e) => !e.pinned).length, pinned = items.length - unpinned;
     $("clipStatus").textContent = enabled ? `${unpinned} saved${pinned ? ` · ${pinned} pinned` : ""}` : "";
-    const latest = items[0];
+    // The newest copy, until dismissed with × (it stays in the list; the next copy shows again).
+    const { dismissed = {} } = await chrome.storage.local.get("dismissed");
+    const latest = items[0]?.at > (dismissed.clip || 0) ? items[0] : null;
     $("clipLatest").hidden = !enabled || !latest;
     if (latest) {
       $("clipLatest").querySelector(".link-text").textContent = oneLine(latest.text);
       $("clipLatest").querySelector("[data-copy]").onclick = () => copy(latest.text);
+      $("clipLatest").querySelector("[data-dismiss]").onclick = () => dismiss("clip", latest).then(render);
     }
     if (!$("clipSheet").hidden) renderList(items);
   }
