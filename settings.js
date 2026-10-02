@@ -502,8 +502,8 @@
   // The popup's tab icons, so the columns read like the tabs.
   const TAB_ICONS = Object.fromEntries(Object.entries({
     tools: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h5v-5h4v5h5V9.5"/>',
-    page: '<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M9 20h6M12 16v4"/>',
-    extra: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    page: '<path d="M20 11V6.5A1.5 1.5 0 0 0 18.5 5h-13A1.5 1.5 0 0 0 4 6.5v11A1.5 1.5 0 0 0 5.5 19H11"/><path d="M4 9h16"/><path d="m14 13 7 2.5-3 1.2-1.2 3z"/>',
+    extra: '<path d="M13.5 3 5 13.5h6L10.5 21 19 10.5h-6z"/>',
   }).map(([k, d]) => [k, `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`]));
 
   let dragging = null;
