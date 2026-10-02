@@ -50,7 +50,7 @@
       <nav class="tabs" aria-label="Sections">
         <button class="tab active" data-panel="tools" aria-current="page" title="Tools"><svg><use href="#i-home"/></svg></button>
         <button class="tab" data-panel="page" title="Page tools"><svg><use href="#i-monitor"/></svg></button>
-        <button class="tab" disabled title="Coming soon"><svg><use href="#i-clock"/></svg></button>
+        <button class="tab" data-panel="extra" title="Your tools: drag sections here in settings → general" disabled><svg><use href="#i-clock"/></svg></button>
         <button class="tab" data-panel="backup" title="Backup"><svg><use href="#i-cloud"/></svg></button>
       </nav>
       <div class="top-actions">
@@ -279,6 +279,8 @@
       </div>
     </section>
     </div>
+
+    <div class="panel" id="panel-extra" hidden></div>
 
     <div class="panel" id="panel-backup" hidden>
     <section data-section="drive" class="block" id="driveRow">

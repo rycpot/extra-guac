@@ -31,21 +31,21 @@
     // everywhere except exclude; force = dark pages darkened (inverted) anyway.
     dark: { enabled: false, mode: "sites", sites: [], exclude: [], force: [] },
     upload: { catbox: false, x02: false, catboxUserhash: "", x02Key: "", x02Verified: false },
-    // Which popup tab each section is in, top to bottom (settings → general → tools layout).
+    // Which of the first three popup tabs each section is in, top to bottom (settings →
+    // general → tools layout). The fourth tab (backup) is fixed.
     layout: {
       tools: ["screenshot", "blur", "dark", "refresh", "autoRefresh", "shortener", "volume", "awake"],
       page: ["color", "element", "font", "remove", "redirect", "upload"],
-      backup: ["drive", "settingsFile"],
+      extra: [],
     },
   };
 
   // Popup tabs that hold sections, and the sections' names.
-  const PANELS = { tools: "tools", page: "page", backup: "backup" };
+  const PANELS = { tools: "tab 1", page: "tab 2", extra: "tab 3" };
   const SECTIONS = {
     screenshot: "screenshot", blur: "privacy blur", dark: "dark mode", refresh: "refresh", autoRefresh: "auto-refresh",
     shortener: "URL shorten", volume: "volume", awake: "awake", color: "what color?", element: "what element?",
     font: "what font?", remove: "remove elements", redirect: "URL auto redirect", upload: "upload images",
-    drive: "drive backup", settingsFile: "settings file",
   };
 
   // A saved layout with unknown sections dropped and any missing ones (new in an update)
