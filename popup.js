@@ -44,6 +44,7 @@ async function init() {
 }
 
 // Puts each section in the tab and order chosen in settings → general → tools layout.
+// The third tab only opens once it has sections.
 function applyLayout(saved) {
   try {
     for (const [panel, ids] of Object.entries(TT.layoutOf(saved))) {
@@ -53,7 +54,13 @@ function applyLayout(saved) {
         const section = document.querySelector(`[data-section="${id}"]`);
         if (section) box.append(section);
       }
-      if (!ids.length) box.insertAdjacentHTML("beforeend", `<p class="empty-panel">Nothing here yet. Drag sections into this tab in settings → general.</p>`);
+      const button = document.querySelector(`.tab[data-panel="${panel}"]`);
+      if (panel === "extra") {
+        button.disabled = !ids.length;
+        if (!ids.length && button.classList.contains("active")) document.querySelector('.tab[data-panel="tools"]').click();
+      } else if (!ids.length) {
+        box.insertAdjacentHTML("beforeend", `<p class="empty-panel">Nothing here yet. Drag sections into this tab in settings → general.</p>`);
+      }
     }
   } finally {
     $("main").classList.add("laid-out");
@@ -124,7 +131,7 @@ function initTabs() {
   tabs.forEach((t) => (t.onclick = () => show(t.dataset.panel)));
   let last = "tools";
   try { last = localStorage.getItem("panel") || last; } catch {}
-  show(document.getElementById(`panel-${last}`) ? last : "tools");
+  show(document.querySelector(`.tab[data-panel="${last}"]:not(:disabled)`) ? last : "tools");
 }
 
 // ---- Screenshot -------------------------------------------------------------

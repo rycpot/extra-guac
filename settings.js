@@ -499,6 +499,13 @@
   }
   // ---- Tools layout: drag sections between the popup's tabs ----
 
+  // The popup's tab icons, so the columns read like the tabs.
+  const TAB_ICONS = Object.fromEntries(Object.entries({
+    tools: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h5v-5h4v5h5V9.5"/>',
+    page: '<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M9 20h6M12 16v4"/>',
+    extra: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  }).map(([k, d]) => [k, `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`]));
+
   let dragging = null;
   function renderLayout() {
     if (dragging) return;
@@ -506,8 +513,8 @@
     $("layoutBoard").replaceChildren(...Object.entries(TT.PANELS).map(([panel, name]) => {
       const col = document.createElement("div");
       col.className = "col";
-      col.innerHTML = `<h3></h3><div class="cards"></div>`;
-      col.querySelector("h3").textContent = name;
+      col.innerHTML = `<h3>${TAB_ICONS[panel]}<span></span></h3><div class="cards"></div>`;
+      col.querySelector("h3 span").textContent = name;
       const cards = col.querySelector(".cards");
       cards.dataset.panel = panel;
       for (const id of layout[panel]) {
