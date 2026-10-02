@@ -322,14 +322,19 @@ Card 4111 1111 1111 1111</textarea>
         <ol>
           <li>Open <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">Google Cloud console</a> and create a project (any name).</li>
           <li><a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noopener">Enable the Google Drive API</a> for it.</li>
-          <li><a href="https://console.cloud.google.com/auth/branding" target="_blank" rel="noopener">Google Auth Platform → Branding</a>: set an app name and your email.
-            Under <b>Audience</b>, choose <b>External</b> and add your Google account as a test user.</li>
-          <li><a href="https://console.cloud.google.com/auth/clients/create" target="_blank" rel="noopener">Clients → Create client</a>: type <b>Web application</b>,
-            and under <b>Authorized redirect URIs</b> add <code id="driveRedirect"></code> <button type="button" class="btn ghost" id="copyRedirect">copy</button></li>
+          <li><a href="https://console.cloud.google.com/auth/branding" target="_blank" rel="noopener">Google Auth Platform → Branding</a>: set an app name and your email.</li>
+          <li><a href="https://console.cloud.google.com/auth/audience" target="_blank" rel="noopener">Audience</a>: choose <b>External</b>, then under <b>Test users</b>
+            click <b>+ Add users</b> and enter the exact Google account you'll connect with. Without this, Google stops the sign-in with
+            “Access blocked: … has not completed the Google verification process” (403 access_denied). Changes can take a minute to apply.</li>
+          <li><a href="https://console.cloud.google.com/auth/clients/create" target="_blank" rel="noopener">Clients → Create client</a>: type <b>Web application</b>.
+            Leave <b>Authorized JavaScript origins</b> empty (it only takes a bare domain and rejects this address with “Invalid Origin”).
+            Under <b>Authorized redirect URIs</b>, click <b>+ Add URI</b> and paste <code id="driveRedirect"></code>
+            <button type="button" class="btn ghost" id="copyRedirect">copy</button> exactly, with the trailing <code>/</code>.</li>
           <li>Copy the client ID it shows into the box above and click <b>connect</b>.</li>
         </ol>
         <p class="hint">Tab Toolkit only asks for access to files it creates itself, and keeps snapshots in a folder named “Tab Toolkit backups”.
-          The redirect URI depends on this copy of the extension: if you load it from another folder, it changes.</p>
+          The redirect URI depends on this copy of the extension: if you load it from another folder, it changes (add the new one to the same client).
+          It has to be an OAuth client: an API key or a service account can't reach your own Drive.</p>
       </details>
     </section>
     <section>
