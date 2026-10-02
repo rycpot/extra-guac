@@ -655,14 +655,16 @@
       return box;
     }
 
-    function pills(words, onRemove) {
+    // Words as small pills. With rows: a fixed band that many rows tall, filled column by
+    // column and scrolled sideways, so a long list never pushes the rest of the page down.
+    function pills(words, onRemove, rows = 0) {
       const box = document.createElement("div");
-      box.className = "hl-pills";
+      box.className = rows ? "hl-pills band" : "hl-pills";
+      if (rows) box.style.setProperty("--rows", rows);
       box.append(...words.map((w) => {
         const chip = document.createElement("span");
         chip.className = "chip";
         const text = Object.assign(document.createElement("span"), { className: "chip-text", textContent: w, title: w });
-        text.style.paddingLeft = "10px";
         const x = Object.assign(document.createElement("button"), { type: "button", className: "chip-x", textContent: "×" });
         x.setAttribute("aria-label", `Remove ${w}`);
         x.onclick = () => onRemove(w);
@@ -720,7 +722,7 @@
       partial.querySelector("input").onchange = (e) => edit((h) => { if (at(h)) at(h).partial = e.target.checked; });
       colors.append(Object.assign(document.createElement("span"), { className: "hint", textContent: "colour" }), colorPicker(list.color, (c) => edit((h) => { if (at(h)) at(h).color = c; })),
         Object.assign(document.createElement("span"), { className: "grow" }), partial);
-      card.append(head, colors, pills(list.words, (w) => edit((h) => { if (at(h)) at(h).words = at(h).words.filter((x) => x !== w); })), add, note);
+      card.append(head, colors, pills(list.words, (w) => edit((h) => { if (at(h)) at(h).words = at(h).words.filter((x) => x !== w); }), isGlobal ? 5 : 3), add, note);
       return card;
     }
 
