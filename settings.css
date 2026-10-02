@@ -112,3 +112,14 @@ input.text.wide { width: 100%; }
 .x02-ok { color: var(--green); }
 .x02-bad { color: var(--error); }
 .rule .rules-grid:has(.rule-error:empty) { display: none; }
+
+/* Remove elements: one row per site, its removed elements as pills in one sideways-scrolling line */
+.rm-site { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.rm-site:last-child { border-bottom: 0; }
+.rm-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.rm-head b { font-weight: 600; }
+.rm-head .hint { margin: 0; flex: 1; }
+.rm-pills { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
+.rm-pills .chip { flex: none; }
+.rm-pills .chip .chip-text { padding-left: 10px; max-width: 320px; }
+.rm-empty { color: var(--muted); padding: 6px 0; }

@@ -35,6 +35,7 @@
       <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
       <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
       <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+      <symbol id="i-eraser" viewBox="0 0 24 24"><path d="M8.5 20H20"/><path d="m4.6 15.4 9.8-9.8a2 2 0 0 1 2.8 0l2.2 2.2a2 2 0 0 1 0 2.8L11 19.1a3 3 0 0 1-4.2 0l-2.2-2.1a1.1 1.1 0 0 1 0-1.6z"/><path d="m9.5 10.5 5 5"/></symbol>
       <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
       <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
       <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></symbol>
@@ -205,6 +206,19 @@
         <span class="link-text"></span>
         <button class="icon-btn small" data-copy title="Copy"><svg><use href="#i-copy"/></svg></button>
         <button class="icon-btn small" data-dismiss title="Dismiss (still in the list)"><svg><use href="#i-close"/></svg></button>
+      </div>
+    </section>
+
+    <section class="block" id="removeRow">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-eraser"/></svg>remove elements
+          <button class="icon-btn small" id="removeSettings" title="All removed elements, by site"><svg><use href="#i-open"/></svg></button>
+        </div>
+        <div class="actions"><span class="status" id="removeStatus"></span><button class="text-btn" id="pickRemove">pick</button></div>
+      </div>
+      <div class="row tight sub-row">
+        <span class="status">show removed on this site</span>
+        <button class="switch" id="removeShow" role="switch" aria-checked="false" aria-label="Show removed elements on this site"></button>
       </div>
     </section>
 

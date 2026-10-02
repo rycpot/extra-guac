@@ -15,6 +15,7 @@
     <a href="#shortener">url shortener</a>
     <a href="#redirect">auto redirect</a>
     <a href="#upload">image upload</a>
+    <a href="#remove">remove elements</a>
   </nav>
 
   <main>
@@ -217,6 +218,21 @@ Card 4111 1111 1111 1111</textarea>
         <tr><td>loops</td><td>A tab is never redirected again from a URL a rule just sent it to, and more than 4 redirects in 10 s
           pauses redirecting that tab for a minute.</td></tr>
       </table>
+    </section>
+  </div>
+
+  <div class="pane" id="remove">
+    <header class="pane-head"><h1>remove elements</h1></header>
+    <section>
+      <h2>Sites <span class="hint">× takes an element back · removals apply to the whole site and its subdomains</span></h2>
+      <div id="removeSites"></div>
+    </section>
+    <section>
+      <h2>How it works</h2>
+      <p class="hint">In the tools, page tab → <b>remove elements</b> → <b>pick</b>, then click everything you want gone
+        (↑ selects the parent, Ctrl/⌘+Z puts the last one back, Esc or Enter when done). Removed elements stay hidden on every
+        later visit — the page is held back until they're hidden, so they never flash, even on slow loads.
+        <b>Show removed on this site</b> brings them back with a red dashed outline until you switch it off or restart Chrome.</p>
     </section>
   </div>
 

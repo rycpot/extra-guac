@@ -30,6 +30,7 @@ async function init() {
   initColor(isWeb);
   initElement(isWeb);
   initFont(isWeb);
+  initRemove(isWeb);
   initRedirect();
   initUploads();
 }
@@ -641,6 +642,29 @@ async function initFont(isWeb) {
   });
   $("pickFont").disabled = !isWeb;
   $("pickFont").onclick = () => send("pickFont").then(() => closePopup(), fail);
+}
+
+// ---- Page tools: remove elements -----------------------------------------------
+// Counts this site's removed elements, starts the remove picker, and switches "show
+// removed" for the site (bg-remove.js).
+
+function initRemove(isWeb) {
+  const site = isWeb ? new URL(tab.url).hostname.toLowerCase().replace(/^www\./, "") : "";
+  const covers = (s) => site === s || site.endsWith(`.${s}`);
+  const toggle = $("removeShow");
+  async function render() {
+    const { removed = {}, removedShow = {} } = await chrome.storage.local.get(["removed", "removedShow"]);
+    const n = Object.keys(removed).filter(covers).reduce((sum, s) => sum + removed[s].length, 0);
+    $("removeStatus").textContent = !isWeb ? "not on this page" : n ? `${n} removed here` : "";
+    setSwitch(toggle, !!removedShow[site]);
+    toggle.disabled = !isWeb || !n;
+  }
+  render();
+  chrome.storage.onChanged.addListener((c, area) => area === "local" && (c.removed || c.removedShow) && render());
+  $("pickRemove").disabled = !isWeb;
+  $("pickRemove").onclick = () => send("pickRemove").then(() => closePopup(), fail);
+  toggle.onclick = () => send("removeShow", { site, on: toggle.getAttribute("aria-checked") !== "true" }).catch(fail);
+  $("removeSettings").onclick = () => send("openSettings", { section: "remove" }).then(() => closePopup(), fail);
 }
 
 // ---- Page tools: auto redirect ------------------------------------------------
