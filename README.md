@@ -1,5 +1,6 @@
 # Extra Guac 🥑
-
+![Image](https://rycpot.x02.me/i/zYYNSz.png)
+![Image](https://rycpot.x02.me/i/dhgVrt.png)
 Eighteen tools for the page you're on, in one side panel. We may have gotten carried away.
 
 A Chrome (MV3) extension. Click the toolbar icon to open it: Chrome's side panel by default, which stays open while you switch tabs or use the settings window and always shows the tools for the tab in front, or a popup (settings → general). The gear opens settings, ⏻ stops everything that is running.
