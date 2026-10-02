@@ -36,6 +36,7 @@
       <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
       <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
       <symbol id="i-eraser" viewBox="0 0 24 24"><path d="M8.5 20H20"/><path d="m4.6 15.4 9.8-9.8a2 2 0 0 1 2.8 0l2.2 2.2a2 2 0 0 1 0 2.8L11 19.1a3 3 0 0 1-4.2 0l-2.2-2.1a1.1 1.1 0 0 1 0-1.6z"/><path d="m9.5 10.5 5 5"/></symbol>
+      <symbol id="i-contrast" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor" stroke="none"/></symbol>
       <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
       <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
       <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></symbol>
@@ -71,6 +72,18 @@
       <div class="actions">
         <button class="icon-btn small" id="blurSettings" title="Blur rules & style"><svg><use href="#i-sliders"/></svg></button>
         <button class="switch" id="blurToggle" role="switch" aria-checked="false" aria-label="Blur sensitive data"></button>
+      </div>
+    </section>
+
+    <section class="row" id="darkRow">
+      <div class="label"><svg><use href="#i-contrast"/></svg>dark mode</div>
+      <div class="actions">
+        <div class="seg" id="darkMode" role="radiogroup" aria-label="Dark mode for">
+          <button data-mode="sites" role="radio" title="Only on sites you switch on">sites</button>
+          <button data-mode="all" role="radio" title="Everywhere, except sites you switch off">all</button>
+        </div>
+        <button class="icon-btn small" id="darkSettings" title="Dark mode sites"><svg><use href="#i-sliders"/></svg></button>
+        <button class="switch" id="darkToggle" role="switch" aria-checked="false" aria-label="Dark mode on this site"></button>
       </div>
     </section>
 

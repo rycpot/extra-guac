@@ -123,3 +123,8 @@ input.text.wide { width: 100%; }
 .rm-pills .chip { flex: none; }
 .rm-pills .chip .chip-text { padding-left: 10px; max-width: 320px; }
 .rm-empty { color: var(--muted); padding: 6px 0; }
+
+/* Dark mode site lists (pills reuse the remove-elements style) */
+.dark-list.inactive h2, .dark-list.inactive .rm-pills { opacity: .5; }
+.add-row { display: flex; gap: 8px; margin-top: 6px; max-width: 420px; }
+.add-row .text { flex: 1; }
