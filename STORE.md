@@ -8,15 +8,42 @@ Ready-to-paste answers for the Developer Dashboard. This file isn't part of the 
 
 > Page tools in a side panel: screenshots, privacy blur, dark mode, auto-refresh, highlights, clipboard history, image saving & more.
 
+**Name:** Extra Guac
+
 **Category:** Tools (or Productivity).
 
-**Name:** still to be decided. Keep it short and avoid lists of keywords. The Web Store's spam policy rejects names stuffed with feature words, such as the current one, "Tab Toolkit: Screenshots, Auto-Refresh, PII Blur, Nuke & More".
+**Description** (plain text; paste as is):
+
+```
+Eighteen tools for the page you're on, in one side panel. We may have gotten carried away.
+
+• Screenshot: a dragged area, the visible part of the tab, or the full page
+• Privacy blur: hides emails, phone numbers and other personal data on screen
+• Dark mode: on every site, or only the ones you pick
+• Refresh: hard refresh, or nuke a site's cookies, storage and cache
+• Auto-refresh: on a fixed or random timer, with an alert when your keywords appear
+• URL shorten: with cutt.ly, TinyURL or Dub, copied right away
+• Volume: turn down one noisy tab
+• Awake: keep the screen on for a set time, or until you say stop
+• URL auto redirect: rewrite addresses with your own rules
+• Highlight words: neon marks for words you care about, on every site or per site
+• What color?: copy the colour of any pixel on the page
+• What font?: find the real name of any font on the page
+• What element?: copy an element's CSS or XPath selector
+• Remove elements: click away clutter; it stays gone on that site
+• Clipboard history: search and pin text you copy on web pages
+• Zoom & rotate images: hold a key and scroll over any image
+• Save images on click: hold a key and click; save as is, PNG, JPG or WebP
+• Upload images: right-click to upload to catbox or x02, link copied
+
+Privacy: everything stays in your browser. There are no accounts, no analytics and no server of ours. Data leaves your browser only when you use a tool that needs an outside service you chose: a link shortener, an image host, or a backup to your own Google Drive. It goes only to that service. Tools that record anything are off until you turn them on, and password, one-time-code and card fields are never saved.
+```
 
 ## Privacy practices tab
 
 ### Single purpose
 
-> Tab Toolkit gives you tools for the web page you're on, gathered in one popup or side panel: capture it (screenshots, saved images), hide or change how it looks (privacy blur, dark mode, highlighted words, removed elements, zoom), control it (refresh, auto-refresh, volume, redirects, keep awake), inspect it (colour, font and element pickers) and keep what you copy from it (clipboard history, short links, image uploads).
+> Extra Guac gives you tools for the web page you're on, gathered in one popup or side panel: capture it (screenshots, saved images), hide or change how it looks (privacy blur, dark mode, highlighted words, removed elements, zoom), control it (refresh, auto-refresh, volume, redirects, keep awake), inspect it (colour, font and element pickers) and keep what you copy from it (clipboard history, short links, image uploads).
 
 ### Permission justifications
 
@@ -64,7 +91,7 @@ Then tick all three statements:
 
 ## Before submitting
 
-- Upload the release zip (`tab-toolkit-vX.Y.Z.zip`). It holds only the extension files.
+- Upload the release zip (`extra-guac-vX.Y.Z.zip`). It holds only the extension files.
 - Screenshots: at least one at 1280×800 or 640×400. A 440×280 promo tile is optional.
 - Drive backup needs each user's own OAuth client ID, so say so in the listing description, or ship a built-in client later.
 - Reviewers may take longer because of the `<all_urls>` host access. That is expected.

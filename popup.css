@@ -1,6 +1,6 @@
 @font-face { font-family: "Inter"; src: url("fonts/InterVariable.woff2") format("woff2"); font-weight: 100 900; font-display: block; } /* Inter, SIL Open Font License (fonts/Inter.LICENSE) */
 
-/* Tab Toolkit popup / side panel: near-black panel with a faint film grain,
+/* Extra Guac popup / side panel: near-black panel with a faint film grain,
    hairline dividers, rounded controls, green switches. */
 :root {
   --bg: #0b0b0b;

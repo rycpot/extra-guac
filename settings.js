@@ -463,7 +463,7 @@
           tr.querySelectorAll("[data-what]").forEach((b) => (b.onclick = async () => {
             const settingsToo = b.dataset.what === "settings";
             if (!confirm(settingsToo
-              ? `Replace Tab Toolkit's settings and data with the snapshot from ${when(snap.at)}?`
+              ? `Replace Extra Guac's settings and data with the snapshot from ${when(snap.at)}?`
               : `Add the bookmarks from ${when(snap.at)} in a new folder under Other bookmarks?`)) return;
             b.disabled = true;
             try {
@@ -537,9 +537,9 @@
           ? await new Response(file.stream().pipeThrough(new DecompressionStream("gzip"))).text()
           : await file.text();
         const snapshot = JSON.parse(text);
-        if (snapshot?.app !== "Tab Toolkit") throw new Error("That isn't a Tab Toolkit backup");
+        if (snapshot?.app !== "Extra Guac") throw new Error("That isn't an Extra Guac backup");
         const from = snapshot.createdAt ? ` from ${when(snapshot.createdAt)}` : "";
-        if (!confirm(`Replace Tab Toolkit's settings and data with the ones in ${file.name}${from}?`)) return;
+        if (!confirm(`Replace Extra Guac's settings and data with the ones in ${file.name}${from}?`)) return;
         const res = await send("backupImportLocal", { snapshot });
         alert(`Settings imported. ${savedNote(res)}`);
         location.reload();

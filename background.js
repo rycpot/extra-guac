@@ -43,11 +43,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   // (they undo themselves); inject the new one right away so pages stay blurred.
   const pii = await getBlurSettings();
   syncBlurScript(pii, pii.enabled);
-  const s = await TT.getSettings();
-  // The alert sound used to be a link to an outside site by default; that default is now
-  // the built-in chime (a sound link someone chose themselves stays).
-  if (s.refresh.sound === "https://audio.jukehost.co.uk/sKgfWrjaHsuxPYeGQiFoGuWXg14F0xfV") await TT.updateSettings({ refresh: { sound: "chime" } });
-  syncMenus(s);
+  syncMenus(await TT.getSettings());
 });
 
 chrome.runtime.onStartup.addListener(async () => {
