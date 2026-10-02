@@ -15,20 +15,42 @@
 
   const rgb = (c) => (c.match(/[\d.]+/g) || []).map(Number);
   const luminance = ([r, g, b]) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-  // The colour the page is painted on: body, then html; transparent means white.
-  function pageColor() {
+  // How light the page's own background is (0–1): body, then html, using a solid colour
+  // or the average of a gradient (some sites paint their dark background as a gradient
+  // and leave the colour unset). null when it's a picture; transparent all the way = white.
+  function pageLight() {
     for (const el of [document.body, root]) {
       if (!el) continue;
-      const c = rgb(getComputedStyle(el).backgroundColor);
-      if (c.length >= 3 && (c[3] ?? 1) > 0.5) return c;
+      const cs = getComputedStyle(el);
+      const c = rgb(cs.backgroundColor);
+      if (c.length >= 3 && (c[3] ?? 1) > 0.5) return luminance(c);
+      const img = cs.backgroundImage;
+      if (img && img !== "none") {
+        const stops = (img.match(/rgba?\([^)]*\)/g) || []).map(rgb).filter((s) => s.length >= 3 && (s[3] ?? 1) > 0.5);
+        if (stops.length) return stops.reduce((sum, s) => sum + luminance(s), 0) / stops.length;
+        if (/url\(/.test(img)) return null;
+      }
     }
-    return [255, 255, 255];
+    return 1;
   }
-  // Light text on a dark page means the page is dark already.
+  // Light text, weighted by how much of it there is (sampled), 0–1.
+  function textLight() {
+    let total = 0, light = 0;
+    const els = document.body.querySelectorAll("p, li, a, span, td, h1, h2, h3, h4, div");
+    for (let i = 0; i < els.length && total < 4000; i += Math.max(1, Math.floor(els.length / 400))) {
+      const el = els[i], len = el.firstChild?.nodeType === 3 ? el.firstChild.data.trim().length : 0;
+      if (!len) continue;
+      total += len;
+      if (luminance(rgb(getComputedStyle(el).color)) > 0.6) light += len;
+    }
+    return total ? light / total : luminance(rgb(getComputedStyle(document.body).color)) > 0.6 ? 1 : 0;
+  }
+  // Dark background with lighter text, or mostly light text (unreadable on white, so the
+  // page must be painting something dark behind it).
   function alreadyDark() {
-    const bg = luminance(pageColor());
-    const text = luminance(rgb(getComputedStyle(document.body || root).color));
-    return bg < 0.35 && text > bg;
+    const bg = pageLight(), text = luminance(rgb(getComputedStyle(document.body || root).color));
+    if (bg !== null && bg < 0.35 && text > bg) return true;
+    return textLight() > 0.6;
   }
 
   const KEY = "__ttDarkPages";
