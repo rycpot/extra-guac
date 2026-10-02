@@ -88,8 +88,8 @@
   // ---- Custom rules -------------------------------------------------------
 
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  // Whitespace plus invisible formatting characters pages wrap values in (e.g. Amazon
-  // writes phone numbers as "\u202A9415550123\u202C" to keep them left-to-right).
+  // Whitespace plus invisible formatting characters pages wrap values in (some sites
+  // write phone numbers as "\u202A9415550123\u202C" to keep them left-to-right).
   const GAP = "[\\s\\u00AD\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\uFEFF]";
   const GAP_RE = new RegExp(GAP);
   // Literal label text: any whitespace (or none, since page markup may drop it) matches.

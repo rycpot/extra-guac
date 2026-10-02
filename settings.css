@@ -1,6 +1,6 @@
 @font-face { font-family: "Riforma"; src: url("fonts/RiformaLLTT-Regular.ttf") format("truetype"); font-weight: 400; font-display: block; }
 
-/* Settings window — same look as the popup (Hop-style): dark grain panel, monospaced type. */
+/* Settings window — same look as the popup: dark grain panel, hairline dividers. */
 :root {
   --bg: #0b0b0b; --fg: rgba(255,255,255,.92); --muted: rgba(255,255,255,.5); --line: rgba(255,255,255,.08);
   --field: rgba(255,255,255,.07); --chip: rgba(255,255,255,.09); --hover: rgba(255,255,255,.07);

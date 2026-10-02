@@ -44,8 +44,8 @@
     let choices = null; // the XPath card's options once an element is clicked
     const trail = []; // elements visited with ↑, for ↓
 
-    // In XPath mode a label (or anything inside one) stands for the control it labels,
-    // like the reference XPath extension, which sees the click the label forwards to it.
+    // In XPath mode a label (or anything inside one) stands for the control it labels:
+    // clicking a label clicks that control, so it's usually the element that matters.
     // The label stays highlighted, since the control is often a hidden radio or checkbox.
     const target = (el) => (format === "xpath" && el.closest("label")?.control) || el;
     const anchor = (el) => (target(el) === el ? el : el.closest("label"));
@@ -147,8 +147,8 @@
 
   const unique = (sel) => { try { return document.querySelectorAll(sel).length === 1; } catch { return false; } };
 
-  // Same library and options as the reference element-selector extension, so the
-  // selectors match what it produces (e.g. ".button--variant-primary.button--intent-primary:nth-child(1)").
+  // Class-based selectors from css-selector-generator, falling back to tag and position
+  // (e.g. ".button--variant-primary.button--intent-primary:nth-child(1)").
   function cssPath(el) {
     try {
       return CssSelectorGenerator.getCssSelector(el, { selectors: ["class", "tag", "nthchild", "nthoftype"] });
