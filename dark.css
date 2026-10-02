@@ -1,19 +1,20 @@
 /* Dark mode (invert engine): the whole rendered page is inverted with hues kept, so no
    part of it can stay light — shadow DOM and web components included — then pictures
    and video are flipped back. Injected before the page paints (bg-dark.js); dark.js
-   turns it off on pages that are already dark (data-tt-dark="off"). */
+   turns it off on pages that are already dark (data-tt-dark="off") or that it has
+   switched to their own dark theme (data-tt-dark="native"). */
 
-html:not([data-tt-dark="off"]) {
+html:not([data-tt-dark]) {
   filter: invert(0.93) hue-rotate(180deg) !important;
 }
 /* A transparent page is painted on white, so make that explicit to have it inverted too
    (zero specificity: the page's own background wins when it has one). */
-:where(html:not([data-tt-dark="off"])) {
+:where(html:not([data-tt-dark])) {
   background-color: #fff;
 }
 
 /* Pictures and video come back to (slightly dimmed) normal */
-html:not([data-tt-dark="off"]) :is(img:not([data-tt-dark-keep]), video, canvas, embed, object, [data-tt-dark-media],
+html:not([data-tt-dark]) :is(img:not([data-tt-dark-keep]), video, canvas, embed, object, [data-tt-dark-media],
   iframe:is([src*="youtube."], [src*="youtube-nocookie."], [src*="vimeo."], [src*="maps."], [src*="/maps"], [src*="twitch."],
     [src*="dailymotion."], [src*="player."], [src*="spotify."], [src*="soundcloud."])) {
   filter: invert(1) hue-rotate(180deg) !important;
@@ -22,13 +23,13 @@ html:not([data-tt-dark="off"]) :is(img:not([data-tt-dark-keep]), video, canvas, 
 /* The page's own background picture (on body or html): moved to a layer behind the page
    and flipped back on its own, so a dark patterned backdrop stays dark while the content
    on top is darkened. (Flipping body back as a whole would undo the whole page.) */
-html[data-tt-dark-bg]:not([data-tt-dark="off"]),
-html[data-tt-dark-bg]:not([data-tt-dark="off"]) > body {
+html[data-tt-dark-bg]:not([data-tt-dark]),
+html[data-tt-dark-bg]:not([data-tt-dark]) > body {
   background-image: none !important;
 }
-html[data-tt-dark-bg]:not([data-tt-dark="off"]) { background-color: var(--tt-dark-bg-color) !important; }
-html[data-tt-dark-bg]:not([data-tt-dark="off"]) > body { background-color: transparent !important; }
-html[data-tt-dark-bg]:not([data-tt-dark="off"])::before {
+html[data-tt-dark-bg]:not([data-tt-dark]) { background-color: var(--tt-dark-bg-color) !important; }
+html[data-tt-dark-bg]:not([data-tt-dark]) > body { background-color: transparent !important; }
+html[data-tt-dark-bg]:not([data-tt-dark])::before {
   content: ""; position: fixed; inset: 0; z-index: -2147483647; pointer-events: none;
   background-image: var(--tt-dark-bg-image); background-position: var(--tt-dark-bg-position);
   background-size: var(--tt-dark-bg-size); background-repeat: var(--tt-dark-bg-repeat);
@@ -36,6 +37,6 @@ html[data-tt-dark-bg]:not([data-tt-dark="off"])::before {
 }
 
 /* …but not twice, when a picture sits inside something already flipped back */
-html:not([data-tt-dark="off"]) [data-tt-dark-media] :is(img, video, canvas, embed, object, [data-tt-dark-media]) {
+html:not([data-tt-dark]) [data-tt-dark-media] :is(img, video, canvas, embed, object, [data-tt-dark-media]) {
   filter: none !important;
 }

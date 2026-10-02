@@ -1,5 +1,6 @@
 // Dark mode, in the page alongside dark.css (top frame of sites where it's on):
 // - pages that are already dark are left alone ("off"), page by page;
+// - light pages with a dark theme of their own get that instead of inverting ("native");
 // - elements whose stylesheet gives them a background picture are marked so dark.css
 //   flips them back like <img>; SVG images (mostly logos and icons drawn in one dark
 //   colour) stay inverted so they don't vanish on the dark page.
@@ -97,6 +98,9 @@
   function alreadyDark() {
     const said = declared();
     if (said !== null) return said;
+    return screenDark();
+  }
+  function screenDark() {
     if (!ready()) return null;
     let dark = 0, known = 0;
     for (let i = 0; i < 7; i++) {
@@ -128,18 +132,122 @@
     if (!on && selfOff) { if (root.getAttribute("data-tt-dark") === "off") root.removeAttribute("data-tt-dark"); selfOff = false; }
   };
 
+  // ---- The site's own dark theme ------------------------------------------------------
+  // Many sites ship a dark theme switched by a "dark" class or a data-theme/-mode/... value
+  // on <html> (and some on inner elements, like Claude's .cds-root), or by color-scheme
+  // (CSS light-dark()). On a light page those are switched to dark and the page measured
+  // in the same moment, before anything is painted: dark now → keep the site's own theme
+  // instead of inverting ("native"); not → undo every change and invert. A site that keeps
+  // resetting its theme gets it put back a few times, then is inverted instead. Pages where
+  // it worked are remembered (localStorage) and switched before the first paint.
+
+  const ATTRS = ["data-theme", "data-mode", "data-color-mode", "data-bs-theme", "data-color-scheme"];
+  const NATIVE_KEY = "__ttDarkNativePages";
+  const SOFT = /^(light|auto|system|)$/i; // values we may replace; a theme's own name we leave
+  let native = null; // { changes: [[element, what, old value]], resets }
+  const tried = new Set(); // paths where it didn't work this visit
+
+  function applyNative() {
+    const changes = [];
+    const set = (el, name, value) => {
+      const old = el.getAttribute(name);
+      if (old === value) return;
+      changes.push([el, name, old]);
+      el.setAttribute(name, value);
+    };
+    if (!root.classList.contains("dark")) { changes.push([root, "class", null]); root.classList.add("dark"); }
+    for (const a of ATTRS) { const v = root.getAttribute(a); if (v === null || SOFT.test(v)) set(root, a, "dark"); }
+    for (const el of document.querySelectorAll(ATTRS.map((a) => `[${a}="light" i]`).join(","))) {
+      if (el !== root) for (const a of ATTRS) if (/^light$/i.test(el.getAttribute(a) || "")) set(el, a, "dark");
+    }
+    if (root.style.getPropertyValue("color-scheme") !== "dark") {
+      changes.push([root, "color-scheme", root.style.getPropertyValue("color-scheme")]);
+      root.style.setProperty("color-scheme", "dark");
+    }
+    return changes;
+  }
+  function undoNative(changes) {
+    for (const [el, what, old] of changes.reverse()) {
+      if (what === "class") el.classList.remove("dark");
+      else if (what === "color-scheme") old ? el.style.setProperty("color-scheme", old) : el.style.removeProperty("color-scheme");
+      else if (old === null) el.removeAttribute(what);
+      else el.setAttribute(what, old);
+    }
+    if (!root.getAttribute("style")) root.removeAttribute("style");
+  }
+  const nativeKnown = () => { try { return JSON.parse(localStorage.getItem(NATIVE_KEY) || "[]"); } catch { return []; } };
+  function rememberNative(path, works) {
+    try {
+      const list = nativeKnown().filter((p) => p !== path);
+      if (works) list.push(path);
+      localStorage.setItem(NATIVE_KEY, JSON.stringify(list.slice(-300)));
+    } catch {}
+  }
+  function startNative(changes) {
+    native = { changes, resets: 0 };
+    root.setAttribute("data-tt-dark", "native");
+    window.__ttNativeOn = true;
+  }
+  function stopNative(fallBackToInvert) {
+    if (!native) return;
+    undoNative(native.changes);
+    native = null;
+    window.__ttNativeOn = false;
+    if (fallBackToInvert && root.getAttribute("data-tt-dark") === "native") root.removeAttribute("data-tt-dark");
+  }
+  // Light page: try its own dark theme. True if it's on now.
+  function tryNative(path) {
+    if (native || tried.has(path)) return !!native;
+    const changes = applyNative();
+    if (changes.length && screenDark() === true) {
+      startNative(changes);
+      rememberNative(path, true);
+      return true;
+    }
+    undoNative(changes);
+    tried.add(path);
+    rememberNative(path, false);
+    return false;
+  }
+  // Native theme in use: put back what the site reset, and check it still looks dark.
+  function keepNative(path) {
+    const before = native.changes.length;
+    native.changes.push(...applyNative());
+    if (native.changes.length > before && ++native.resets > 10) return giveUp(path); // the site keeps undoing it
+    if (screenDark() === false) giveUp(path);
+  }
+  function giveUp(path) {
+    stopNative(true);
+    tried.add(path);
+    rememberNative(path, false);
+  }
+  // The tools switched dark mode off (data-tt-dark set to "off" over "native"), or back on.
+  new MutationObserver(() => {
+    const v = root.getAttribute("data-tt-dark");
+    if (native && v !== "native") stopNative(false);
+    else if (!native && v === null) setTimeout(check, 50);
+  }).observe(root, { attributes: true, attributeFilter: ["data-tt-dark"] });
+
   let page = location.pathname;
   if (known().includes(page)) setSelfOff(true); // before the first paint
+  else if (nativeKnown().includes(page)) startNative(applyNative());
 
   // Stays inverted if the site is on the "darken anyway" list.
   let checking = false;
   function check() {
     if (checking || !document.body) return;
-    const path = location.pathname, dark = alreadyDark();
+    const path = location.pathname;
+    if (native) return keepNative(path);
+    const dark = alreadyDark();
     if (dark === null) return; // nothing to judge yet; the later checks will
     window.__ttDarkPage = dark;
     remember(path, dark);
-    if (!dark) return setSelfOff(false);
+    if (!dark) {
+      if (root.getAttribute("data-tt-dark") === "off" && !selfOff) return; // switched off in the tools
+      setSelfOff(false);
+      tryNative(path);
+      return;
+    }
     checking = true;
     chrome.runtime.sendMessage({ type: "darkNative" }).then(
       (r) => setSelfOff(!r?.keep),
@@ -228,7 +336,7 @@
     for (const t of [300, 1000, 2500, 5000]) setTimeout(check, t);
     markTree(root);
     observer.observe(root, { childList: true, subtree: true });
-    const theme = { attributes: true, attributeFilter: ["class", "style", "data-theme", "data-color-mode", "data-dark-theme"] };
+    const theme = { attributes: true, attributeFilter: ["class", "style", "data-theme", "data-mode", "data-color-mode", "data-bs-theme", "data-color-scheme", "data-dark-theme"] };
     themeWatch.observe(root, theme);
     if (document.body) themeWatch.observe(document.body, theme);
   }
