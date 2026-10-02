@@ -761,10 +761,21 @@ function initHighlight(isWeb) {
     $("hlStatus").textContent = !hl.enabled ? "" : n == null ? (isWeb ? "" : "not on this page") : n >= 5000 ? "5,000+ found" : `${n} found`;
   }
   render();
-  chrome.storage.onChanged.addListener((c, area) => area === "local" && c.hl && setTimeout(render, 400));
-  $("hlToggle").onclick = () => send("hlEnable", { on: $("hlToggle").getAttribute("aria-checked") !== "true" }).catch(fail);
-  $("hlExclude").onclick = () => send("hlSite", { site, kind: "exclude", on: $("hlExclude").getAttribute("aria-checked") !== "true" }).catch(fail);
-  $("hlSite").onclick = () => send("hlSite", { site: $("hlSite").dataset.site, kind: "site", on: $("hlSite").getAttribute("aria-checked") !== "true" }).catch(fail);
+  chrome.storage.onChanged.addListener((c, area) => area === "local" && c.hl && setTimeout(render, 300));
+  // Saved straight from here (no trip through the background, which may be asleep), so the
+  // page reacts at once. The switch flips right away too.
+  async function save(el, fn) {
+    const on = el.getAttribute("aria-checked") !== "true";
+    setSwitch(el, on);
+    const next = TT.hlOf((await chrome.storage.local.get("hl")).hl);
+    fn(next, on);
+    await chrome.storage.local.set({ hl: next }).catch(fail);
+  }
+  $("hlToggle").onclick = () => save($("hlToggle"), (h, on) => (h.enabled = on));
+  $("hlExclude").onclick = () => save($("hlExclude"), (h, on) => {
+    h.exclude = on ? [...new Set([...h.exclude, site])].sort() : h.exclude.filter((s) => !covers(s));
+  });
+  $("hlSite").onclick = () => save($("hlSite"), (h, on) => { if (h.sites[$("hlSite").dataset.site]) h.sites[$("hlSite").dataset.site].on = on; });
   $("hlSettings").onclick = () => send("openSettings", { section: "highlight" }).then(() => closePopup(), fail);
 }
 
