@@ -385,17 +385,14 @@ async function initShortener(isWeb) {
     const counter = $("shortCount");
     counter.textContent = s.shortener.paid[service] ? `${count} this month` : `${count}/${limit} this month`;
     counter.classList.toggle("limit", !s.shortener.paid[service] && count >= limit);
-    const latest = shortHistory[0];
-    $("latestLink").hidden = !latest;
-    if (latest) {
-      $("latestLink").querySelector(".link-text").textContent = latest.short;
-      $("latestLink").querySelector("[data-copy]").onclick = () => copy(latest.short);
-    }
+    const latest = await latestShown("short");
+    showCopyRow($("latestLink"), latest?.short, null, latest && (() => dismiss("short", latest)));
     if (sheetKind === "short") renderSheet();
   }
   render();
+  onRowChange("short", render);
   chrome.storage.onChanged.addListener((c, area) => {
-    if (area === "local" && (c.shortHistory || c.shortCounts || c.tt)) render();
+    if (area === "local" && (c.shortCounts || c.tt)) render();
   });
 
   $("shortenBtn").onclick = async () => {
@@ -414,13 +411,46 @@ async function initShortener(isWeb) {
   $("historyBtn").onclick = () => openSheet("short");
 }
 
-// ---- History sheet (shortened links or image uploads) ----------------------
+// ---- Latest rows -------------------------------------------------------------
+// The short link, upload, color, selector and font rows show the newest item until it's
+// an hour old or dismissed with ×; the ↗ sheet keeps the whole history either way.
+
+const ROW_TTL_MS = 60 * 60 * 1000;
+const when = (at) => (at ? new Date(at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "earlier");
+
+async function latestShown(kind) {
+  const key = SHEETS[kind].key;
+  const { [key]: list = [], dismissed = {} } = await chrome.storage.local.get([key, "dismissed"]);
+  const latest = list[0];
+  return latest && latest.at > (dismissed[kind] || 0) && Date.now() - latest.at < ROW_TTL_MS ? latest : null;
+}
+
+async function dismiss(kind, item) {
+  const { dismissed = {} } = await chrome.storage.local.get("dismissed");
+  await chrome.storage.local.set({ dismissed: { ...dismissed, [kind]: item.at } });
+}
+
+// Re-renders a row when its history or the dismissals change, and when its hour runs out.
+function onRowChange(kind, render) {
+  chrome.storage.onChanged.addListener((c, area) => {
+    if (area === "local" && (c[SHEETS[kind].key] || c.dismissed)) render();
+  });
+  setInterval(render, 30000);
+}
+
+// ---- History sheet (links, uploads, colors, selectors, fonts) -----------------
 
 const SHEETS = {
-  short: { title: "shortened links", key: "shortHistory", clear: "clearShortHistory", empty: "No shortened links yet",
-    line: (i) => [i.short, `${TT.SHORTENERS[i.service]?.label || i.service} · ${new Date(i.at).toLocaleDateString()} · ${i.url}`, i.url] },
-  upload: { title: "uploaded images", key: "uploadHistory", clear: "clearUploadHistory", empty: "No uploads yet",
-    line: (i) => [i.link, `${i.host} · ${new Date(i.at).toLocaleDateString()} · ${i.source}`, i.source] },
+  short: { title: "shortened links", icon: "i-link", key: "shortHistory", clear: "clearShortHistory", empty: "No shortened links yet",
+    line: (i) => [i.short, `${TT.SHORTENERS[i.service]?.label || i.service} · ${when(i.at)} · ${i.url}`, i.url] },
+  upload: { title: "uploaded images", icon: "i-upload", key: "uploadHistory", clear: "clearUploadHistory", empty: "No uploads yet",
+    line: (i) => [i.link, `${i.host} · ${when(i.at)} · ${i.source}`, i.source] },
+  color: { title: "picked colors", icon: "i-dropper", key: "colorHistory", clear: "clearColorHistory", empty: "No colors picked yet",
+    line: (i) => [i.value, when(i.at), i.value], swatch: (i) => i.value },
+  selector: { title: "picked elements", icon: "i-pointer", key: "selectorHistory", clear: "clearSelectorHistory", empty: "No elements picked yet",
+    line: (i) => [i.value, `${i.format === "xpath" ? "XPath" : "CSS"} · ${when(i.at)}`, i.value] },
+  font: { title: "picked fonts", icon: "i-font", key: "fontHistory", clear: "clearFontHistory", empty: "No fonts picked yet",
+    line: (i) => [i.value, when(i.at), i.value], copyText: (i) => i.value.split(" · ")[0] },
 };
 let sheetKind = null;
 
@@ -452,6 +482,7 @@ function initHistorySheet() {
 function openSheet(kind) {
   sheetKind = kind;
   $("sheetTitle").textContent = SHEETS[kind].title;
+  $("sheetIcon").setAttribute("href", `#${SHEETS[kind].icon}`);
   $("historySheet").hidden = false;
   renderSheet();
 }
@@ -467,12 +498,14 @@ async function renderSheet() {
   list.replaceChildren(...items.map((item) => {
     const [main, meta, title] = cfg.line(item);
     const li = document.createElement("li");
-    li.innerHTML = `<span class="meta"><span class="short"></span><span class="long"></span></span>
+    li.innerHTML = `${cfg.swatch ? '<i class="swatch"></i>' : ""}<span class="meta"><span class="short"></span><span class="long"></span></span>
       <button class="icon-btn small" title="Copy"><svg><use href="#i-copy"/></svg></button>`;
+    if (cfg.swatch) li.querySelector(".swatch").style.background = cfg.swatch(item);
     li.querySelector(".short").textContent = main;
+    li.querySelector(".short").title = main;
     li.querySelector(".long").textContent = meta;
     li.querySelector(".long").title = title;
-    li.querySelector("button").onclick = () => copy(main);
+    li.querySelector("button").onclick = () => copy(cfg.copyText ? cfg.copyText(item) : main);
     return li;
   }));
 }
@@ -559,19 +592,31 @@ async function initAwake() {
 
 // ---- Page tools: color & element pickers ------------------------------------
 
-function showCopyRow(row, value, extra) {
+function showCopyRow(row, value, extra, onDismiss) {
   row.hidden = !value;
   if (!value) return;
   row.querySelector(".link-text").textContent = value;
   row.querySelector(".link-text").title = value;
   row.querySelector("[data-copy]").onclick = () => copy(value);
+  const x = row.querySelector("[data-dismiss]");
+  if (x) x.onclick = onDismiss;
   extra?.(row);
 }
 
+// One of the picker rows: the newest pick, the ↗ sheet, and dismissal.
+function initPickRow(kind, rowId, extra) {
+  const render = async () => {
+    const latest = await latestShown(kind);
+    showCopyRow($(rowId), latest?.value, latest && extra && ((row) => extra(row, latest)), latest && (() => dismiss(kind, latest)));
+    if (sheetKind === kind) renderSheet();
+  };
+  render();
+  onRowChange(kind, render);
+  $(`${kind}HistoryBtn`).onclick = () => openSheet(kind);
+}
+
 async function initColor(isWeb) {
-  const render = (hex) => showCopyRow($("lastColor"), hex, (row) => (row.querySelector(".swatch").style.background = hex));
-  render((await chrome.storage.local.get("lastColor")).lastColor);
-  chrome.storage.onChanged.addListener((c, area) => area === "local" && c.lastColor && render(c.lastColor.newValue));
+  initPickRow("color", "lastColor", (row, c) => (row.querySelector(".swatch").style.background = c.value));
   $("pickColor").disabled = !isWeb;
   $("pickColor").onclick = () => send("pickColor").then(() => closePopup(), fail);
 }
@@ -584,20 +629,16 @@ async function initElement(isWeb) {
     setFormat(b.dataset.format);
     TT.updateSettings({ picker: { selectorFormat: b.dataset.format } });
   }));
-  const render = (v) => showCopyRow($("lastSelector"), v?.value);
-  render((await chrome.storage.local.get("lastSelector")).lastSelector);
-  chrome.storage.onChanged.addListener((c, area) => area === "local" && c.lastSelector && render(c.lastSelector.newValue));
+  initPickRow("selector", "lastSelector");
   $("pickElement").disabled = !isWeb;
   $("pickElement").onclick = () => send("pickElement").then(() => closePopup(), fail);
 }
 
 async function initFont(isWeb) {
   // Copies just the family name (the stored value is "Inter · SemiBold · 16px").
-  const render = (v) => showCopyRow($("lastFont"), v, (row) => {
-    row.querySelector("[data-copy]").onclick = () => copy(v.split(" · ")[0]);
+  initPickRow("font", "lastFont", (row, f) => {
+    row.querySelector("[data-copy]").onclick = () => copy(f.value.split(" · ")[0]);
   });
-  render((await chrome.storage.local.get("lastFont")).lastFont);
-  chrome.storage.onChanged.addListener((c, area) => area === "local" && c.lastFont && render(c.lastFont.newValue));
   $("pickFont").disabled = !isWeb;
   $("pickFont").onclick = () => send("pickFont").then(() => closePopup(), fail);
 }
@@ -633,10 +674,11 @@ async function initUploads() {
     }
     const on = [...hosts].filter((b) => b.getAttribute("aria-pressed") === "true").length;
     $("uploadStatus").textContent = on ? "right-click an image" : "pick a host";
-    const latest = (await chrome.storage.local.get("uploadHistory")).uploadHistory?.[0];
-    showCopyRow($("latestUpload"), latest?.link);
+    const latest = await latestShown("upload");
+    showCopyRow($("latestUpload"), latest?.link, null, latest && (() => dismiss("upload", latest)));
   };
   render(settings);
+  onRowChange("upload", async () => render(await TT.getSettings()));
   hosts.forEach((b) => (b.onclick = async () => {
     const id = b.dataset.host;
     render(await TT.updateSettings({ upload: { [id]: b.getAttribute("aria-pressed") !== "true" } }));
@@ -644,6 +686,6 @@ async function initUploads() {
   $("uploadSettings").onclick = () => send("openSettings", { section: "upload" }).then(() => closePopup(), fail);
   $("uploadHistoryBtn").onclick = () => openSheet("upload");
   chrome.storage.onChanged.addListener(async (c, area) => {
-    if (area === "local" && (c.tt || c.uploadHistory)) render(await TT.getSettings());
+    if (area === "local" && c.tt) render(await TT.getSettings());
   });
 }
