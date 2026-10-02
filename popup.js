@@ -145,43 +145,51 @@ async function initBlur() {
 }
 
 // ---- Dark mode ----------------------------------------------------------------
-// "sites": on only where switched on; "all": on everywhere except where switched off.
-// The switch is for this tab's site (bg-dark.js keeps the lists and open tabs in step).
-// It shows the choice, not whether the page is inverted: a page that's dark on its own
-// stays as it is and says "already dark" (settings can darken such sites anyway).
+// The main switch turns dark mode on or off everywhere (the mode and site lists stay).
+// While it's on, a second row handles this tab's site: in "all" mode "exclude <site>",
+// in "sites" mode "dark on <site>". bg-dark.js keeps the lists and open tabs in step.
+// A page that's dark on its own is left as it is and says "already dark".
 
 function initDark(isWeb) {
   const site = isWeb ? new URL(tab.url).hostname.toLowerCase().replace(/^www\./, "") : "";
   const covers = (list) => list.some((s) => site === s || site.endsWith(`.${s}`));
-  const seg = $("darkMode"), toggle = $("darkToggle");
+  const seg = $("darkMode"), main = $("darkToggle"), siteSwitch = $("darkSiteToggle");
   let ready = false, saving = false;
   async function render() {
     const { dark } = await TT.getSettings();
     seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.mode === dark.mode)));
-    const on = dark.mode === "all" ? !covers(dark.exclude) : covers(dark.sites);
-    setSwitch(toggle, on);
-    const [probe] = isWeb && on && !covers(dark.force)
+    setSwitch(main, dark.enabled);
+    $("darkSiteRow").hidden = !dark.enabled || !isWeb;
+    const all = dark.mode === "all";
+    const on = all ? !covers(dark.exclude) : covers(dark.sites);
+    $("darkSiteLabel").textContent = `${all ? "exclude" : "dark on"} ${site}`;
+    siteSwitch.setAttribute("aria-label", $("darkSiteLabel").textContent);
+    setSwitch(siteSwitch, all ? !on : on);
+    const [probe] = dark.enabled && isWeb && on && !covers(dark.force)
       ? await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => window.__ttDarkPage === true }).catch(() => [])
       : [];
-    $("darkStatus").textContent = dark.mode === "all" && !on ? "excluded" : probe?.result ? "already dark" : "";
-    toggle.disabled = !isWeb;
-    toggle.title = isWeb ? "" : "Not available on this page";
+    $("darkStatus").textContent = probe?.result ? "already dark" : "";
     ready = true;
   }
   render();
   chrome.storage.onChanged.addListener((c, area) => area === "local" && c.tt && render());
   seg.querySelectorAll("button").forEach((b) => (b.onclick = () => TT.updateSettings({ dark: { mode: b.dataset.mode } })));
-  // Flips at once and takes no second click until it's saved: reading a not-yet-redrawn
-  // switch made two quick clicks both mean "off", leaving the site excluded.
-  toggle.onclick = async () => {
+
+  // Both switches flip at once and take no second click until it's saved.
+  async function flip(el, save) {
     if (!ready || saving) return;
-    const on = toggle.getAttribute("aria-checked") !== "true";
-    setSwitch(toggle, on);
+    const value = el.getAttribute("aria-checked") !== "true";
+    setSwitch(el, value);
     saving = true;
-    try { await send("darkSite", { site, on }); }
+    try { await save(value); }
     catch (err) { fail(err); render(); }
     finally { saving = false; }
-  };
+  }
+  main.onclick = () => flip(main, (on) => TT.updateSettings({ dark: { enabled: on } }));
+  siteSwitch.onclick = () => flip(siteSwitch, async (checked) => {
+    const { dark } = await TT.getSettings();
+    await send("darkSite", { site, on: dark.mode === "all" ? !checked : checked });
+  });
   $("darkSettings").onclick = () => send("openSettings", { section: "dark" }).then(() => closePopup(), fail);
 }
 
