@@ -15,21 +15,35 @@
 
   const rgb = (c) => (c.match(/[\d.]+/g) || []).map(Number);
   const luminance = ([r, g, b]) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-  // How light the page's own background is (0–1): body, then html, using a solid colour
-  // or the average of a gradient (some sites paint their dark background as a gradient
-  // and leave the colour unset). null when it's a picture; transparent all the way = white.
-  function pageLight() {
-    for (const el of [document.body, root]) {
-      if (!el) continue;
-      const cs = getComputedStyle(el);
-      const c = rgb(cs.backgroundColor);
-      if (c.length >= 3 && (c[3] ?? 1) > 0.5) return luminance(c);
-      const img = cs.backgroundImage;
-      if (img && img !== "none") {
-        const stops = (img.match(/rgba?\([^)]*\)/g) || []).map(rgb).filter((s) => s.length >= 3 && (s[3] ?? 1) > 0.5);
-        if (stops.length) return stops.reduce((sum, s) => sum + luminance(s), 0) / stops.length;
-        if (/url\(/.test(img)) return null;
+  // Background colours count as solid colours or the average of a gradient. A picture
+  // ("url(…)") says nothing usable about brightness, so it's skipped. Some sites put a
+  // dark colour on body and then cover nearly all of it with light content (or a light
+  // picture), so the page's own background colour alone can't be trusted.
+  function backgroundLight(cs) {
+    const img = cs.backgroundImage;
+    if (img && img !== "none" && /url\(/.test(img)) return undefined; // picture: unknown
+    const c = rgb(cs.backgroundColor);
+    if (c.length >= 3 && (c[3] ?? 1) > 0.5) return luminance(c);
+    if (img && img !== "none") {
+      const stops = (img.match(/rgba?\([^)]*\)/g) || []).map(rgb).filter((s) => s.length >= 3 && (s[3] ?? 1) > 0.5);
+      if (stops.length) return stops.reduce((sum, s) => sum + luminance(s), 0) / stops.length;
+    }
+    return null; // transparent: look further back
+  }
+  // What is actually painted at a point of the screen: the first element under it (or
+  // behind it) with a background. Transparent all the way down = white.
+  function lightAt(x, y) {
+    const hit = document.elementFromPoint(x, y);
+    // A drawing surface, video or picture: its pixels can't be read, so it says nothing.
+    if (hit && /^(canvas|video|img|picture|iframe|embed|object)$/.test(hit.localName)) return undefined;
+    for (let el = hit; el; el = el.parentElement) {
+      // Below a short body the page shows body's colour (dark.css's white on html is ours).
+      if (el === root && document.body) {
+        const l = backgroundLight(getComputedStyle(document.body));
+        if (l !== null) return l;
       }
+      const l = backgroundLight(getComputedStyle(el));
+      if (l !== null) return l; // a number, or undefined for a picture
     }
     return 1;
   }
@@ -43,13 +57,22 @@
       total += len;
       if (luminance(rgb(getComputedStyle(el).color)) > 0.6) light += len;
     }
-    return total ? light / total : luminance(rgb(getComputedStyle(document.body).color)) > 0.6 ? 1 : 0;
+    return total ? light / total : 0;
   }
-  // Dark background with lighter text, or mostly light text (unreadable on white, so the
-  // page must be painting something dark behind it).
+  // Dark when most of what's on screen is dark: a 7×6 grid of points over the viewport.
+  // Too few readable points (pictures everywhere) or a split screen: decide by the text.
   function alreadyDark() {
-    const bg = pageLight(), text = luminance(rgb(getComputedStyle(document.body || root).color));
-    if (bg !== null && bg < 0.35 && text > bg) return true;
+    let dark = 0, known = 0;
+    for (let i = 0; i < 7; i++) {
+      for (let j = 0; j < 6; j++) {
+        const l = lightAt(innerWidth * (i + 0.5) / 7, innerHeight * (j + 0.5) / 6);
+        if (l === undefined) continue;
+        known++;
+        if (l < 0.4) dark++;
+      }
+    }
+    const share = known ? dark / known : 0;
+    if (known >= 10 && (share >= 0.65 || share <= 0.35)) return share >= 0.65;
     return textLight() > 0.6;
   }
 
@@ -101,8 +124,15 @@
   // ---- Background pictures ---------------------------------------------------------
 
   const PICTURE = /url\((?!["']?data:image\/svg)/;
+  // Page-sized boxes (body, html, full-page wrappers) are never flipped back as a whole:
+  // that would undo the dark mode for everything inside them.
+  const pageSized = (el) => {
+    if (el === root || el === document.body) return true;
+    const r = el.getBoundingClientRect();
+    return r.width >= innerWidth * 0.9 && r.height >= innerHeight;
+  };
   function mark(el) {
-    if (el.nodeType !== 1 || el.hasAttribute("data-tt-dark-media")) return;
+    if (el.nodeType !== 1 || el.hasAttribute("data-tt-dark-media") || pageSized(el)) return;
     if (el.localName === "img") {
       if (/\.svg(\?|#|$)/i.test(el.currentSrc || el.src)) el.setAttribute("data-tt-dark-keep", "");
       return;
@@ -131,7 +161,23 @@
     }
   });
 
+  // The page's own background picture goes to its own layer (dark.css, html::before).
+  function pagePicture() {
+    for (const el of [document.body, root]) {
+      if (!el) continue;
+      const cs = getComputedStyle(el);
+      if (!PICTURE.test(cs.backgroundImage)) continue;
+      const colour = [document.body, root].map((e) => e && getComputedStyle(e).backgroundColor)
+        .find((c) => c && (rgb(c)[3] ?? 1) > 0.5) || "#fff";
+      for (const [name, value] of [["color", colour], ["image", cs.backgroundImage], ["position", cs.backgroundPosition],
+        ["size", cs.backgroundSize], ["repeat", cs.backgroundRepeat]]) root.style.setProperty(`--tt-dark-bg-${name}`, value);
+      root.setAttribute("data-tt-dark-bg", "");
+      return;
+    }
+  }
+
   function start() {
+    pagePicture();
     check();
     markTree(root);
     observer.observe(root, { childList: true, subtree: true });
@@ -143,5 +189,5 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
   else start();
   // Late stylesheets can change the page colour; look once more when everything has loaded.
-  addEventListener("load", recheck, { once: true });
+  addEventListener("load", () => { if (!root.hasAttribute("data-tt-dark-bg")) pagePicture(); recheck(); }, { once: true });
 })();

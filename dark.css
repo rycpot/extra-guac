@@ -19,6 +19,22 @@ html:not([data-tt-dark="off"]) :is(img:not([data-tt-dark-keep]), video, canvas, 
   filter: invert(1) hue-rotate(180deg) !important;
 }
 
+/* The page's own background picture (on body or html): moved to a layer behind the page
+   and flipped back on its own, so a dark patterned backdrop stays dark while the content
+   on top is darkened. (Flipping body back as a whole would undo the whole page.) */
+html[data-tt-dark-bg]:not([data-tt-dark="off"]),
+html[data-tt-dark-bg]:not([data-tt-dark="off"]) > body {
+  background-image: none !important;
+}
+html[data-tt-dark-bg]:not([data-tt-dark="off"]) { background-color: var(--tt-dark-bg-color) !important; }
+html[data-tt-dark-bg]:not([data-tt-dark="off"]) > body { background-color: transparent !important; }
+html[data-tt-dark-bg]:not([data-tt-dark="off"])::before {
+  content: ""; position: fixed; inset: 0; z-index: -2147483647; pointer-events: none;
+  background-image: var(--tt-dark-bg-image); background-position: var(--tt-dark-bg-position);
+  background-size: var(--tt-dark-bg-size); background-repeat: var(--tt-dark-bg-repeat);
+  filter: invert(1) hue-rotate(180deg);
+}
+
 /* …but not twice, when a picture sits inside something already flipped back */
 html:not([data-tt-dark="off"]) [data-tt-dark-media] :is(img, video, canvas, embed, object, [data-tt-dark-media]) {
   filter: none !important;
