@@ -388,10 +388,14 @@
       $("driveClientId").disabled = !!st.connected;
       $("driveNow").disabled = !st.connected;
       if (!st.connected) say("not connected");
+      else if (st.awaitingChoice) say("connected — Drive already has snapshots from another browser or an earlier install. Restore one below, or press sync now to start backing up this browser as it is.", true);
       else if (st.needsSignIn) say("signed out of Google — sign in again", true);
       else if (st.lastError) say(`last sync failed: ${st.lastError}`, true);
       else say(`connected${st.email ? ` as ${st.email}` : ""}${st.lastSnapshot ? ` · last snapshot ${when(st.lastSnapshot)}` : ""}${st.lastCheck ? ` · checked ${when(st.lastCheck)}` : ""}`);
       if (st.connected && !st.needsSignIn && !listed) listSnaps();
+      const { preRestore } = await chrome.storage.local.get("preRestore");
+      $("undoRestore").hidden = !preRestore?.data;
+      if (preRestore?.at) $("undoRestore").title = `Put back the settings from just before the restore on ${when(preRestore.at)}`;
     }
 
     async function listSnaps() {
@@ -399,6 +403,7 @@
       const box = $("driveSnaps");
       try {
         const { snapshots } = await send("backupList");
+        const { backupDevice } = await chrome.storage.local.get("backupDevice");
         if (!snapshots.length) return void (box.innerHTML = `<p class="rm-empty">No snapshots yet.</p>`);
         const table = document.createElement("table");
         table.className = "snaps";
@@ -410,6 +415,16 @@
             <td><button type="button" class="btn ghost" data-html>.html</button></td>
             <td><button type="button" class="btn ghost" data-json>.json</button></td>`;
           tr.querySelector("b").textContent = when(snap.at);
+          const tags = [];
+          if (snap.kind === "pre-restore") tags.push("before a restore");
+          if (backupDevice && snap.device === backupDevice) tags.push("this browser");
+          else if (snap.device) tags.push("another browser");
+          for (const t of tags) {
+            const tag = document.createElement("span");
+            tag.className = "tag";
+            tag.textContent = t;
+            tr.cells[0].append(tag);
+          }
           tr.querySelector(".when .hint").textContent = age(snap.at);
           tr.cells[1].querySelector(".hint").textContent = size(snap.size);
           tr.title = snap.name;
@@ -421,7 +436,7 @@
             b.disabled = true;
             try {
               const res = await send("backupRestore", { id: snap.id, what: b.dataset.what });
-              alert(settingsToo ? "Settings restored." : `Bookmarks restored to “${res.folder}” in Other bookmarks.`);
+              alert(settingsToo ? `Settings restored. ${savedNote(res)}` : `Bookmarks restored to “${res.folder}” in Other bookmarks.`);
               if (settingsToo) location.reload();
             } catch (err) { alert(err.message); }
             b.disabled = false;
@@ -450,7 +465,11 @@
       await chrome.storage.local.set({ backup: { ...backup, clientId: $("driveClientId").value.trim() } });
       $("driveConnect").disabled = true;
       say("waiting for Google…");
-      try { await send("backupConnect"); listed = false; } catch (err) { say(err.message, true); }
+      try {
+        const res = await send("backupConnect");
+        listed = false;
+        if (res.awaitingChoice) alert("Google Drive already has snapshots from another browser or an earlier install, so nothing was backed up yet.\n\nIf this is a new install, restore one of them below. Otherwise press sync now to start backing up this browser.");
+      } catch (err) { say(err.message, true); }
       $("driveConnect").disabled = false;
       render();
     };
@@ -461,6 +480,8 @@
       listed = false;
     };
     $("driveNow").onclick = async () => {
+      const { backupState: st = {} } = await chrome.storage.local.get("backupState");
+      if (st.awaitingChoice && !confirm("Back up this browser's current settings as the newest snapshot?\n\nDrive already has snapshots from another browser or an earlier install — if this is a new install, restore one of those first.")) return;
       $("driveNow").disabled = true;
       say("syncing…");
       try {
@@ -487,16 +508,32 @@
         if (snapshot?.app !== "Tab Toolkit") throw new Error("That isn't a Tab Toolkit backup");
         const from = snapshot.createdAt ? ` from ${when(snapshot.createdAt)}` : "";
         if (!confirm(`Replace Tab Toolkit's settings and data with the ones in ${file.name}${from}?`)) return;
-        await send("backupImportLocal", { snapshot });
-        alert("Settings imported.");
+        const res = await send("backupImportLocal", { snapshot });
+        alert(`Settings imported. ${savedNote(res)}`);
         location.reload();
       } catch (err) {
         alert(err instanceof SyntaxError ? "That file couldn't be read as a backup." : err.message);
       }
     };
 
+    $("undoRestore").onclick = async () => {
+      if (!confirm("Put back the settings and data from just before the last restore or import? (What's there now is kept, so you can flip back.)")) return;
+      try {
+        await send("backupUndoRestore");
+        alert("Previous settings put back.");
+        location.reload();
+      } catch (err) { alert(err.message); }
+    };
+
     render();
-    chrome.storage.onChanged.addListener((c, area) => area === "local" && (c.backup || c.backupState) && render());
+    chrome.storage.onChanged.addListener((c, area) => area === "local" && (c.backup || c.backupState || c.preRestore) && render());
+  }
+
+  // What happened to the settings that were there before a restore/import.
+  function savedNote(res) {
+    return res?.preRestore === "drive"
+      ? "The previous settings were saved to Drive first (kept 30 days) — undo last restore puts them back."
+      : "The previous settings were kept in this browser — undo last restore puts them back.";
   }
   // ---- Tools layout: drag sections between the popup's tabs ----
 

@@ -142,6 +142,7 @@ h2 #driveNow { margin-left: 8px; padding: 3px 10px; text-transform: none; letter
 .snaps td.when { width: 100%; }
 .snaps .hint { margin: 0 0 0 6px; }
 .snaps .btn { padding: 3px 9px; font-size: 12px; }
+.snaps .tag { margin-left: 6px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 4px; font-size: 11px; color: var(--muted); }
 #driveInterval label { min-width: 0; margin-right: 6px; }
 
 /* Tools layout: the popup's tabs side by side; sections are dragged between them */

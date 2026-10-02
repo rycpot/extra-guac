@@ -7,9 +7,17 @@
 // ones are fetched silently, and settings ask to sign in again when Google wants that.
 //
 // Each snapshot is one gzipped JSON file in a "Tab Toolkit backups" folder, uploaded only
-// when something changed. Old snapshots thin out like a time machine: the newest is kept,
-// plus the oldest one in each age window (under a week, 1–2 weeks, 2 weeks–1 month, 1–2
-// months, 2–6 months, 6–12 months, over a year), so there are never more than 8.
+// when something changed. Old snapshots thin out like a time machine. Kept are:
+//   - the 3 newest;
+//   - the newest from each browser (device) that backed up in the last 90 days, so one
+//     browser's backups never push out another's latest;
+//   - protected ones (keepUntil): the copy taken before every restore/import, and the
+//     previous snapshot whenever a new one is less than half its size — for 30 days;
+//   - the oldest one in each age window (under a week, 1–2 weeks, 2 weeks–1 month, 1–2
+//     months, 2–6 months, 6–12 months, over a year).
+// Connecting a browser whose Drive folder already has snapshots from elsewhere doesn't
+// back up straight away (that would make a fresh, empty install the "newest"): it waits
+// until the user restores one or presses sync now.
 // Snapshots include API keys (shorteners, upload hosts), like the settings themselves.
 
 // "backup" is the Drive setup (OAuth client ID, auto-sync interval); the sign-in itself isn't saved.
@@ -21,15 +29,30 @@ const BACKUP_INTERVALS = [0, 1, 2, 4, 6, 12, 24]; // hours; 0 = only when asked,
 const DRIVE = "https://www.googleapis.com/drive/v3";
 const DAY = 864e5;
 const BACKUP_WINDOWS = [0, 7, 14, 30, 60, 180, 365, Infinity].map((d) => d * DAY);
+const KEEP_RECENT = 3;
+const DEVICE_KEEP = 90 * DAY; // a browser's newest snapshot is kept while it's younger than this
+const PROTECT_FOR = 30 * DAY; // pre-restore copies and big-before-shrink snapshots
+const SHRINK_RATIO = 0.5;
 
 const backupHandlers = {
   backupConnect: async () => {
-    const { backup = {} } = await chrome.storage.local.get("backup");
+    const { backup = {}, backupState: before = {} } = await chrome.storage.local.get(["backup", "backupState"]);
     if (!backup.clientId?.trim()) throw new Error("Paste your OAuth client ID first");
     await driveToken(true);
     const about = await drive("/about?fields=user(emailAddress)");
     await setBackupState({ connected: true, email: about.user?.emailAddress || "", needsSignIn: false, lastError: "", folderId: "" });
-    return runBackup();
+    // A browser that has never backed up here, connecting to a folder that already has
+    // other snapshots, is most likely a reinstall or a new computer still waiting to be
+    // restored. Backing it up now would make its fresh settings the newest snapshot.
+    if (!before.lastHash) {
+      const device = await deviceId();
+      const others = (await listSnapshots()).filter((s) => s.device !== device);
+      if (others.length) {
+        await setBackupState({ awaitingChoice: true, lastCheck: Date.now() });
+        return { uploaded: false, awaitingChoice: true };
+      }
+    }
+    return runBackup({ manual: true });
   },
   backupDisconnect: async () => {
     const { driveToken: t } = await chrome.storage.session.get("driveToken");
@@ -37,12 +60,18 @@ const backupHandlers = {
     await chrome.storage.session.remove("driveToken");
     await chrome.storage.local.set({ backupState: {} });
   },
-  backupNow: () => runBackup(),
+  backupNow: () => runBackup({ manual: true }),
   backupList: async () => ({ snapshots: await listSnapshots() }),
   backupRestore: async ({ id, what }) => {
     const snap = await readSnapshot(id);
     if (what === "bookmarks") return { folder: await restoreBookmarks(snap) };
-    await applyData(snap.data);
+    assertHasData(snap.data);
+    return locked(async () => {
+      const saved = await savePreRestore();
+      await applyData(snap.data);
+      await setBackupState({ awaitingChoice: false });
+      return saved;
+    });
   },
   backupBookmarksHtml: async ({ id }) => {
     const snap = await readSnapshot(id);
@@ -59,8 +88,24 @@ const backupHandlers = {
   },
   backupImportLocal: async ({ snapshot }) => {
     if (snapshot?.app !== "Tab Toolkit" || !snapshot.data || typeof snapshot.data !== "object") throw new Error("That isn't a Tab Toolkit backup");
-    await applyData(snapshot.data);
+    assertHasData(snapshot.data);
+    return locked(async () => {
+      const saved = await savePreRestore();
+      await applyData(snapshot.data);
+      await setBackupState({ awaitingChoice: false });
+      return saved;
+    });
   },
+  // Puts back what was there before the last restore/import (and keeps what's there now
+  // as the new "before", so pressing it twice flips back).
+  backupUndoRestore: () => locked(async () => {
+    const { preRestore } = await chrome.storage.local.get("preRestore");
+    if (!preRestore?.data) throw new Error("Nothing to undo");
+    const now = await buildSnapshot(false);
+    await applyData(preRestore.data);
+    await chrome.storage.local.set({ preRestore: { at: Date.now(), data: now.data } });
+    return { from: preRestore.at };
+  }),
 };
 
 // ---- State -----------------------------------------------------------------------------
@@ -73,6 +118,25 @@ async function setBackupState(patch) {
 }
 
 const stamp = (d) => d.toISOString().slice(0, 16).replace(/:/g, "-"); // 2026-10-02T09-00
+
+// A random id for this browser profile, stored with each snapshot it uploads. Not part of
+// the backed-up data, so a restored browser keeps its own id. A reinstall gets a new one.
+async function deviceId() {
+  const { backupDevice } = await chrome.storage.local.get("backupDevice");
+  if (backupDevice) return backupDevice;
+  const id = crypto.randomUUID();
+  await chrome.storage.local.set({ backupDevice: id });
+  return id;
+}
+
+// Backups, restores and imports one at a time, so a scheduled backup can't read the
+// settings halfway through a restore.
+let backupLock = Promise.resolve();
+function locked(fn) {
+  const run = backupLock.then(fn);
+  backupLock = run.catch(() => {});
+  return run;
+}
 
 // ---- Google sign-in --------------------------------------------------------------------
 
@@ -181,13 +245,29 @@ async function listSnapshots() {
   const q = `'${folder}' in parents and trashed=false`;
   const res = await drive(`/files?q=${encodeURIComponent(q)}&fields=files(id,name,size,createdTime,appProperties)&pageSize=1000&spaces=drive`);
   return (res.files || [])
-    .map((f) => ({ id: f.id, name: f.name, size: Number(f.size) || 0, at: Number(f.appProperties?.at) || Date.parse(f.createdTime) }))
+    .map((f) => ({
+      id: f.id,
+      name: f.name,
+      size: Number(f.size) || 0,
+      at: Number(f.appProperties?.at) || Date.parse(f.createdTime),
+      device: f.appProperties?.device || "", // "" = made before devices were recorded
+      kind: f.appProperties?.kind || "auto",
+      keepUntil: Number(f.appProperties?.keepUntil) || 0,
+    }))
     .sort((a, b) => b.at - a.at);
 }
 
-// Which snapshots to keep: the newest, and the oldest in each age window.
+// Which snapshots to keep — see the comment at the top of this file.
 function snapshotsToKeep(snaps, now = Date.now()) {
-  const keep = new Set(snaps.length ? [snaps.reduce((a, b) => (b.at > a.at ? b : a)).id] : []);
+  const newestFirst = [...snaps].sort((a, b) => b.at - a.at);
+  const keep = new Set(newestFirst.slice(0, KEEP_RECENT).map((s) => s.id));
+  const devices = new Set();
+  for (const s of newestFirst) {
+    if (devices.has(s.device)) continue;
+    devices.add(s.device);
+    if (now - s.at < DEVICE_KEEP) keep.add(s.id);
+  }
+  for (const s of snaps) if (s.keepUntil > now) keep.add(s.id);
   for (let i = 0; i < BACKUP_WINDOWS.length - 1; i++) {
     const inWindow = snaps.filter((s) => now - s.at >= BACKUP_WINDOWS[i] && now - s.at < BACKUP_WINDOWS[i + 1]);
     if (inWindow.length) keep.add(inWindow.reduce((a, b) => (b.at < a.at ? b : a)).id);
@@ -204,33 +284,69 @@ async function readSnapshot(id) {
 }
 
 let backupRun = null;
-function runBackup() {
-  backupRun ??= doBackup().finally(() => (backupRun = null));
+// Scheduled runs share one in-flight backup; "sync now" (manual) always runs its own.
+function runBackup({ manual = false } = {}) {
+  if (manual) return locked(() => doBackup({ manual: true }));
+  backupRun ??= locked(() => doBackup()).finally(() => (backupRun = null));
   return backupRun;
 }
 
-async function doBackup() {
+// Uploads one snapshot; returns its size in Drive.
+async function uploadSnapshot(snap, props = {}) {
+  const folder = await backupFolder();
+  const at = Date.parse(snap.createdAt) || Date.now();
+  const prefix = props.kind === "pre-restore" ? "tab-toolkit-before-restore" : "tab-toolkit";
+  const meta = {
+    name: `${prefix}-${stamp(new Date(at))}.json.gz`,
+    parents: [folder],
+    mimeType: "application/gzip",
+    appProperties: { at: String(at), tt: "1", device: await deviceId(), ...props },
+  };
+  const b = `tt${crypto.randomUUID()}`;
+  const gz = await gzip(JSON.stringify(snap));
+  const body = new Blob([
+    `--${b}\r\ncontent-type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\ncontent-type: application/gzip\r\n\r\n`,
+    gz,
+    `\r\n--${b}--`,
+  ]);
+  await drive("/files?uploadType=multipart&fields=id", { method: "POST", body, headers: { "content-type": `multipart/related; boundary=${b}` }, base: "https://www.googleapis.com/upload/drive/v3" });
+  return { at, size: gz.size };
+}
+
+const protectSnapshot = (id, until) =>
+  drive(`/files/${id}?fields=id`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ appProperties: { keepUntil: String(until) } }),
+  });
+
+async function doBackup({ manual = false } = {}) {
   const { backupState = {} } = await chrome.storage.local.get("backupState");
   if (!backupState.connected) throw new Error("Connect Google Drive first");
+  // Waiting for the user to restore or confirm after connecting (see backupConnect):
+  // scheduled runs leave Drive alone; "sync now" means "back this browser up".
+  if (backupState.awaitingChoice && !manual) return { uploaded: false, awaitingChoice: true };
   try {
     const snap = await buildSnapshot();
     const hash = await sha256(JSON.stringify([snap.data, snap.bookmarks]));
-    const folder = await backupFolder();
+    let snaps = await listSnapshots();
     let uploaded = false;
-    if (hash !== backupState.lastHash || !(await listSnapshots()).length) {
-      const at = Date.now();
-      const meta = { name: `tab-toolkit-${stamp(new Date(at))}.json.gz`, parents: [folder], mimeType: "application/gzip", appProperties: { at: String(at), tt: "1" } };
-      const b = `tt${crypto.randomUUID()}`;
-      const body = new Blob([
-        `--${b}\r\ncontent-type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\ncontent-type: application/gzip\r\n\r\n`,
-        await gzip(JSON.stringify(snap)),
-        `\r\n--${b}--`,
-      ]);
-      await drive("/files?uploadType=multipart&fields=id", { method: "POST", body, headers: { "content-type": `multipart/related; boundary=${b}` }, base: "https://www.googleapis.com/upload/drive/v3" });
+    if (hash !== backupState.lastHash || !snaps.length) {
+      // Compare with this browser's own previous snapshot (another browser's can be any size).
+      const device = await deviceId();
+      const before = snaps.find((s) => s.device === device) || snaps.find((s) => !s.device);
+      const { at, size } = await uploadSnapshot(snap);
       uploaded = true;
-      await setBackupState({ lastHash: hash, lastSnapshot: at });
+      // Much smaller than the snapshot before it: probably data went missing. Keep the
+      // bigger one around for a month whatever the age windows say.
+      if (before && before.size && size < before.size * SHRINK_RATIO) {
+        await protectSnapshot(before.id, Date.now() + PROTECT_FOR).catch(() => {});
+      }
+      await setBackupState({ lastHash: hash, lastSnapshot: at, awaitingChoice: false });
+      snaps = await listSnapshots();
+    } else if (backupState.awaitingChoice) {
+      await setBackupState({ awaitingChoice: false });
     }
-    const snaps = await listSnapshots();
     const keep = snapshotsToKeep(snaps);
     for (const s of snaps) if (!keep.has(s.id)) await drive(`/files/${s.id}`, { method: "DELETE" }).catch(() => {});
     await setBackupState({ lastCheck: Date.now(), lastError: "", needsSignIn: false });
@@ -242,6 +358,33 @@ async function doBackup() {
 }
 
 // ---- Restore ---------------------------------------------------------------------------
+
+// A backup whose settings and data are all missing or empty (e.g. an export from a fresh
+// install) would wipe everything; refuse it.
+function assertHasData(data) {
+  const filled = (v) =>
+    v !== undefined && v !== null && v !== "" &&
+    !(Array.isArray(v) && v.length === 0) &&
+    !(typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === 0);
+  if (!data || typeof data !== "object" || !BACKUP_KEYS.some((k) => k !== "backup" && filled(data[k]))) {
+    throw new Error("That backup has no settings or data in it, so nothing was changed");
+  }
+}
+
+// Before a restore or import: keep what's there now, locally (for "undo") and, when Drive
+// is connected, as a snapshot protected from clean-up for 30 days.
+async function savePreRestore() {
+  const snap = await buildSnapshot();
+  await chrome.storage.local.set({ preRestore: { at: Date.now(), data: snap.data } });
+  const { backupState = {} } = await chrome.storage.local.get("backupState");
+  if (!backupState.connected || backupState.needsSignIn) return { preRestore: "local" };
+  try {
+    await uploadSnapshot(snap, { kind: "pre-restore", keepUntil: String(Date.now() + PROTECT_FOR) });
+    return { preRestore: "drive" };
+  } catch {
+    return { preRestore: "local" };
+  }
+}
 
 // Settings and data are replaced by the snapshot's. The Drive setup is only taken when the
 // file has one (older ones don't); a different client ID means signing in again.

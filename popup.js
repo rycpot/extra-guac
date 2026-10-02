@@ -859,12 +859,13 @@ function initBackup() {
     const { backup = {}, backupState: st = {} } = await chrome.storage.local.get(["backup", "backupState"]);
     const interval = Number(backup.interval ?? 24);
     seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(Number(b.dataset.h) === interval)));
-    const problem = !st.connected || st.needsSignIn || !!st.lastError;
+    const problem = !st.connected || st.needsSignIn || !!st.lastError || !!st.awaitingChoice;
     row.classList.toggle("problem", problem);
-    now.textContent = !st.connected ? "set up" : st.needsSignIn ? "sign in" : "sync now";
+    now.textContent = !st.connected ? "set up" : st.needsSignIn ? "sign in" : st.awaitingChoice ? "choose" : "sync now";
     $("driveStatus").textContent = busy ? "syncing…"
       : !st.connected ? "not connected"
       : st.needsSignIn ? "signed out"
+      : st.awaitingChoice ? "waiting: restore or sync in settings"
       : st.lastError ? "last sync failed"
       : st.lastSnapshot ? `saved ${ago(st.lastSnapshot)}` : "connected";
     $("driveStatus").title = st.lastError || (st.lastCheck ? `checked ${new Date(st.lastCheck).toLocaleString()}${st.email ? ` · ${st.email}` : ""}` : "");
@@ -881,12 +882,12 @@ function initBackup() {
   $("importLocal").onclick = settings;
   now.onclick = async () => {
     const { backupState: st = {} } = await chrome.storage.local.get("backupState");
-    if (!st.connected) return settings();
+    if (!st.connected || st.awaitingChoice) return settings();
     busy = true;
     render();
     try {
       const res = await send(st.needsSignIn ? "backupConnect" : "backupNow");
-      toast(res.uploaded ? "Snapshot saved to Drive" : "Nothing changed since the last snapshot");
+      toast(res.awaitingChoice ? "Drive has other snapshots — choose in settings" : res.uploaded ? "Snapshot saved to Drive" : "Nothing changed since the last snapshot");
     } catch (err) { fail(err); }
     busy = false;
     render();

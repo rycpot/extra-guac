@@ -383,21 +383,24 @@ Card 4111 1111 1111 1111</textarea>
         <label><input type="radio" name="driveInterval" value="24"> 24 h</label>
       </div>
       <p class="hint">A snapshot is saved only when something changed: your bookmarks, and Tab Toolkit's settings and data
-        (API keys included, blur rules, removed elements, histories). Older ones thin out like a time machine — the latest,
-        about 1 week, 2 weeks, 1 month, 2 months, 6 months and 1 year old, and the oldest one forever.</p>
+        (API keys included, blur rules, removed elements, histories). Older ones thin out like a time machine — the 3 latest,
+        about 1 week, 2 weeks, 1 month, 2 months, 6 months and 1 year old, and the oldest one forever. Each browser's latest is
+        always kept, and so is the copy taken before every restore or import (for 30 days).</p>
     </section>
     <section>
       <h2>Snapshots <button type="button" class="btn" id="driveNow">sync now</button></h2>
       <div id="driveSnaps"><p class="rm-empty">Connect Google Drive to see your snapshots.</p></div>
       <p class="hint"><b>restore settings</b> replaces Tab Toolkit's settings and data with the snapshot's.
         <b>restore bookmarks</b> adds the snapshot's bookmarks in a new folder under Other bookmarks, next to the ones you have now.
-        <b>.html</b> saves them as a bookmarks file any browser can import.</p>
+        <b>.html</b> saves them as a bookmarks file any browser can import.
+        Before every restore or import, the current settings are saved first — <b>undo last restore</b> below puts them back.</p>
     </section>
     <section>
       <h2>Settings file</h2>
       <div class="row">
         <button type="button" class="btn" id="exportLocal">export…</button>
         <button type="button" class="btn" id="importLocal">import…</button>
+        <button type="button" class="btn ghost" id="undoRestore" hidden>undo last restore</button>
         <input type="file" id="importFile" accept=".json,.gz,application/json,application/gzip" hidden>
       </div>
       <p class="hint">Tab Toolkit's settings and data as a .json file, API keys and the Drive client ID included (not the Google sign-in) — keep it somewhere private.
