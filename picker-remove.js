@@ -92,6 +92,10 @@
         li.off .name { opacity: .45; text-decoration: line-through; }
         li .x:hover { color: #ff6961; }
         .empty { padding: 12px; color: rgba(255,255,255,.5); }
+        .foot { display: flex; align-items: center; gap: 8px; padding: 7px 8px 7px 12px; border-top: 1px solid rgba(255,255,255,.08); }
+        .foot[hidden] { display: none; }
+        .session { flex: 1; color: rgba(255,255,255,.55); }
+        .discard:hover { background: rgba(255,69,58,.28); color: #ffb3ae; }
         svg { width: 14px; height: 14px; display: block; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
       </style>
       <div class="hint">Click to remove · ↑ parent · Ctrl+Z undo · Esc done</div>
@@ -105,6 +109,7 @@
           <button class="done">done</button>
         </div>
         <ul></ul>
+        <div class="foot" hidden><span class="session"></span><button class="discard" title="Put back everything removed since you started picking; none of it is saved">discard all</button></div>
       </div>`;
     const $ = (s) => root.querySelector(s);
     const box = $(".box"), tag = $(".tag"), panel = $(".panel"), list = $("ul");
@@ -118,7 +123,7 @@
     let current = null;
     let site = "", items = [], showAll = false;
     const trail = []; // elements visited with ↑, for ↓
-    const removed = []; // { el, selector, prev } in this session, for undo
+    const removed = []; // { el, selector, was } picked this session, for undo and "discard all"
     const inline = new Map(); // selector → [{ el, prev }] hidden inline until the site's stylesheet has it
 
     const usable = (el) => el instanceof Element && el !== host && el !== document.documentElement && el !== document.body;
@@ -146,6 +151,8 @@
       $(".title").append(Object.assign(document.createElement("b"), { textContent: site }), ` · ${on}`);
       $(".title").title = `${on} removed on ${site}${items.length > on ? `, ${items.length - on} off` : ""}`;
       $(".show").classList.toggle("on", showAll);
+      $(".foot").hidden = !removed.length;
+      $(".session").textContent = `${removed.length} picked this time`;
       $(".show").disabled = !items.length;
       list.replaceChildren();
       if (!items.length) {
@@ -270,21 +277,38 @@
       const prev = [el.style.getPropertyValue("display"), el.style.getPropertyPriority("display")];
       el.style.setProperty("display", "none", "important");
       inline.set(selector, [...(inline.get(selector) || []), { el, prev }]);
-      removed.push({ el, selector });
+      const entry = { el, selector, was: null };
+      removed.push(entry);
       trail.length = 0;
       show(null);
-      await send("removeAdd", { selector, label });
+      const res = await send("removeAdd", { selector, label });
+      if (res?.existed) entry.was = { enabled: res.enabled };
       await load();
+    }
+
+    // Takes one pick back: gone from the list, or as it was if it had been removed before.
+    async function takeBack(pick) {
+      release(pick.selector);
+      const r = items.find((e) => e.selector === pick.selector);
+      if (pick.was) await send("removeToggle", { site: r?.site, selector: pick.selector, enabled: pick.was.enabled });
+      else await send("removeUndo", { site: r?.site, selector: pick.selector });
     }
 
     async function undo() {
       const last = removed.pop();
       if (!last) return;
-      release(last.selector);
-      const r = items.find((e) => e.selector === last.selector);
-      await send("removeUndo", { site: r?.site, selector: last.selector });
+      await takeBack(last);
       await load();
     }
+
+    // "discard all": everything picked this session comes back and nothing of it is kept.
+    $(".discard").onclick = async () => {
+      if (peeking) unpeek();
+      const picks = removed.splice(0).reverse();
+      for (const pick of picks) await takeBack(pick);
+      cleanup();
+      window.__ttFlash(`Discarded ${picks.length} pick${picks.length === 1 ? "" : "s"}; nothing saved`);
+    };
 
     $(".show").onclick = async () => {
       // Elements hidden inline this session would stay hidden: hand them to the stylesheet.

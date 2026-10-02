@@ -33,7 +33,8 @@ body::after { content: ""; position: fixed; inset: 0; pointer-events: none; opac
 .side a:hover { background: var(--hover); color: var(--fg); }
 .side a.active { background: var(--chip); color: var(--fg); }
 main { flex: 1; min-width: 0; overflow-y: auto; padding: 18px 26px 40px; }
-.pane { min-width: 0; } /* fills the window: wider window, wider fields */
+.pane { max-width: 640px; }
+#redirect.pane { max-width: none; } /* the rules table grows with the window */
 .pane-head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 6px; }
 h1 { font-size: 16px; margin: 0; font-weight: 600; }
 a { color: var(--accent); }
@@ -84,7 +85,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 1
 .chips:empty { display: none; }
 .chip { display: inline-flex; align-items: center; max-width: 100%; border: 1px solid var(--line); border-radius: 999px; background: var(--field); font: 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .chip button { border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 5px 4px; }
-.chip .chip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: max(380px, 45vw); padding: 5px 2px; }
+.chip .chip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 380px; padding: 5px 2px; }
 .chip .chip-toggle { color: var(--accent); padding-left: 9px; }
 .chip .chip-x { color: var(--muted); padding-right: 9px; font-size: 14px; line-height: 1; }
 .chip .chip-x:hover { color: var(--error); }
@@ -121,12 +122,12 @@ input.text.wide { width: 100%; }
 .rm-head .hint { margin: 0; flex: 1; }
 .rm-pills { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
 .rm-pills .chip { flex: none; }
-.rm-pills .chip .chip-text { padding-left: 10px; max-width: max(320px, 35vw); }
+.rm-pills .chip .chip-text { padding-left: 10px; max-width: 320px; }
 .rm-empty { color: var(--muted); padding: 6px 0; }
 
 /* Dark mode site lists (pills reuse the remove-elements style) */
 .dark-list.inactive h2, .dark-list.inactive .rm-pills { opacity: .5; }
-.add-row { display: flex; gap: 8px; margin-top: 6px; max-width: max(420px, 60%); }
+.add-row { display: flex; gap: 8px; margin-top: 6px; max-width: 420px; }
 .add-row .text { flex: 1; }
 
 /* Backup */
