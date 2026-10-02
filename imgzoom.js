@@ -1,6 +1,6 @@
 // Zoom & rotate images (settings.imgZoom). Holding the chosen key (Option/Alt by default,
-// or Ctrl or Shift) and scrolling over an image zooms it, always around the image's own
-// centre, wherever the cursor is. Zooming brings up faint controls at the bottom-right of
+// ⌘ on a Mac / Ctrl elsewhere, or Shift) and scrolling over an image zooms it, always
+// around the image's own centre, wherever the cursor is. Zooming brings up faint controls at the bottom-right of
 // the window (they go again 3 s after the last zoom unless pointed at); right-click an
 // image → "Image controls" shows them until closed: rotate left, rotate right, back to 1:1, a
 // zoom slider (10%–500%) and ✕. Only the image's inline styles change; 1:1 puts them back.
@@ -28,7 +28,10 @@
   chrome.storage.onChanged.addListener((c, area) => { if (area === "local" && c.tt && chrome.runtime?.id) apply(c.tt.newValue); });
 
   const imageIn = (e) => e.composedPath().find((n) => n instanceof HTMLImageElement) || null;
-  const held = (e) => (modifier === "alt" ? e.altKey : modifier === "ctrl" ? e.ctrlKey : e.shiftKey);
+  // "ctrl" is ⌘ on a Mac (where Ctrl+click is the right-click menu and a trackpad pinch
+  // reports Ctrl) and Ctrl everywhere else.
+  const MAC = /Mac/i.test(navigator.userAgentData?.platform || navigator.platform);
+  const held = (e) => (modifier === "alt" ? e.altKey : modifier === "ctrl" ? (MAC ? e.metaKey : e.ctrlKey) : e.shiftKey);
   const clamp = (v) => Math.min(MAX, Math.max(MIN, v));
 
   // ---- Transform -------------------------------------------------------------------------

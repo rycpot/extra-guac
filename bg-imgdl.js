@@ -11,7 +11,7 @@ const IMGDL_TYPES = { png: ["image/png"], jpg: ["image/jpeg", 0.92], webp: ["ima
 const imgDlHandlers = {
   imgDownload: async ({ url, fallback }, sender) => {
     try {
-      return await saveClickedImage(url, sender.tab, !fallback);
+      return await saveClickedImage(url, sender.tab);
     } catch (err) {
       if (!fallback) throw err;
       return saveClickedImage(fallback, sender.tab);
@@ -19,22 +19,14 @@ const imgDlHandlers = {
   },
 };
 
-// direct: if the extension can't fetch it, hand the address to Chrome's downloader (whose
-// failure can't be seen here, so not when there's a fallback to try).
-async function saveClickedImage(url, tab, direct = true) {
+// Only ever saves what really is an image: when the address gives back anything else (a
+// web page, a login or "hotlinking not allowed" page), nothing is saved and the page
+// says it couldn't.
+async function saveClickedImage(url, tab) {
   const { imgDl } = await TT.getSettings();
   const folder = TT.cleanFolder(imgDl.folder);
   const target = IMGDL_TYPES[imgDl.format];
-  let file;
-  try {
-    file = await fetchImage(url, tab);
-  } catch (err) {
-    // Some sites refuse the extension's own request; Chrome's downloader may still get it.
-    if (!direct || target || !/^https?:/i.test(url)) throw err;
-    const name = fetchName(url);
-    await chrome.downloads.download({ url, filename: folder ? `${folder}/${name}` : name, conflictAction: "uniquify", saveAs: false });
-    return { name };
-  }
+  const file = await fetchImage(url, tab);
   let { blob, name } = file;
   if (target && blob.type !== target[0] && blob.type !== "image/svg+xml") {
     const bmp = await createImageBitmap(blob);
@@ -48,10 +40,6 @@ async function saveClickedImage(url, tab, direct = true) {
   const dataUrl = await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
   await chrome.downloads.download({ url: dataUrl, filename: folder ? `${folder}/${name}` : name, conflictAction: "uniquify", saveAs: false });
   return { name };
-}
-
-function fetchName(url) {
-  try { return decodeURIComponent(new URL(url).pathname.split("/").pop()).replace(/[^\w.-]/g, "_").slice(0, 80) || "image"; } catch { return "image"; }
 }
 
 async function syncImgDlScript() {

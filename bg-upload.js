@@ -171,13 +171,33 @@ async function fetchImage(srcUrl, tab) {
     if (!res.ok) throw new Error(`Couldn't download the image (HTTP ${res.status})`);
     blob = await res.blob();
   }
-  if (!blob.type.startsWith("image/")) throw new Error("That doesn't look like an image");
+  if (!blob.type.startsWith("image/")) {
+    // Some servers label images as generic data: recognise them by their first bytes. A web
+    // page (an error, login or "no hotlinking" page) is refused.
+    const type = await sniffImageType(blob);
+    if (!type) throw new Error("the address gave back a web page, not an image");
+    blob = new Blob([blob], { type });
+  }
   const ext = (blob.type.split("/")[1] || "png").replace("jpeg", "jpg").replace(/\+.*/, "");
   let base = "image";
   if (/^https?:/i.test(srcUrl)) {
     try { base = decodeURIComponent(new URL(srcUrl).pathname.split("/").pop()).replace(/\.[^.]+$/, "") || base; } catch {}
   }
   return { blob, name: `${base.replace(/[^\w.-]/g, "_").slice(0, 60)}.${ext}` };
+}
+
+async function sniffImageType(blob) {
+  const b = new Uint8Array(await blob.slice(0, 32).arrayBuffer());
+  const ascii = (from, to) => String.fromCharCode(...b.slice(from, to));
+  if (b[0] === 0x89 && ascii(1, 4) === "PNG") return "image/png";
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
+  if (ascii(0, 4) === "GIF8") return "image/gif";
+  if (ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP") return "image/webp";
+  if (ascii(4, 8) === "ftyp" && /^avi[fs]$/.test(ascii(8, 12))) return "image/avif";
+  if (ascii(0, 2) === "BM") return "image/bmp";
+  const head = (await blob.slice(0, 512).text()).trimStart();
+  if (/^(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*)*<svg[\s>]/i.test(head)) return "image/svg+xml";
+  return "";
 }
 
 chrome.notifications.onClicked.addListener((id) => {
