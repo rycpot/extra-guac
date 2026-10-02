@@ -138,7 +138,9 @@ input:disabled, .seg button:disabled { opacity: .55; }
 .chips-empty { color: var(--text3); font-size: 11px; }
 .kw-count { color: var(--text3); font-size: 11px; font-variant-numeric: tabular-nums; }
 .kw-count.over { color: var(--red); }
-.sub-row { margin-top: 2px; }
+/* Option rows under a heading sit as close to it as awake's or auto-refresh's own rows. */
+.row.tight.sub-row { padding: 0; margin-top: 2px; }
+.row.tight.sub-row + .sub-row { margin-top: 8px; }
 /* A text button in a heading with options below it keeps the heading as tall as one with a
    switch, so the gap under every heading is the same. */
 .row.tight:has(+ .sub-row) .text-btn { margin-block: -2px; }
