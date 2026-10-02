@@ -1,5 +1,6 @@
 // Tab volume (captures the tab's audio into a gain node in the offscreen document)
 // and keep awake (chrome.power, shown as a green dot on the toolbar icon).
+// Loaded by background.js; mediaHandlers join its message handlers.
 
 const mediaHandlers = {
   setVolume: ({ tabId, volume }) => setVolume(tabId, volume),
