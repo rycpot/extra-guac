@@ -24,7 +24,7 @@
   // ---- Lists → patterns ----------------------------------------------------------------
 
   const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  function pattern(words) {
+  function pattern(words, partial) {
     const root = {};
     for (const w of words) {
       let n = root;
@@ -38,8 +38,8 @@
       const s = alts.length > 1 ? `(?:${alts.join("|")})` : alts[0];
       return n[""] ? `(?:${s})?` : s;
     };
-    // Whole words: no letter, digit or underscore right before or after.
-    return new RegExp(`(?<![\\p{L}\\p{N}_])${build(root)}(?![\\p{L}\\p{N}_])`, "giu");
+    // Whole words: no letter, digit or underscore right before or after. Partial: anywhere.
+    return partial ? new RegExp(build(root), "giu") : new RegExp(`(?<![\\p{L}\\p{N}_])${build(root)}(?![\\p{L}\\p{N}_])`, "giu");
   }
 
   // The lists that apply to this page: this site's own list (drawn on top), then global.
@@ -48,9 +48,9 @@
     const out = [];
     const siteKey = Object.keys(hl.sites || {}).filter(covers).sort((a, b) => b.length - a.length)[0];
     const site = siteKey && hl.sites[siteKey];
-    if (site?.on && site.words?.length) out.push({ name: "tt-hl-site", color: site.color, words: site.words });
+    if (site?.on && site.words?.length) out.push({ name: "tt-hl-site", color: site.color, partial: !!site.partial, words: site.words });
     if (hl.global?.on && hl.global.words?.length && !(hl.exclude || []).some(covers)) {
-      out.push({ name: "tt-hl-global", color: hl.global.color, words: hl.global.words });
+      out.push({ name: "tt-hl-global", color: hl.global.color, partial: !!hl.global.partial, words: hl.global.words });
     }
     return out;
   }
@@ -261,7 +261,7 @@
       const marks = new Highlight();
       marks.priority = lists.length - i; // the site's own list wins where both match
       CSS.highlights.set(l.name, marks);
-      return { name: l.name, color: l.color, re: pattern(l.words), marks };
+      return { name: l.name, color: l.color, re: pattern(l.words, l.partial), marks };
     });
     style(document);
     observer.disconnect();
