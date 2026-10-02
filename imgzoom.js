@@ -150,13 +150,12 @@
     root.innerHTML = `
       <style>
         .bar { display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 12px; background: rgba(16,16,16,.8);
-          color: #fff; font: 600 11px system-ui, sans-serif; opacity: .3; transition: opacity .15s; box-shadow: 0 4px 18px rgba(0,0,0,.3); }
-        .bar:hover, .bar:focus-within { opacity: 1; }
+          color: #fff; font: 600 11px system-ui, sans-serif; opacity: .3; box-shadow: 0 4px 18px rgba(0,0,0,.3); }
+        /* Stays faint even while used; only the button under the pointer is marked, lightly. */
         button { all: unset; height: 26px; min-width: 26px; display: grid; place-items: center; border-radius: 8px; cursor: pointer; }
-        button:hover { background: rgba(255,255,255,.16); }
+        button:hover { background: rgba(255,255,255,.12); }
         .one { padding: 0 6px; font-size: 11px; letter-spacing: .02em; }
-        .x { min-width: 20px; height: 20px; margin-left: 2px; opacity: .7; }
-        .x:hover { opacity: 1; }
+        .x { min-width: 20px; height: 20px; margin-left: 2px; }
         svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
         .x svg { width: 11px; height: 11px; }
         input { width: 96px; margin: 0 4px; accent-color: #fff; cursor: pointer; }
