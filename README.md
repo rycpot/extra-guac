@@ -33,7 +33,7 @@ The first tab holds the everyday tools, the second the page tools.
 | Tool | What it does |
 |---|---|
 | **Drive backup** | Snapshots of your bookmarks and of Tab Toolkit's settings and data (API keys, blur rules, removed elements, histories) to your Google Drive, in a "Tab Toolkit backups" folder, as gzipped JSON. Auto-sync every 1, 2, 4, 6, 12 or 24 h (or off), plus **sync now**; a snapshot is only saved when something changed. Old snapshots thin out like a time machine: the latest plus about 1 week, 2 weeks, 1 month, 2 months, 6 months and 1 year old, and the oldest forever. Settings → backup lists them: restore settings (replaces the current ones), restore bookmarks (into a new "Restored YYYY-MM-DD" folder under Other bookmarks, nothing is overwritten), or save the bookmarks as a bookmarks.html any browser imports. Uses your own Google OAuth client (settings → backup has the steps) with access only to the files Tab Toolkit creates. |
-| **Settings file** | Export Tab Toolkit's settings and data (API keys included) as a .json file, or import one — or a Drive snapshot — to replace them. |
+| **Settings file** | Export Tab Toolkit's settings and data (API keys and the Drive client ID included) as a .json file, or import one — or a Drive snapshot — to replace them. |
 
 ## Blur sensitive data
 

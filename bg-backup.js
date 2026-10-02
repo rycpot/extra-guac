@@ -12,7 +12,8 @@
 // months, 2–6 months, 6–12 months, over a year), so there are never more than 8.
 // Snapshots include API keys (shorteners, upload hosts), like the settings themselves.
 
-const BACKUP_KEYS = ["tt", "pii", "removed", "shortHistory", "shortCounts", "uploadHistory", "colorHistory", "selectorHistory", "fontHistory"];
+// "backup" is the Drive setup (OAuth client ID, auto-sync interval); the sign-in itself isn't saved.
+const BACKUP_KEYS = ["tt", "pii", "removed", "shortHistory", "shortCounts", "uploadHistory", "colorHistory", "selectorHistory", "fontHistory", "backup"];
 const BACKUP_FOLDER = "Tab Toolkit backups";
 const BACKUP_ALARM = "tt-backup";
 const BACKUP_INTERVALS = [0, 1, 2, 4, 6, 12, 24]; // hours; 0 = only when asked, 24 unless set
@@ -241,12 +242,23 @@ async function doBackup() {
 
 // ---- Restore ---------------------------------------------------------------------------
 
-// Settings and data are replaced by the snapshot's (Drive connection stays as it is).
+// Settings and data are replaced by the snapshot's. The Drive setup is only taken when the
+// file has one (older ones don't); a different client ID means signing in again.
 async function applyData(data) {
   const set = {}, remove = [];
   for (const k of BACKUP_KEYS) {
+    if (k === "backup") continue;
     if (data[k] !== undefined) set[k] = data[k];
     else remove.push(k);
+  }
+  const { backup = {}, backupState = {} } = await chrome.storage.local.get(["backup", "backupState"]);
+  const from = data.backup;
+  if (from && typeof from === "object") {
+    set.backup = { ...backup, ...(typeof from.clientId === "string" ? { clientId: from.clientId.trim() } : {}), ...(from.interval !== undefined ? { interval: Number(from.interval) } : {}) };
+    if (backupState.connected && (set.backup.clientId || "") !== (backup.clientId || "")) {
+      await chrome.storage.session.remove("driveToken");
+      set.backupState = { ...backupState, needsSignIn: true };
+    }
   }
   if (remove.length) await chrome.storage.local.remove(remove);
   await chrome.storage.local.set(set);
