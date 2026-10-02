@@ -1,7 +1,7 @@
 importScripts(
   "pii-rules.js", "shared.js", "redirect-rules.js",
   "bg-capture.js", "bg-refresh.js", "bg-shortener.js", "bg-media.js", "bg-pickers.js", "bg-redirect.js", "bg-upload.js",
-  "bg-remove.js", "bg-dark.js",
+  "bg-remove.js", "bg-dark.js", "bg-backup.js",
 );
 
 // Messages from the popup, settings window, page overlays and the offscreen document.
@@ -19,6 +19,7 @@ const handlers = {
   ...uploadHandlers,
   ...removeHandlers,
   ...darkHandlers,
+  ...backupHandlers,
 };
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {

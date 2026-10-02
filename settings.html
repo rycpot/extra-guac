@@ -17,6 +17,7 @@
     <a href="#redirect">auto redirect</a>
     <a href="#upload">image upload</a>
     <a href="#remove">remove elements</a>
+    <a href="#backup">backup</a>
   </nav>
 
   <main>
@@ -263,13 +264,14 @@ Card 4111 1111 1111 1111</textarea>
   <div class="pane" id="remove">
     <header class="pane-head"><h1>remove elements</h1></header>
     <section>
-      <h2>Sites <span class="hint">× takes an element back · removals apply to the whole site and its subdomains</span></h2>
+      <h2>Sites <span class="hint">click a name to turn it off or on · × deletes it · hover for its address · removals apply to the whole site and its subdomains</span></h2>
       <div id="removeSites"></div>
     </section>
     <section>
       <h2>How it works</h2>
       <p class="hint">In the tools, page tab → <b>remove elements</b> → <b>pick</b>, then click everything you want gone
-        (↑ selects the parent, Ctrl/⌘+Z puts the last one back, Esc or Enter when done). Removed elements stay hidden on every
+        (↑ selects the parent, Ctrl/⌘+Z puts the last one back, Esc or Enter when done). While picking, a panel in the corner
+        lists what's removed on the site: point at an entry to see that element, the eye shows it again (or hides it again), × deletes it. Removed elements stay hidden on every
         later visit — the page is held back until they're hidden, so they never flash, even on slow loads.
         <b>Show removed on this site</b> brings them back with a red dashed outline until you switch it off or restart Chrome.</p>
     </section>
@@ -303,6 +305,64 @@ Card 4111 1111 1111 1111</textarea>
       <p class="hint">Right-click any image → <i>Upload image to …</i> (with both hosts on, the item branches into the two).
         The link is copied, a notification confirms it, and it's listed in the popup's upload history.
         The host fetches the image itself; if it can't (private or embedded images), Tab Toolkit downloads it and uploads the file.</p>
+    </section>
+  </div>
+
+  <div class="pane" id="backup">
+    <header class="pane-head"><h1>backup</h1></header>
+    <section>
+      <h2>Google Drive <span class="hint" id="driveState"></span></h2>
+      <div class="row">
+        <input type="text" class="text" id="driveClientId" placeholder="OAuth client ID (….apps.googleusercontent.com)" spellcheck="false" autocomplete="off">
+        <button type="button" class="btn" id="driveConnect">connect</button>
+        <button type="button" class="btn ghost" id="driveDisconnect" hidden>disconnect</button>
+      </div>
+      <details class="steps">
+        <summary>How to get a client ID (once, about 3 minutes)</summary>
+        <ol>
+          <li>Open <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">Google Cloud console</a> and create a project (any name).</li>
+          <li><a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noopener">Enable the Google Drive API</a> for it.</li>
+          <li><a href="https://console.cloud.google.com/auth/branding" target="_blank" rel="noopener">Google Auth Platform → Branding</a>: set an app name and your email.
+            Under <b>Audience</b>, choose <b>External</b> and add your Google account as a test user.</li>
+          <li><a href="https://console.cloud.google.com/auth/clients/create" target="_blank" rel="noopener">Clients → Create client</a>: type <b>Web application</b>,
+            and under <b>Authorized redirect URIs</b> add <code id="driveRedirect"></code> <button type="button" class="btn ghost" id="copyRedirect">copy</button></li>
+          <li>Copy the client ID it shows into the box above and click <b>connect</b>.</li>
+        </ol>
+        <p class="hint">Tab Toolkit only asks for access to files it creates itself, and keeps snapshots in a folder named “Tab Toolkit backups”.
+          The redirect URI depends on this copy of the extension: if you load it from another folder, it changes.</p>
+      </details>
+    </section>
+    <section>
+      <h2>Auto-sync</h2>
+      <div class="row" id="driveInterval">
+        <label><input type="radio" name="driveInterval" value="0"> off</label>
+        <label><input type="radio" name="driveInterval" value="1"> every hour</label>
+        <label><input type="radio" name="driveInterval" value="2"> 2 h</label>
+        <label><input type="radio" name="driveInterval" value="4"> 4 h</label>
+        <label><input type="radio" name="driveInterval" value="6"> 6 h</label>
+        <label><input type="radio" name="driveInterval" value="12"> 12 h</label>
+        <label><input type="radio" name="driveInterval" value="24"> 24 h</label>
+      </div>
+      <p class="hint">A snapshot is saved only when something changed: your bookmarks, and Tab Toolkit's settings and data
+        (API keys included, blur rules, removed elements, histories). Older ones thin out like a time machine — the latest,
+        about 1 week, 2 weeks, 1 month, 2 months, 6 months and 1 year old, and the oldest one forever.</p>
+    </section>
+    <section>
+      <h2>Snapshots <button type="button" class="btn" id="driveNow">sync now</button></h2>
+      <div id="driveSnaps"><p class="rm-empty">Connect Google Drive to see your snapshots.</p></div>
+      <p class="hint"><b>restore settings</b> replaces Tab Toolkit's settings and data with the snapshot's.
+        <b>restore bookmarks</b> adds the snapshot's bookmarks in a new folder under Other bookmarks, next to the ones you have now.
+        <b>.html</b> saves them as a bookmarks file any browser can import.</p>
+    </section>
+    <section>
+      <h2>Settings file</h2>
+      <div class="row">
+        <button type="button" class="btn" id="exportLocal">export…</button>
+        <button type="button" class="btn" id="importLocal">import…</button>
+        <input type="file" id="importFile" accept=".json,.gz,application/json,application/gzip" hidden>
+      </div>
+      <p class="hint">Tab Toolkit's settings and data as a .json file, API keys included — keep it somewhere private.
+        Import takes such a file or a Drive snapshot (.json.gz) and replaces the current settings and data.</p>
     </section>
   </div>
   </main>

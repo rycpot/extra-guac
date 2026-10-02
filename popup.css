@@ -138,6 +138,8 @@ input:disabled, .seg button:disabled { opacity: .55; }
 .kw-count.over { color: var(--red); }
 .sub-row { margin-top: 2px; }
 .kw-note { margin: 3px 0 0; font-size: 10.5px; color: var(--yellow); }
+.note { margin: 4px 0 0; font-size: 10.5px; line-height: 1.4; color: var(--text3); }
+#driveRow.problem #driveStatus { color: var(--yellow); }
 .kw-hint { margin: 10px 0 0; font-size: 11px; color: var(--text3); }
 .kw-text { flex: 1; margin-top: 8px; resize: none; line-height: 1.5; }
 .kw-foot { display: flex; align-items: center; justify-content: space-between; padding-top: 10px; }

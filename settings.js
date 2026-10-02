@@ -16,6 +16,7 @@
     initUpload();
     initRemoved();
     initDarkLists();
+    initBackup();
     showPane();
     addEventListener("hashchange", showPane);
     $("testSound").onclick = testSound;
@@ -276,15 +277,19 @@
         row.className = "rm-site";
         row.innerHTML = `<div class="rm-head"><b></b><span class="hint"></span><button type="button" class="btn ghost">clear site</button></div><div class="rm-pills"></div>`;
         row.querySelector("b").textContent = site;
-        row.querySelector(".hint").textContent = `${removed[site].length} removed`;
+        const off = removed[site].filter((r) => r.enabled === false).length;
+        row.querySelector(".hint").textContent = `${removed[site].length - off} removed${off ? ` · ${off} off` : ""}`;
         row.querySelector("button").onclick = () => edit(site, () => []);
         row.querySelector(".rm-pills").append(...removed[site].map((r) => {
+          const on = r.enabled !== false;
           const chip = document.createElement("span");
-          chip.className = "chip";
-          chip.title = `${r.selector}\nremoved ${new Date(r.at).toLocaleString()}`;
-          const text = Object.assign(document.createElement("span"), { className: "chip-text", textContent: r.selector });
+          chip.className = `chip${on ? "" : " off"}`;
+          chip.title = `${r.selector}\nremoved ${new Date(r.at).toLocaleString()}${on ? "" : "\n(off: shown on the page)"}`;
+          const text = Object.assign(document.createElement("button"), { type: "button", className: "chip-text", textContent: r.label || r.selector });
+          text.setAttribute("aria-label", `${on ? "Show" : "Remove"} ${r.label || r.selector} again`);
+          text.onclick = () => edit(site, (list) => list.map((e) => (e.selector === r.selector ? { ...e, enabled: !on } : e)));
           const x = Object.assign(document.createElement("button"), { type: "button", className: "chip-x", textContent: "×" });
-          x.setAttribute("aria-label", `Stop removing ${r.selector}`);
+          x.setAttribute("aria-label", `Stop removing ${r.label || r.selector}`);
           x.onclick = () => edit(site, (list) => list.filter((e) => e.selector !== r.selector));
           chip.append(text, x);
           return chip;
@@ -352,5 +357,142 @@
     }
     render();
     chrome.storage.onChanged.addListener((c, area) => area === "local" && c.tt && render());
+  }
+  // ---- Backup ----
+
+  function initBackup() {
+    const send = async (type, payload = {}) => {
+      const res = await chrome.runtime.sendMessage({ type, ...payload });
+      if (!res?.ok) throw new Error(res?.error || "Something went wrong");
+      return res;
+    };
+    const say = (text, bad = false) => { $("driveState").textContent = text; $("driveState").classList.toggle("bad", bad); };
+    const when = (t) => new Date(t).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+    const age = (t) => { const d = (Date.now() - t) / 864e5; return d < 1 ? "today" : d < 2 ? "yesterday" : d < 60 ? `${Math.round(d)} days ago` : d < 730 ? `${Math.round(d / 30.4)} months ago` : `${Math.round(d / 365)} years ago`; };
+    const size = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
+    $("driveRedirect").textContent = chrome.identity.getRedirectURL();
+    $("copyRedirect").onclick = () => navigator.clipboard.writeText(chrome.identity.getRedirectURL()).then(() => ($("copyRedirect").textContent = "copied"));
+
+    let listed = false;
+    async function render() {
+      const { backup = {}, backupState: st = {} } = await chrome.storage.local.get(["backup", "backupState"]);
+      if (document.activeElement !== $("driveClientId")) $("driveClientId").value = backup.clientId || "";
+      const interval = String(backup.interval ?? 24);
+      document.querySelectorAll('[name="driveInterval"]').forEach((r) => (r.checked = r.value === interval));
+      $("driveConnect").textContent = !st.connected ? "connect" : st.needsSignIn ? "sign in again" : "reconnect";
+      $("driveConnect").hidden = st.connected && !st.needsSignIn;
+      $("driveDisconnect").hidden = !st.connected;
+      $("driveClientId").disabled = !!st.connected;
+      $("driveNow").disabled = !st.connected;
+      if (!st.connected) say("not connected");
+      else if (st.needsSignIn) say("signed out of Google — sign in again", true);
+      else if (st.lastError) say(`last sync failed: ${st.lastError}`, true);
+      else say(`connected${st.email ? ` as ${st.email}` : ""}${st.lastSnapshot ? ` · last snapshot ${when(st.lastSnapshot)}` : ""}${st.lastCheck ? ` · checked ${when(st.lastCheck)}` : ""}`);
+      if (st.connected && !st.needsSignIn && !listed) listSnaps();
+    }
+
+    async function listSnaps() {
+      listed = true;
+      const box = $("driveSnaps");
+      try {
+        const { snapshots } = await send("backupList");
+        if (!snapshots.length) return void (box.innerHTML = `<p class="rm-empty">No snapshots yet.</p>`);
+        const table = document.createElement("table");
+        table.className = "snaps";
+        for (const snap of snapshots) {
+          const tr = table.insertRow();
+          tr.innerHTML = `<td class="when"><b></b><span class="hint"></span></td><td><span class="hint"></span></td>
+            <td><button type="button" class="btn" data-what="settings">restore settings</button></td>
+            <td><button type="button" class="btn" data-what="bookmarks">restore bookmarks</button></td>
+            <td><button type="button" class="btn ghost" data-html>.html</button></td>
+            <td><button type="button" class="btn ghost" data-json>.json</button></td>`;
+          tr.querySelector("b").textContent = when(snap.at);
+          tr.querySelector(".when .hint").textContent = age(snap.at);
+          tr.cells[1].querySelector(".hint").textContent = size(snap.size);
+          tr.title = snap.name;
+          tr.querySelectorAll("[data-what]").forEach((b) => (b.onclick = async () => {
+            const settingsToo = b.dataset.what === "settings";
+            if (!confirm(settingsToo
+              ? `Replace Tab Toolkit's settings and data with the snapshot from ${when(snap.at)}?`
+              : `Add the bookmarks from ${when(snap.at)} in a new folder under Other bookmarks?`)) return;
+            b.disabled = true;
+            try {
+              const res = await send("backupRestore", { id: snap.id, what: b.dataset.what });
+              alert(settingsToo ? "Settings restored." : `Bookmarks restored to “${res.folder}” in Other bookmarks.`);
+              if (settingsToo) location.reload();
+            } catch (err) { alert(err.message); }
+            b.disabled = false;
+          }));
+          tr.querySelector("[data-html]").onclick = () => send("backupBookmarksHtml", { id: snap.id }).catch((err) => alert(err.message));
+          tr.querySelector("[data-json]").onclick = () => send("backupDownload", { id: snap.id }).catch((err) => alert(err.message));
+        }
+        box.replaceChildren(table);
+      } catch (err) {
+        box.innerHTML = `<p class="rm-empty"></p>`;
+        box.firstChild.textContent = `Couldn't list snapshots: ${err.message}`;
+        listed = false;
+      }
+    }
+
+    $("driveClientId").addEventListener("change", async () => {
+      const { backup = {} } = await chrome.storage.local.get("backup");
+      await chrome.storage.local.set({ backup: { ...backup, clientId: $("driveClientId").value.trim() } });
+    });
+    document.querySelectorAll('[name="driveInterval"]').forEach((r) => r.addEventListener("change", async () => {
+      const { backup = {} } = await chrome.storage.local.get("backup");
+      await chrome.storage.local.set({ backup: { ...backup, interval: Number(r.value) } });
+    }));
+    $("driveConnect").onclick = async () => {
+      const { backup = {} } = await chrome.storage.local.get("backup");
+      await chrome.storage.local.set({ backup: { ...backup, clientId: $("driveClientId").value.trim() } });
+      $("driveConnect").disabled = true;
+      say("waiting for Google…");
+      try { await send("backupConnect"); listed = false; } catch (err) { say(err.message, true); }
+      $("driveConnect").disabled = false;
+      render();
+    };
+    $("driveDisconnect").onclick = async () => {
+      if (!confirm("Disconnect Google Drive? Your snapshots stay in Drive.")) return;
+      await send("backupDisconnect");
+      $("driveSnaps").innerHTML = `<p class="rm-empty">Connect Google Drive to see your snapshots.</p>`;
+      listed = false;
+    };
+    $("driveNow").onclick = async () => {
+      $("driveNow").disabled = true;
+      say("syncing…");
+      try {
+        const res = await send("backupNow");
+        listed = false;
+        await listSnaps();
+        alert(res.uploaded ? "Snapshot saved to Drive." : "Nothing changed since the last snapshot, so none was saved.");
+      } catch (err) { say(err.message, true); }
+      $("driveNow").disabled = false;
+    };
+
+    $("exportLocal").onclick = () => send("backupExportLocal").catch((err) => alert(err.message));
+    $("importLocal").onclick = () => $("importFile").click();
+    $("importFile").onchange = async () => {
+      const file = $("importFile").files[0];
+      $("importFile").value = "";
+      if (!file) return;
+      try {
+        const head = new Uint8Array(await file.slice(0, 2).arrayBuffer());
+        const text = head[0] === 0x1f && head[1] === 0x8b
+          ? await new Response(file.stream().pipeThrough(new DecompressionStream("gzip"))).text()
+          : await file.text();
+        const snapshot = JSON.parse(text);
+        if (snapshot?.app !== "Tab Toolkit") throw new Error("That isn't a Tab Toolkit backup");
+        const from = snapshot.createdAt ? ` from ${when(snapshot.createdAt)}` : "";
+        if (!confirm(`Replace Tab Toolkit's settings and data with the ones in ${file.name}${from}?`)) return;
+        await send("backupImportLocal", { snapshot });
+        alert("Settings imported.");
+        location.reload();
+      } catch (err) {
+        alert(err instanceof SyntaxError ? "That file couldn't be read as a backup." : err.message);
+      }
+    };
+
+    render();
+    chrome.storage.onChanged.addListener((c, area) => area === "local" && (c.backup || c.backupState) && render());
   }
 })();

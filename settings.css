@@ -128,3 +128,17 @@ input.text.wide { width: 100%; }
 .dark-list.inactive h2, .dark-list.inactive .rm-pills { opacity: .5; }
 .add-row { display: flex; gap: 8px; margin-top: 6px; max-width: 420px; }
 .add-row .text { flex: 1; }
+
+/* Backup */
+.steps summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 6px; }
+.steps ol { margin: 8px 0 4px; padding-left: 20px; font-size: 12.5px; line-height: 1.7; }
+.steps code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--field); padding: 2px 6px; border-radius: 6px; user-select: all; }
+.steps .btn { padding: 2px 8px; }
+#driveState.bad { color: var(--error); }
+h2 #driveNow { margin-left: 8px; padding: 3px 10px; text-transform: none; letter-spacing: 0; font-size: 12px; }
+.snaps { width: 100%; }
+.snaps td { padding: 6px 10px 6px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.snaps td.when { width: 100%; }
+.snaps .hint { margin: 0 0 0 6px; }
+.snaps .btn { padding: 3px 9px; font-size: 12px; }
+#driveInterval label { min-width: 0; margin-right: 6px; }
