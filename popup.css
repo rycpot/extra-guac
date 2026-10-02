@@ -102,7 +102,7 @@ section.block:not(:has(> :nth-child(n+2):not([hidden]))) { padding-bottom: 4px; 
 
 /* Segmented choice (fixed/random, shortener service) */
 .seg { display: inline-flex; padding: 2px; border-radius: 12px; background: var(--row); }
-.seg button { padding: 4px 8px; border-radius: 9px; color: var(--text2); }
+.seg button { padding: 4px 8px; border-radius: 9px; color: var(--text2); white-space: nowrap; } /* a narrow popup wraps the label beside it, never a choice */
 .seg button[aria-checked="true"] { background: var(--chip); color: var(--text); }
 .seg button:not([aria-checked="true"]):hover { color: var(--text); }
 
