@@ -44,6 +44,7 @@ async function init() {
   initBackup();
   initClipboard();
   initImgZoom();
+  initImgDl();
 }
 
 // Puts each section in the tab and order chosen in settings → general → tools layout.
@@ -1004,4 +1005,32 @@ function initImgZoom() {
     TT.updateSettings({ imgZoom: { enabled: on } }).catch(fail);
   };
   $("imgMod").querySelectorAll("button").forEach((b) => (b.onclick = () => TT.updateSettings({ imgZoom: { modifier: b.dataset.mod } }).catch(fail)));
+}
+
+// ---- Save images on click ----
+
+function initImgDl() {
+  const mac = /Mac/i.test(navigator.userAgentData?.platform || navigator.platform);
+  const names = { alt: mac ? "option" : "alt", ctrl: mac ? "⌘ cmd" : "ctrl", shift: "shift" };
+  $("imgDlMod").querySelector('[data-mod="alt"]').textContent = names.alt;
+  $("imgDlMod").querySelector('[data-mod="ctrl"]').textContent = names.ctrl;
+  async function render() {
+    const { imgDl } = await TT.getSettings();
+    setSwitch($("imgDlToggle"), imgDl.enabled);
+    $("imgDlKeyRow").hidden = $("imgDlFmtRow").hidden = !imgDl.enabled;
+    $("imgDlMod").querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.mod === imgDl.modifier)));
+    $("imgDlFmt").querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.fmt === imgDl.format)));
+    const folder = TT.cleanFolder(imgDl.folder);
+    $("imgDlHint").textContent = imgDl.enabled ? `${names[imgDl.modifier]} + click an image · saved to Downloads${folder ? `/${folder}` : ""}` : "";
+  }
+  render();
+  chrome.storage.onChanged.addListener((c, area) => area === "local" && c.tt && render());
+  $("imgDlToggle").onclick = () => {
+    const on = $("imgDlToggle").getAttribute("aria-checked") !== "true";
+    setSwitch($("imgDlToggle"), on);
+    TT.updateSettings({ imgDl: { enabled: on } }).catch(fail);
+  };
+  $("imgDlMod").querySelectorAll("button").forEach((b) => (b.onclick = () => TT.updateSettings({ imgDl: { modifier: b.dataset.mod } }).catch(fail)));
+  $("imgDlFmt").querySelectorAll("button").forEach((b) => (b.onclick = () => TT.updateSettings({ imgDl: { format: b.dataset.fmt } }).catch(fail)));
+  $("imgDlSettings").onclick = () => send("openSettings", { section: "screenshot" }).then(() => closePopup(), fail);
 }
