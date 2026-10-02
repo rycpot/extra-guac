@@ -34,6 +34,7 @@ async function init() {
   initRemove(isWeb);
   initRedirect();
   initUploads();
+  initBackup();
 }
 
 // Side panel: start over for the tab you switch to, or when this tab goes to another page.
@@ -705,7 +706,7 @@ function initRemove(isWeb) {
   const toggle = $("removeShow");
   async function render() {
     const { removed = {}, removedShow = {} } = await chrome.storage.local.get(["removed", "removedShow"]);
-    const n = Object.keys(removed).filter(covers).reduce((sum, s) => sum + removed[s].length, 0);
+    const n = Object.keys(removed).filter(covers).reduce((sum, s) => sum + removed[s].filter((r) => r.enabled !== false).length, 0);
     $("removeStatus").textContent = !isWeb ? "not on this page" : n ? `${n} removed here` : "";
     setSwitch(toggle, !!removedShow[site]);
     toggle.disabled = !isWeb || !n;
@@ -763,4 +764,53 @@ async function initUploads() {
   chrome.storage.onChanged.addListener(async (c, area) => {
     if (area === "local" && c.tt) render(await TT.getSettings());
   });
+}
+
+// ---- Backup tab ----
+
+const ago = (t) => {
+  const m = Math.round((Date.now() - t) / 60000);
+  return m < 1 ? "just now" : m < 60 ? `${m}m ago` : m < 48 * 60 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`;
+};
+
+function initBackup() {
+  const row = $("driveRow"), now = $("driveNow"), seg = $("driveInterval");
+  let busy = false;
+  async function render() {
+    const { backup = {}, backupState: st = {} } = await chrome.storage.local.get(["backup", "backupState"]);
+    const interval = Number(backup.interval ?? 24);
+    seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(Number(b.dataset.h) === interval)));
+    const problem = !st.connected || st.needsSignIn || !!st.lastError;
+    row.classList.toggle("problem", problem);
+    now.textContent = !st.connected ? "set up" : st.needsSignIn ? "sign in" : "sync now";
+    $("driveStatus").textContent = busy ? "syncing…"
+      : !st.connected ? "not connected"
+      : st.needsSignIn ? "signed out"
+      : st.lastError ? "last sync failed"
+      : st.lastSnapshot ? `saved ${ago(st.lastSnapshot)}` : "connected";
+    $("driveStatus").title = st.lastError || (st.lastCheck ? `checked ${new Date(st.lastCheck).toLocaleString()}${st.email ? ` · ${st.email}` : ""}` : "");
+    now.disabled = busy;
+  }
+  render();
+  chrome.storage.onChanged.addListener((c, area) => area === "local" && (c.backup || c.backupState) && render());
+  seg.querySelectorAll("button").forEach((b) => (b.onclick = async () => {
+    const { backup = {} } = await chrome.storage.local.get("backup");
+    await chrome.storage.local.set({ backup: { ...backup, interval: Number(b.dataset.h) } });
+  }));
+  const settings = () => send("openSettings", { section: "backup" }).then(() => closePopup(), fail);
+  $("driveSettings").onclick = settings;
+  $("importLocal").onclick = settings;
+  now.onclick = async () => {
+    const { backupState: st = {} } = await chrome.storage.local.get("backupState");
+    if (!st.connected) return settings();
+    busy = true;
+    render();
+    try {
+      const res = await send(st.needsSignIn ? "backupConnect" : "backupNow");
+      toast(res.uploaded ? "Snapshot saved to Drive" : "Nothing changed since the last snapshot");
+    } catch (err) { fail(err); }
+    busy = false;
+    render();
+  };
+  $("exportLocal").onclick = () => send("backupExportLocal").then(() => closePopup(), fail);
 }
