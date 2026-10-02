@@ -313,14 +313,9 @@
     };
     async function lists() {
       const { dark } = await TT.getSettings();
-      const { darkNative = [] } = await chrome.storage.local.get("darkNative");
-      return { dark, all: { sites: dark.sites, exclude: dark.exclude, native: darkNative, force: dark.force } };
+      return { dark, all: { sites: dark.sites, exclude: dark.exclude, force: dark.force } };
     }
     async function change(key, fn) {
-      if (key === "native") {
-        const { darkNative = [] } = await chrome.storage.local.get("darkNative");
-        return chrome.storage.local.set({ darkNative: fn(darkNative) });
-      }
       const { dark } = await TT.getSettings();
       await TT.updateSettings({ dark: { [key]: fn(dark[key]) } });
     }
@@ -356,6 +351,6 @@
       input.addEventListener("keydown", (e) => e.key === "Enter" && add());
     }
     render();
-    chrome.storage.onChanged.addListener((c, area) => area === "local" && (c.tt || c.darkNative) && render());
+    chrome.storage.onChanged.addListener((c, area) => area === "local" && c.tt && render());
   }
 })();
