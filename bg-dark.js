@@ -1,5 +1,5 @@
-// Dark mode (settings.dark): "sites" turns it on only for the sites in dark.sites; "all"
-// turns it on everywhere except dark.exclude. A site is a hostname without "www." and
+// Dark mode (settings.dark): off everywhere unless dark.enabled. Then "sites" turns it on
+// only for the sites in dark.sites; "all" turns it on everywhere except dark.exclude. A site is a hostname without "www." and
 // covers its subdomains. Pages that are dark on their own are left as they are, page by
 // page (dark.js), unless their site is in dark.force ("darken anyway").
 //
@@ -38,7 +38,7 @@ const covers = (site, list) => list.some((s) => site === s || site.endsWith(`.${
 
 // Whether dark mode applies to this site.
 function darkOn(site, dark) {
-  if (!site) return false;
+  if (!site || !dark.enabled) return false;
   return dark.mode === "all" ? !covers(site, dark.exclude) : covers(site, dark.sites);
 }
 
@@ -49,7 +49,9 @@ const sitePatterns = (sites) => sites
 async function syncDarkScript() {
   const { dark } = await TT.getSettings();
   const script = { id: DARK_SCRIPT_ID, css: ["dark.css"], js: ["dark.js"], runAt: "document_start", allFrames: false, persistAcrossSessions: true };
-  if (dark.mode === "all") {
+  if (!dark.enabled) {
+    script.matches = [];
+  } else if (dark.mode === "all") {
     script.matches = ["http://*/*", "https://*/*"];
     const skip = sitePatterns(dark.exclude);
     if (skip.length) script.excludeMatches = skip;
@@ -98,7 +100,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes.tt && darkOf(changes.tt.oldValue) !== darkOf(changes.tt.newValue)) queueDarkSync(true);
 });
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener(async () => {
   chrome.storage.local.remove("darkNative"); // 2.12.0 remembered whole sites as dark; now it's per page
+  // Before the main switch (2.13), dark mode was in use if "all" was picked or sites were listed.
+  const { tt } = await chrome.storage.local.get("tt");
+  const old = tt?.dark;
+  if (old && old.enabled === undefined) await TT.updateSettings({ dark: { enabled: old.mode === "all" || !!old.sites?.length } });
   queueDarkSync(false);
 });

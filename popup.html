@@ -75,16 +75,24 @@
       </div>
     </section>
 
-    <section class="row" id="darkRow">
-      <div class="label"><svg><use href="#i-contrast"/></svg>dark mode</div>
-      <div class="actions">
-        <span class="status" id="darkStatus" title="This page is dark on its own, so it's left as it is"></span>
-        <div class="seg" id="darkMode" role="radiogroup" aria-label="Dark mode for">
-          <button data-mode="sites" role="radio" title="Only on sites you switch on">sites</button>
-          <button data-mode="all" role="radio" title="Everywhere, except sites you switch off">all</button>
+    <section class="block" id="darkRow">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-contrast"/></svg>dark mode</div>
+        <div class="actions">
+          <div class="seg" id="darkMode" role="radiogroup" aria-label="Dark mode for">
+            <button data-mode="sites" role="radio" title="Only on the sites you pick">sites</button>
+            <button data-mode="all" role="radio" title="Everywhere, except the sites you exclude">all</button>
+          </div>
+          <button class="icon-btn small" id="darkSettings" title="Dark mode sites"><svg><use href="#i-sliders"/></svg></button>
+          <button class="switch" id="darkToggle" role="switch" aria-checked="false" aria-label="Dark mode, on or off everywhere"></button>
         </div>
-        <button class="icon-btn small" id="darkSettings" title="Dark mode sites"><svg><use href="#i-sliders"/></svg></button>
-        <button class="switch" id="darkToggle" role="switch" aria-checked="false" aria-label="Dark mode on this site"></button>
+      </div>
+      <div class="row tight sub-row" id="darkSiteRow" hidden>
+        <span class="status" id="darkSiteLabel"></span>
+        <div class="actions">
+          <span class="status" id="darkStatus" title="This page is dark on its own, so it's left as it is"></span>
+          <button class="switch" id="darkSiteToggle" role="switch" aria-checked="false"></button>
+        </div>
       </div>
     </section>
 
