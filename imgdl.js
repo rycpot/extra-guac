@@ -1,5 +1,6 @@
-// Save images on click (settings.imgDl): holding the chosen key (Option/Alt, Ctrl/⌘ or
-// Shift) and clicking an image saves it (bg-imgdl.js does the saving and any conversion).
+// Save images on click (settings.imgDl): holding the chosen key (Option/Alt, ⌘ on a Mac /
+// Ctrl elsewhere, or Shift) and clicking an image saves it (bg-imgdl.js does the saving
+// and any conversion).
 // Finds <img> (the size actually shown), images covered by another layer, CSS background
 // images and inline SVG. A thumbnail that links to its full-size picture (search results
 // keep the original's address in the link as ?imgurl=…, and many sites link a preview
@@ -19,8 +20,10 @@
   chrome.storage.local.get("tt").then(({ tt }) => apply(tt));
   chrome.storage.onChanged.addListener((c, area) => { if (area === "local" && c.tt && chrome.runtime?.id) apply(c.tt.newValue); });
 
-  // "ctrl" also means ⌘ (on a Mac, Ctrl+click is the right-click menu).
-  const held = (e) => (modifier === "alt" ? e.altKey : modifier === "ctrl" ? e.ctrlKey || e.metaKey : e.shiftKey);
+  // "ctrl" is ⌘ on a Mac (where Ctrl+click is the right-click menu and a trackpad pinch
+  // reports Ctrl) and Ctrl everywhere else.
+  const MAC = /Mac/i.test(navigator.userAgentData?.platform || navigator.platform);
+  const held = (e) => (modifier === "alt" ? e.altKey : modifier === "ctrl" ? (MAC ? e.metaKey : e.ctrlKey) : e.shiftKey);
 
   const bgUrl = (el) => {
     const bg = getComputedStyle(el).backgroundImage;

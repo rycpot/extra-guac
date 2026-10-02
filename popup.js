@@ -988,8 +988,9 @@ function initClipboard() {
 
 function initImgZoom() {
   const mac = /Mac/i.test(navigator.userAgentData?.platform || navigator.platform);
-  const names = { alt: mac ? "option" : "alt", ctrl: "ctrl", shift: "shift" };
+  const names = { alt: mac ? "option" : "alt", ctrl: mac ? "⌘ cmd" : "ctrl", shift: "shift" };
   $("imgMod").querySelector('[data-mod="alt"]').textContent = names.alt;
+  $("imgMod").querySelector('[data-mod="ctrl"]').textContent = names.ctrl;
   async function render() {
     const { imgZoom } = await TT.getSettings();
     setSwitch($("imgToggle"), imgZoom.enabled);
