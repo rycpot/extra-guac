@@ -26,6 +26,6 @@ jobs:
             echo "Release $TAG already exists, skipping."
             exit 0
           fi
-          ZIP="tab-toolkit-$TAG.zip"
+          ZIP="extra-guac-$TAG.zip"
           zip -r "$ZIP" manifest.json *.js *.html *.css icons vendor fonts
           gh release create "$TAG" "$ZIP" --target "$GITHUB_SHA" --title "$TAG" --generate-notes

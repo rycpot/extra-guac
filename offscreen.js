@@ -8,7 +8,7 @@
 
 // Created with the BLOBS reason (which, unlike AUDIO_PLAYBACK alone, doesn't make
 // Chrome close this page after ~30s of silence); this is that use.
-URL.createObjectURL(new Blob(["tab-toolkit"]));
+URL.createObjectURL(new Blob(["extra-guac"]));
 
 let ticker = 0;
 const graphs = new Map(); // tabId -> { ctx, stream, gain }

@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Settings · Tab Toolkit</title>
+  <title>Settings · Extra Guac</title>
   <link rel="stylesheet" href="settings.css">
 </head>
 <body>
   <nav class="side" aria-label="Settings sections">
-    <div class="brand">tab toolkit</div>
+    <div class="brand">extra guac</div>
     <a href="#general">general</a>
     <a href="#screenshot">screenshot</a>
     <a href="#blur">privacy blur</a>
@@ -395,7 +395,7 @@ Card 4111 1111 1111 1111</textarea>
       <h2>How it works</h2>
       <p class="hint">Right-click any image → <i>Upload image to …</i> (with both hosts on, the item branches into the two).
         The link is copied, a notification confirms it, and it's listed in the popup's upload history.
-        The host fetches the image itself; if it can't (private or embedded images), Tab Toolkit downloads it and uploads the file.</p>
+        The host fetches the image itself; if it can't (private or embedded images), Extra Guac downloads it and uploads the file.</p>
     </section>
   </div>
 
@@ -423,7 +423,7 @@ Card 4111 1111 1111 1111</textarea>
             <button type="button" class="btn ghost" id="copyRedirect">copy</button> exactly, with the trailing <code>/</code>.</li>
           <li>Copy the client ID it shows into the box above and click <b>connect</b>.</li>
         </ol>
-        <p class="hint">Tab Toolkit only asks for access to files it creates itself, and keeps snapshots in a folder named “Tab Toolkit backups”.
+        <p class="hint">Extra Guac only asks for access to files it creates itself, and keeps snapshots in a folder named “Extra Guac backups”.
           The redirect URI depends on this copy of the extension: if you load it from another folder, it changes (add the new one to the same client).
           It has to be an OAuth client: an API key or a service account can't reach your own Drive.</p>
       </details>
@@ -439,7 +439,7 @@ Card 4111 1111 1111 1111</textarea>
         <label><input type="radio" name="driveInterval" value="12"> 12 h</label>
         <label><input type="radio" name="driveInterval" value="24"> 24 h</label>
       </div>
-      <p class="hint">A snapshot is saved only when something changed: your bookmarks, and Tab Toolkit's settings and data
+      <p class="hint">A snapshot is saved only when something changed: your bookmarks, and Extra Guac's settings and data
         (API keys included, blur rules, removed elements, histories). Older ones thin out like a time machine — the 3 latest,
         about 1 week, 2 weeks, 1 month, 2 months, 6 months and 1 year old, and the oldest one forever. Each browser's latest is
         always kept, and so is the copy taken before every restore or import (for 30 days).</p>
@@ -447,7 +447,7 @@ Card 4111 1111 1111 1111</textarea>
     <section>
       <h2>Snapshots <button type="button" class="btn" id="driveNow">sync now</button></h2>
       <div id="driveSnaps"><p class="rm-empty">Connect Google Drive to see your snapshots.</p></div>
-      <p class="hint"><b>restore settings</b> replaces Tab Toolkit's settings and data with the snapshot's.
+      <p class="hint"><b>restore settings</b> replaces Extra Guac's settings and data with the snapshot's.
         <b>restore bookmarks</b> adds the snapshot's bookmarks in a new folder under Other bookmarks, next to the ones you have now.
         <b>.html</b> saves them as a bookmarks file any browser can import.
         Before every restore or import, the current settings are saved first — <b>undo last restore</b> below puts them back.</p>
@@ -460,7 +460,7 @@ Card 4111 1111 1111 1111</textarea>
         <button type="button" class="btn ghost" id="undoRestore" hidden>undo last restore</button>
         <input type="file" id="importFile" accept=".json,.gz,application/json,application/gzip" hidden>
       </div>
-      <p class="hint">Tab Toolkit's settings and data as a .json file, API keys and the Drive client ID included (not the Google sign-in) — keep it somewhere private.
+      <p class="hint">Extra Guac's settings and data as a .json file, API keys and the Drive client ID included (not the Google sign-in) — keep it somewhere private.
         Import takes such a file or a Drive snapshot (.json.gz) and replaces the current settings and data.</p>
     </section>
   </div>

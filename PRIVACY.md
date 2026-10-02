@@ -1,8 +1,8 @@
-# Tab Toolkit privacy policy
+# Extra Guac privacy policy
 
 _Last updated: 2 October 2026_
 
-Tab Toolkit is a browser extension with tools for the page you're on: screenshots, privacy blur, dark mode, auto-refresh, word highlighting, clipboard history, image saving and similar tools. This policy covers what it handles and where that goes.
+Extra Guac is a browser extension with tools for the page you're on: screenshots, privacy blur, dark mode, auto-refresh, word highlighting, clipboard history, image saving and similar tools. This policy covers what it handles and where that goes.
 
 **In short:** everything stays in your browser. The developer runs no server, collects no analytics and can't see your data. Data leaves your browser only when you use a feature that sends it to a service you chose, and only to that service.
 
@@ -32,9 +32,9 @@ The following are worked out in your browser and never sent anywhere:
 | Alert sound (if you set a sound file link) | The site hosting that sound file | A normal request to play the file. The built-in chime needs no request. |
 | Save images on click | The site the image comes from | A normal request for the image, like your browser makes when showing it |
 
-These services have their own privacy policies. Tab Toolkit sends nothing else to them, and nothing at all to anyone else.
+These services have their own privacy policies. Extra Guac sends nothing else to them, and nothing at all to anyone else.
 
-## What Tab Toolkit does not do
+## What Extra Guac does not do
 
 - It doesn't sell, rent or share your data.
 - It doesn't track your browsing, keep a browsing history or build a profile of you.
@@ -46,7 +46,7 @@ These services have their own privacy policies. Tab Toolkit sends nothing else t
 - Each tool that records anything (such as clipboard history) is off until you switch it on.
 - You can clear clipboard history, removed elements and recent results from the tools themselves.
 - The backup tab can export your settings and data to a file. Removing the extension deletes everything it stored in your browser.
-- Drive backups live in a "Tab Toolkit backups" folder in your Google Drive. You can delete that folder at any time and revoke the extension's access in your Google account settings.
+- Drive backups live in an "Extra Guac backups" folder in your Google Drive. You can delete that folder at any time and revoke the extension's access in your Google account settings.
 
 ## Changes
 

@@ -1,9 +1,9 @@
-# Tab Toolkit
+# Extra Guac 🥑
 
-**Tab Toolkit: Screenshots, Auto-Refresh, PII Blur, Nuke & More**: a Chrome (MV3) extension
-that puts handy page tools in one place.
-Click the toolbar icon to open it: a popup by default, or Chrome's side panel (settings → general), which stays open while you switch tabs or use the settings window and always shows the tools for the tab in front. The gear opens settings, ⏻ stops everything that is running.
-The first tab holds the everyday tools, the second the page tools.
+Eighteen tools for the page you're on, in one side panel. We may have gotten carried away.
+
+A Chrome (MV3) extension. Click the toolbar icon to open it: Chrome's side panel by default, which stays open while you switch tabs or use the settings window and always shows the tools for the tab in front, or a popup (settings → general). The gear opens settings, ⏻ stops everything that is running.
+The first tab holds most tools, the second the image tools; settings → general → tools layout moves them between three tabs.
 
 | Tool | What it does |
 |---|---|
@@ -36,8 +36,8 @@ The first tab holds the everyday tools, the second the page tools.
 
 | Tool | What it does |
 |---|---|
-| **Drive backup** | Snapshots of your bookmarks and of Tab Toolkit's settings and data (API keys, blur rules, removed elements, histories) to your Google Drive, in a "Tab Toolkit backups" folder, as gzipped JSON. Auto-sync every 1, 2, 4, 6, 12 or 24 h (or off), plus **sync now**; a snapshot is only saved when something changed. Old snapshots thin out like a time machine: the 3 latest plus about 1 week, 2 weeks, 1 month, 2 months, 6 months and 1 year old, and the oldest forever — and each browser's latest is always kept, so a second computer can't push out the first one's backups. If a snapshot is much smaller than the one before (data went missing), the bigger one is kept for 30 days. Connecting a new install to a Drive that already has snapshots doesn't back up straight away: restore one first, or press sync now. Settings → backup lists them: restore settings (replaces the current ones), restore bookmarks (into a new "Restored YYYY-MM-DD" folder under Other bookmarks, nothing is overwritten), or save the bookmarks as a bookmarks.html any browser imports. Before every restore or import the current settings are saved first (to Drive, protected for 30 days, and in the browser), and **undo last restore** puts them back. Uses your own Google OAuth client (settings → backup has the steps) with access only to the files Tab Toolkit creates. |
-| **Settings file** | Export Tab Toolkit's settings and data (API keys and the Drive client ID included) as a .json file, or import one — or a Drive snapshot — to replace them. A file with no settings or data in it is refused. |
+| **Drive backup** | Snapshots of your bookmarks and of Extra Guac's settings and data (API keys, blur rules, removed elements, histories) to your Google Drive, in a "Extra Guac backups" folder, as gzipped JSON. Auto-sync every 1, 2, 4, 6, 12 or 24 h (or off), plus **sync now**; a snapshot is only saved when something changed. Old snapshots thin out like a time machine: the 3 latest plus about 1 week, 2 weeks, 1 month, 2 months, 6 months and 1 year old, and the oldest forever — and each browser's latest is always kept, so a second computer can't push out the first one's backups. If a snapshot is much smaller than the one before (data went missing), the bigger one is kept for 30 days. Connecting a new install to a Drive that already has snapshots doesn't back up straight away: restore one first, or press sync now. Settings → backup lists them: restore settings (replaces the current ones), restore bookmarks (into a new "Restored YYYY-MM-DD" folder under Other bookmarks, nothing is overwritten), or save the bookmarks as a bookmarks.html any browser imports. Before every restore or import the current settings are saved first (to Drive, protected for 30 days, and in the browser), and **undo last restore** puts them back. Uses your own Google OAuth client (settings → backup has the steps) with access only to the files Extra Guac creates. |
+| **Settings file** | Export Extra Guac's settings and data (API keys and the Drive client ID included) as a .json file, or import one — or a Drive snapshot — to replace them. A file with no settings or data in it is refused. |
 
 **Layout:** settings → general → *tools layout* shows the popup's first three tabs side by side (tab 3 starts empty and appears in the popup once it has sections; the backup tab is fixed); drag any section to another tab or up and down within one, and the popup and side panel follow at once (**reset** puts everything back). The URL auto redirect settings grow with the window, so the rules table gets more room.
 

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Tab Toolkit: Screenshots, Auto-Refresh, PII Blur, Nuke & More",
-  "version": "2.23.0",
+  "name": "Extra Guac",
+  "version": "2.24.0",
   "description": "Page tools in a side panel: screenshots, privacy blur, dark mode, auto-refresh, highlights, clipboard history, image saving & more.",
   "permissions": [
     "alarms",
@@ -29,7 +29,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Tab Toolkit",
+    "default_title": "Extra Guac",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
@@ -45,7 +45,7 @@
     "128": "icons/icon128.png"
   },
   "options_page": "settings.html",
-  "short_name": "Tab Toolkit",
+  "short_name": "Extra Guac",
   "side_panel": {
     "default_path": "popup.html"
   }

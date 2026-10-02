@@ -1,12 +1,12 @@
-// Backup: snapshots of the bookmarks and of Tab Toolkit's settings and data, to Google
+// Backup: snapshots of the bookmarks and of Extra Guac's settings and data, to Google
 // Drive (on a schedule or on demand) and to a local file (settings and data only).
 //
 // Drive: the user creates an OAuth client in Google Cloud and pastes its client ID in
 // settings ("backup": { clientId, interval }). Signing in uses the drive.file scope, so
-// Tab Toolkit only ever sees the files it made itself. Access tokens last an hour; later
+// Extra Guac only ever sees the files it made itself. Access tokens last an hour; later
 // ones are fetched silently, and settings ask to sign in again when Google wants that.
 //
-// Each snapshot is one gzipped JSON file in a "Tab Toolkit backups" folder, uploaded only
+// Each snapshot is one gzipped JSON file in an "Extra Guac backups" folder, uploaded only
 // when something changed. Old snapshots thin out like a time machine. Kept are:
 //   - the 3 newest;
 //   - the newest from each browser (device) that backed up in the last 90 days, so one
@@ -22,8 +22,7 @@
 
 // "backup" is the Drive setup (OAuth client ID, auto-sync interval); the sign-in itself isn't saved.
 const BACKUP_KEYS = ["tt", "pii", "removed", "shortHistory", "shortCounts", "uploadHistory", "colorHistory", "selectorHistory", "fontHistory", "hl", "backup"];
-const ADDED_LATER = new Set(["hl"]);
-const BACKUP_FOLDER = "Tab Toolkit backups";
+const BACKUP_FOLDER = "Extra Guac backups";
 const BACKUP_ALARM = "tt-backup";
 const BACKUP_INTERVALS = [0, 1, 2, 4, 6, 12, 24]; // hours; 0 = only when asked, 24 unless set
 const DRIVE = "https://www.googleapis.com/drive/v3";
@@ -79,15 +78,15 @@ const backupHandlers = {
   },
   backupDownload: async ({ id }) => {
     const snap = await readSnapshot(id);
-    await saveFile(`tab-toolkit-${stamp(new Date(snap.createdAt))}.json`, "application/json", JSON.stringify(snap, null, 1));
+    await saveFile(`extra-guac-${stamp(new Date(snap.createdAt))}.json`, "application/json", JSON.stringify(snap, null, 1));
   },
   // Local file: settings and data, no bookmarks (Chrome exports those itself).
   backupExportLocal: async () => {
     const snap = await buildSnapshot(false);
-    await saveFile(`tab-toolkit-settings-${stamp(new Date())}.json`, "application/json", JSON.stringify(snap, null, 1));
+    await saveFile(`extra-guac-settings-${stamp(new Date())}.json`, "application/json", JSON.stringify(snap, null, 1));
   },
   backupImportLocal: async ({ snapshot }) => {
-    if (snapshot?.app !== "Tab Toolkit" || !snapshot.data || typeof snapshot.data !== "object") throw new Error("That isn't a Tab Toolkit backup");
+    if (snapshot?.app !== "Extra Guac" || !snapshot.data || typeof snapshot.data !== "object") throw new Error("That isn't an Extra Guac backup");
     assertHasData(snapshot.data);
     return locked(async () => {
       const saved = await savePreRestore();
@@ -228,7 +227,7 @@ function trimBookmarks(node) {
 async function buildSnapshot(withBookmarks = true) {
   const data = await chrome.storage.local.get(BACKUP_KEYS);
   data.clips = await clipExport(); // clipboard history: one key per entry (bg-clip.js)
-  const snap = { app: "Tab Toolkit", format: 1, version: chrome.runtime.getManifest().version, createdAt: new Date().toISOString(), data };
+  const snap = { app: "Extra Guac", format: 1, version: chrome.runtime.getManifest().version, createdAt: new Date().toISOString(), data };
   if (withBookmarks) snap.bookmarks = (await chrome.bookmarks.getTree())[0].children.map(trimBookmarks);
   return snap;
 }
@@ -296,7 +295,7 @@ function runBackup({ manual = false } = {}) {
 async function uploadSnapshot(snap, props = {}) {
   const folder = await backupFolder();
   const at = Date.parse(snap.createdAt) || Date.now();
-  const prefix = props.kind === "pre-restore" ? "tab-toolkit-before-restore" : "tab-toolkit";
+  const prefix = props.kind === "pre-restore" ? "extra-guac-before-restore" : "extra-guac";
   const meta = {
     name: `${prefix}-${stamp(new Date(at))}.json.gz`,
     parents: [folder],
@@ -394,7 +393,7 @@ async function applyData(data) {
   for (const k of BACKUP_KEYS) {
     if (k === "backup") continue;
     if (data[k] !== undefined) set[k] = data[k];
-    else if (!ADDED_LATER.has(k)) remove.push(k); // older snapshots don't have these: keep what's there
+    else remove.push(k);
   }
   const { backup = {}, backupState = {} } = await chrome.storage.local.get(["backup", "backupState"]);
   const from = data.backup;
