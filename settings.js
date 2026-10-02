@@ -15,6 +15,7 @@
     initRedirect();
     initUpload();
     initRemoved();
+    initDarkLists();
     showPane();
     addEventListener("hashchange", showPane);
     $("testSound").onclick = testSound;
@@ -300,5 +301,61 @@
     }
     render();
     chrome.storage.onChanged.addListener((c, area) => area === "local" && c.removed && render());
+  }
+
+  // ---- Dark mode: the site lists ----
+
+  function initDarkLists() {
+    const clean = (v) => {
+      let h = v.trim().toLowerCase();
+      try { if (h.includes("://")) h = new URL(h).hostname; } catch {}
+      return h.split("/")[0].split(":")[0].replace(/^(\*\.|www\.)/, "");
+    };
+    async function lists() {
+      const { dark } = await TT.getSettings();
+      const { darkNative = [] } = await chrome.storage.local.get("darkNative");
+      return { dark, all: { sites: dark.sites, exclude: dark.exclude, native: darkNative, force: dark.force } };
+    }
+    async function change(key, fn) {
+      if (key === "native") {
+        const { darkNative = [] } = await chrome.storage.local.get("darkNative");
+        return chrome.storage.local.set({ darkNative: fn(darkNative) });
+      }
+      const { dark } = await TT.getSettings();
+      await TT.updateSettings({ dark: { [key]: fn(dark[key]) } });
+    }
+    async function render() {
+      const { dark, all } = await lists();
+      for (const sec of document.querySelectorAll(".dark-list")) {
+        const key = sec.dataset.list;
+        sec.classList.toggle("inactive", (key === "sites" && dark.mode !== "sites") || (key === "exclude" && dark.mode !== "all"));
+        const pills = sec.querySelector(".rm-pills");
+        pills.replaceChildren(...all[key].map((site) => {
+          const chip = document.createElement("span");
+          chip.className = "chip";
+          const text = Object.assign(document.createElement("span"), { className: "chip-text", textContent: site });
+          const x = Object.assign(document.createElement("button"), { type: "button", className: "chip-x", textContent: "×" });
+          x.setAttribute("aria-label", `Remove ${site}`);
+          x.onclick = () => change(key, (l) => l.filter((s) => s !== site));
+          chip.append(text, x);
+          return chip;
+        }));
+        if (!all[key].length) pills.innerHTML = `<span class="rm-empty">None</span>`;
+      }
+    }
+    for (const sec of document.querySelectorAll(".dark-list")) {
+      const input = sec.querySelector("input"), btn = sec.querySelector(".add-row button");
+      if (!input) continue;
+      const add = () => {
+        const site = clean(input.value);
+        if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(site)) return input.focus();
+        input.value = "";
+        change(sec.dataset.list, (l) => [...new Set([...l, site])].sort());
+      };
+      btn.onclick = add;
+      input.addEventListener("keydown", (e) => e.key === "Enter" && add());
+    }
+    render();
+    chrome.storage.onChanged.addListener((c, area) => area === "local" && (c.tt || c.darkNative) && render());
   }
 })();

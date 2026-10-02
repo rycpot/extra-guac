@@ -27,6 +27,9 @@
     // Rules: { domain, find, replace, auto, on }. Auto rules redirect on navigation;
     // manual ones run from the page's right-click menu.
     redirect: { enabled: false, rules: [] },
+    // Dark mode: "sites" = only the sites listed, "all" = everywhere except exclude;
+    // force = sites that are dark already but darkened (inverted) anyway on request.
+    dark: { mode: "sites", sites: [], exclude: [], force: [] },
     upload: { catbox: false, x02: false, catboxUserhash: "", x02Key: "", x02Verified: false },
   };
 

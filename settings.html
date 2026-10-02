@@ -11,6 +11,7 @@
     <a href="#general">general</a>
     <a href="#screenshot">screenshot</a>
     <a href="#blur">privacy blur</a>
+    <a href="#dark">dark mode</a>
     <a href="#refresh">auto-refresh</a>
     <a href="#shortener">url shortener</a>
     <a href="#redirect">auto redirect</a>
@@ -42,6 +43,43 @@
       <h2>About</h2>
       <p class="hint">Click the toolbar icon for the tools. ⏻ in the tools stops everything that is running:
         auto-refresh, keep awake, tab volume and blur.</p>
+    </section>
+  </div>
+
+  <div class="pane" id="dark">
+    <header class="pane-head"><h1>dark mode</h1></header>
+    <section>
+      <h2>Dark mode for</h2>
+      <div class="row">
+        <label><input type="radio" name="darkMode" value="sites" data-path="dark.mode"> the sites I pick</label>
+        <label><input type="radio" name="darkMode" value="all" data-path="dark.mode"> all sites, except the ones I exclude</label>
+      </div>
+      <p class="hint">Switch it per site with the switch next to <b>dark mode</b> in the tools. A site covers its subdomains.</p>
+    </section>
+    <section class="dark-list" data-list="sites">
+      <h2>Sites <span class="hint">dark in "sites I pick" mode</span></h2>
+      <div class="rm-pills"></div>
+      <div class="add-row"><input type="text" class="text" placeholder="example.com" spellcheck="false"><button type="button" class="btn">Add</button></div>
+    </section>
+    <section class="dark-list" data-list="exclude">
+      <h2>Exclusions <span class="hint">left as they are in "all sites" mode</span></h2>
+      <div class="rm-pills"></div>
+      <div class="add-row"><input type="text" class="text" placeholder="example.com" spellcheck="false"><button type="button" class="btn">Add</button></div>
+    </section>
+    <section class="dark-list" data-list="native">
+      <h2>Already dark <span class="hint">detected and left alone · × to darken it again</span></h2>
+      <div class="rm-pills"></div>
+    </section>
+    <section class="dark-list" data-list="force">
+      <h2>Darkened anyway <span class="hint">dark already, but switched on in the tools · × to leave it alone again</span></h2>
+      <div class="rm-pills"></div>
+    </section>
+    <section>
+      <h2>How it works</h2>
+      <p class="hint">The page is darkened from its very first paint (no white flash) by inverting it as a whole while keeping
+        its colours' hues, so nothing can stay light — not even parts built from web components. Photos, videos, background
+        pictures and video or map embeds are turned back to normal (slightly dimmed). Sites that are dark already are noticed
+        and left as they are.</p>
     </section>
   </div>
 

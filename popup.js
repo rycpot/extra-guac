@@ -22,6 +22,7 @@ async function init() {
   initHistorySheet();
   initScreenshot();
   initBlur();
+  initDark(isWeb);
   initRefresh();
   initAutoRefresh(isWeb);
   initShortener(isWeb);
@@ -141,6 +142,30 @@ async function initBlur() {
     if (area === "local" && c.pii) setSwitch(toggle, !!c.pii.newValue?.enabled);
   });
   $("blurSettings").onclick = () => send("openSettings", { section: "blur" }).then(() => closePopup(), fail);
+}
+
+// ---- Dark mode ----------------------------------------------------------------
+// "sites": on only where switched on; "all": on everywhere except where switched off.
+// The switch is for this tab's site (bg-dark.js keeps the lists and open tabs in step).
+
+function initDark(isWeb) {
+  const site = isWeb ? new URL(tab.url).hostname.toLowerCase().replace(/^www\./, "") : "";
+  const covers = (list) => list.some((s) => site === s || site.endsWith(`.${s}`));
+  const seg = $("darkMode"), toggle = $("darkToggle");
+  async function render() {
+    const { dark } = await TT.getSettings();
+    const { darkNative = [] } = await chrome.storage.local.get("darkNative");
+    seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.mode === dark.mode)));
+    const native = covers(darkNative);
+    setSwitch(toggle, !native && (dark.mode === "all" ? !covers(dark.exclude) : covers(dark.sites)));
+    toggle.disabled = !isWeb;
+    toggle.title = !isWeb ? "Not available on this page" : native ? "This site is dark already, so it's left alone — switch on to darken it anyway" : "";
+  }
+  render();
+  chrome.storage.onChanged.addListener((c, area) => area === "local" && (c.tt || c.darkNative) && render());
+  seg.querySelectorAll("button").forEach((b) => (b.onclick = () => TT.updateSettings({ dark: { mode: b.dataset.mode } })));
+  toggle.onclick = () => send("darkSite", { site, on: toggle.getAttribute("aria-checked") !== "true" }).catch(fail);
+  $("darkSettings").onclick = () => send("openSettings", { section: "dark" }).then(() => closePopup(), fail);
 }
 
 // ---- Hard refresh / nuke ----------------------------------------------------

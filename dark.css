@@ -1,0 +1,25 @@
+/* Dark mode (invert engine): the whole rendered page is inverted with hues kept, so no
+   part of it can stay light — shadow DOM and web components included — then pictures
+   and video are flipped back. Injected before the page paints (bg-dark.js); dark.js
+   turns it off on pages that are already dark (data-tt-dark="off"). */
+
+html:not([data-tt-dark="off"]) {
+  filter: invert(0.93) hue-rotate(180deg) !important;
+}
+/* A transparent page is painted on white, so make that explicit to have it inverted too
+   (zero specificity: the page's own background wins when it has one). */
+:where(html:not([data-tt-dark="off"])) {
+  background-color: #fff;
+}
+
+/* Pictures and video come back to (slightly dimmed) normal */
+html:not([data-tt-dark="off"]) :is(img:not([data-tt-dark-keep]), video, canvas, embed, object, [data-tt-dark-media],
+  iframe:is([src*="youtube."], [src*="youtube-nocookie."], [src*="vimeo."], [src*="maps."], [src*="/maps"], [src*="twitch."],
+    [src*="dailymotion."], [src*="player."], [src*="spotify."], [src*="soundcloud."])) {
+  filter: invert(1) hue-rotate(180deg) !important;
+}
+
+/* …but not twice, when a picture sits inside something already flipped back */
+html:not([data-tt-dark="off"]) [data-tt-dark-media] :is(img, video, canvas, embed, object, [data-tt-dark-media]) {
+  filter: none !important;
+}
