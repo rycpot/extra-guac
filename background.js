@@ -1,7 +1,7 @@
 importScripts(
   "pii-rules.js", "shared.js", "redirect-rules.js",
   "bg-capture.js", "bg-refresh.js", "bg-shortener.js", "bg-media.js", "bg-pickers.js", "bg-redirect.js", "bg-upload.js",
-  "bg-remove.js", "bg-dark.js", "bg-backup.js", "bg-highlight.js", "bg-clip.js",
+  "bg-remove.js", "bg-dark.js", "bg-backup.js", "bg-highlight.js", "bg-clip.js", "bg-imgzoom.js",
 );
 
 // Messages from the popup, settings window, page overlays and the offscreen document.
@@ -69,6 +69,10 @@ function syncMenus(s) {
       chrome.contextMenus.create({ id: "upload", title: "Upload image to", contexts: ["image"] });
       for (const h of hosts) chrome.contextMenus.create({ id: `upload:${h}`, parentId: "upload", title: h, contexts: ["image"] });
     }
+    // Zoom & rotate images (bg-imgzoom.js): the controls for the right-clicked image.
+    if (s.imgZoom.enabled) {
+      chrome.contextMenus.create({ id: "imgControls", title: "Image controls (rotate, zoom)", contexts: ["image"], documentUrlPatterns: ["http://*/*", "https://*/*"] });
+    }
     // Pinned clipboard entries (bg-clip.js), when that's switched on.
     const pins = await clipMenuItems(s);
     if (pins.length) {
@@ -95,6 +99,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (!tab) return;
   if (info.menuItemId === "redirect") return runManualRedirect(tab);
   if (String(info.menuItemId).startsWith("clippin:")) return onClipMenu(info, tab);
+  if (info.menuItemId === "imgControls") return onImgControlsMenu(info, tab);
   const m = String(info.menuItemId).match(/^upload:(\w+)$/);
   if (m && info.srcUrl) uploadImage(m[1], info.srcUrl, tab);
 });
