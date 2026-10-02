@@ -44,6 +44,8 @@
       <symbol id="i-marker" viewBox="0 0 24 24"><path d="m9 11-5.5 5.5V20h3.5l5.5-5.5"/><path d="m9 11 6.5-6.5a2.1 2.1 0 0 1 3 0l1 1a2.1 2.1 0 0 1 0 3L13 15z"/><path d="M14 21h6"/></symbol>
       <symbol id="i-clipboard" viewBox="0 0 24 24"><rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 4.5V3.5h6v1"/><path d="M9 10h6M9 13.5h6M9 17h4"/></symbol>
       <symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 3.5h6l-1 5.5 3.5 3v1.5h-11V12L10 9z"/><path d="M12 13.5V21"/></symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/></symbol>
+      <symbol id="i-zoom" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8M10.5 8v5M8 10.5h5"/></symbol>
       <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></symbol>
     </defs>
   </svg>
@@ -181,17 +183,17 @@
         <span class="custom">
           <input type="number" id="awakeAmount" min="1" class="num" aria-label="Custom duration">
           <button class="unit" id="awakeUnit" title="Scroll or click to switch minutes / hours">min</button>
-          <button class="go small" id="awakeGo" title="Keep awake for this long"><svg><use href="#i-play"/></svg></button>
+          <button class="go small" id="awakeGo" title="Keep awake for this long"><svg><use id="awakeGoIcon" href="#i-play"/></svg></button>
         </span>
       </div>
     </section>
     <section data-section="clipboard" class="block" id="clipRow">
       <div class="row tight">
-        <div class="label"><svg><use href="#i-clipboard"/></svg>clipboard history
+        <div class="label"><svg><use href="#i-clipboard"/></svg><span class="titles">clipboard history<span class="sub" id="clipStatus"></span></span>
           <button class="icon-btn small" id="clipListBtn" title="All copied text"><svg><use href="#i-expand"/></svg></button>
-          <button class="icon-btn small" id="clipSettings" title="Clipboard settings"><svg><use href="#i-open"/></svg></button>
         </div>
-        <div class="actions"><span class="status" id="clipStatus"></span>
+        <div class="actions">
+          <button class="icon-btn small" id="clipSettings" title="Clipboard settings"><svg><use href="#i-sliders"/></svg></button>
           <button class="switch" id="clipToggle" role="switch" aria-checked="false" aria-label="Clipboard history"></button>
         </div>
       </div>
@@ -254,7 +256,7 @@
     <section data-section="remove" class="block" id="removeRow">
       <div class="row tight">
         <div class="label"><svg><use href="#i-eraser"/></svg>remove elements
-          <button class="icon-btn small" id="removeSettings" title="All removed elements, by site"><svg><use href="#i-open"/></svg></button>
+          <button class="icon-btn small" id="removeSettings" title="All removed elements, by site"><svg><use href="#i-sliders"/></svg></button>
         </div>
         <div class="actions"><span class="status" id="removeStatus"></span><button class="text-btn" id="pickRemove">pick</button></div>
       </div>
@@ -267,7 +269,7 @@
     <section data-section="highlight" class="block" id="hlRow">
       <div class="row tight">
         <div class="label"><svg><use href="#i-marker"/></svg>highlight words
-          <button class="icon-btn small" id="hlSettings" title="Word lists"><svg><use href="#i-open"/></svg></button>
+          <button class="icon-btn small" id="hlSettings" title="Word lists"><svg><use href="#i-sliders"/></svg></button>
         </div>
         <div class="actions"><span class="status" id="hlStatus"></span>
           <button class="switch" id="hlToggle" role="switch" aria-checked="false" aria-label="Highlight words, on or off everywhere"></button>
@@ -283,12 +285,27 @@
       </div>
     </section>
 
+    <section data-section="imgzoom" class="block" id="imgRow">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-zoom"/></svg><span class="titles">zoom &amp; rotate images<span class="sub" id="imgHint"></span></span></div>
+        <div class="actions">
+          <button class="switch" id="imgToggle" role="switch" aria-checked="false" aria-label="Zoom and rotate images"></button>
+        </div>
+      </div>
+      <div class="row tight sub-row" id="imgModRow" hidden>
+        <span class="status">hold while scrolling on an image</span>
+        <div class="seg" id="imgMod" role="radiogroup" aria-label="Key to hold while scrolling">
+          <button data-mod="alt" role="radio"></button>
+          <button data-mod="ctrl" role="radio">ctrl</button>
+          <button data-mod="shift" role="radio">shift</button>
+        </div>
+      </div>
+    </section>
     <section data-section="redirect" class="row">
-      <div class="label"><svg><use href="#i-redirect"/></svg>URL auto redirect</div>
+      <div class="label"><svg><use href="#i-redirect"/></svg><span class="titles">URL auto redirect<span class="sub" id="redirectStatus"></span></span></div>
       <div class="actions">
-        <span class="status" id="redirectStatus"></span>
         <button class="text-btn" id="redirectNow" title="Run the redirect rules on this page now (for pages without a right-click menu)">go</button>
-        <button class="icon-btn small" id="redirectSettings" title="Redirect rules"><svg><use href="#i-open"/></svg></button>
+        <button class="icon-btn small" id="redirectSettings" title="Redirect rules"><svg><use href="#i-sliders"/></svg></button>
         <button class="switch" id="redirectToggle" role="switch" aria-checked="false" aria-label="URL auto redirect"></button>
       </div>
     </section>
@@ -299,7 +316,7 @@
           <button class="icon-btn small" id="uploadHistoryBtn" title="All uploads"><svg><use href="#i-expand"/></svg></button>
         </div>
         <div class="actions">
-          <button class="icon-btn small" id="uploadSettings" title="Upload settings"><svg><use href="#i-open"/></svg></button>
+          <button class="icon-btn small" id="uploadSettings" title="Upload settings"><svg><use href="#i-sliders"/></svg></button>
         </div>
       </div>
       <div class="short-go">
@@ -323,7 +340,7 @@
     <section data-section="drive" class="block" id="driveRow">
       <div class="row tight">
         <div class="label"><svg><use href="#i-cloud"/></svg>drive backup
-          <button class="icon-btn small" id="driveSettings" title="Drive setup, snapshots and restore"><svg><use href="#i-open"/></svg></button>
+          <button class="icon-btn small" id="driveSettings" title="Drive setup, snapshots and restore"><svg><use href="#i-sliders"/></svg></button>
         </div>
         <div class="actions"><span class="status" id="driveStatus"></span><button class="text-btn" id="driveNow">sync now</button></div>
       </div>

@@ -43,6 +43,7 @@ async function init() {
   initUploads();
   initBackup();
   initClipboard();
+  initImgZoom();
 }
 
 // Puts each section in the tab and order chosen in settings → general → tools layout.
@@ -659,6 +660,9 @@ async function initAwake() {
     presets.forEach((b) => b.classList.toggle("active", on && +b.dataset.min === state.minutes));
     $("awakeStatus").textContent = !on ? "keeps the screen on"
       : state.until ? `awake · ${formatLeft(state.until - Date.now())} left` : "awake until turned off";
+    // While awake (a preset or a custom time), ▶ becomes ■ and stops it.
+    $("awakeGoIcon").setAttribute("href", on ? "#i-stop" : "#i-play");
+    $("awakeGo").title = on ? "Stop keeping awake" : "Keep awake for this long";
   }
   render();
   setInterval(render, 1000);
@@ -671,6 +675,7 @@ async function initAwake() {
     else start(minutes);
   }));
   $("awakeGo").onclick = () => {
+    if (state) return send("awakeStop").catch(fail);
     const n = +amount.value;
     if (!(n > 0)) return toast("Enter how long to stay awake", true);
     start(Math.round(unit.textContent === "h" ? n * 60 : n));
@@ -976,4 +981,27 @@ function initClipboard() {
     b.textContent = "clear";
     send("clipClear").catch(fail);
   };
+}
+
+// ---- Zoom & rotate images ----
+
+function initImgZoom() {
+  const mac = /Mac/i.test(navigator.userAgentData?.platform || navigator.platform);
+  const names = { alt: mac ? "option" : "alt", ctrl: "ctrl", shift: "shift" };
+  $("imgMod").querySelector('[data-mod="alt"]').textContent = names.alt;
+  async function render() {
+    const { imgZoom } = await TT.getSettings();
+    setSwitch($("imgToggle"), imgZoom.enabled);
+    $("imgMod").querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.mod === imgZoom.modifier)));
+    $("imgModRow").hidden = !imgZoom.enabled;
+    $("imgHint").textContent = imgZoom.enabled ? "right-click an image for rotate & zoom controls" : "";
+  }
+  render();
+  chrome.storage.onChanged.addListener((c, area) => area === "local" && c.tt && render());
+  $("imgToggle").onclick = () => {
+    const on = $("imgToggle").getAttribute("aria-checked") !== "true";
+    setSwitch($("imgToggle"), on);
+    TT.updateSettings({ imgZoom: { enabled: on } }).catch(fail);
+  };
+  $("imgMod").querySelectorAll("button").forEach((b) => (b.onclick = () => TT.updateSettings({ imgZoom: { modifier: b.dataset.mod } }).catch(fail)));
 }

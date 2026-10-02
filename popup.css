@@ -226,3 +226,8 @@ main:not(.laid-out) .panel { visibility: hidden; }
 .clip-list li.pinned { box-shadow: inset 2px 0 0 var(--yellow); }
 .clip-list .icon-btn.on { color: var(--yellow); }
 .clip-list .actions { flex: none; }
+
+/* A title with a small status line under it */
+.label .titles { display: flex; flex-direction: column; line-height: 1.25; }
+.label .titles .sub { font-size: 10.5px; color: var(--text3); }
+.label .titles .sub:empty { display: none; }
