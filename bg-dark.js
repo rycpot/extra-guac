@@ -1,35 +1,27 @@
 // Dark mode (settings.dark): "sites" turns it on only for the sites in dark.sites; "all"
 // turns it on everywhere except dark.exclude. A site is a hostname without "www." and
-// covers its subdomains. Pages that turn out to be dark already are remembered in
-// storage.local "darkNative" and skipped from then on.
+// covers its subdomains. Pages that are dark on their own are left as they are, page by
+// page (dark.js), unless their site is in dark.force ("darken anyway").
 //
 // dark.css + dark.js are registered at document_start for exactly those pages, so the
 // page is dark from its first paint (no white flash). Switching a site on or off also
 // updates its open tabs straight away.
 
 const darkHandlers = {
-  // From dark.js: this page is dark already. It stays as it is (and the site is skipped
-  // from then on) unless the site was switched on on purpose.
+  // From dark.js: this page is dark already. It's left as it is unless its site is
+  // on the "darken anyway" list.
   darkNative: async (_msg, sender) => {
     const site = darkSiteOf(sender.tab?.url);
-    if (!site) return { keep: false };
     const { dark } = await TT.getSettings();
-    if (covers(site, dark.force)) return { keep: true };
-    const { darkNative = [] } = await chrome.storage.local.get("darkNative");
-    if (!darkNative.includes(site)) await chrome.storage.local.set({ darkNative: [...darkNative, site].sort() });
-    return { keep: false };
+    return { keep: !!site && covers(site, dark.force) };
   },
   // Popup switch: dark mode on/off for this tab's site, in the current mode.
   darkSite: async ({ site, on }) => {
     const { dark } = await TT.getSettings();
     const toggle = (list, add) => (add ? [...new Set([...list, site])].sort() : list.filter((s) => s !== site));
     const next = dark.mode === "all" ? { exclude: toggle(dark.exclude, !on) } : { sites: toggle(dark.sites, on) };
-    // Switching on a site that's dark already means "darken it anyway".
-    const { darkNative = [] } = await chrome.storage.local.get("darkNative");
-    const native = covers(site, darkNative);
-    next.force = toggle(dark.force, on && (native || covers(site, dark.force)));
+    // A site that's dark on its own stays as it is; "darken anyway" is in settings.
     await TT.updateSettings({ dark: next });
-    if (on && native) await chrome.storage.local.set({ darkNative: darkNative.filter((s) => !(site === s || site.endsWith(`.${s}`))) });
   },
 };
 
@@ -44,9 +36,9 @@ function darkSiteOf(url) {
 
 const covers = (site, list) => list.some((s) => site === s || site.endsWith(`.${s}`));
 
-// Whether dark mode applies to this site, given the settings and the remembered dark sites.
-function darkOn(site, dark, darkNative) {
-  if (!site || covers(site, darkNative)) return false;
+// Whether dark mode applies to this site.
+function darkOn(site, dark) {
+  if (!site) return false;
   return dark.mode === "all" ? !covers(site, dark.exclude) : covers(site, dark.sites);
 }
 
@@ -56,14 +48,13 @@ const sitePatterns = (sites) => sites
 
 async function syncDarkScript() {
   const { dark } = await TT.getSettings();
-  const { darkNative = [] } = await chrome.storage.local.get("darkNative");
   const script = { id: DARK_SCRIPT_ID, css: ["dark.css"], js: ["dark.js"], runAt: "document_start", allFrames: false, persistAcrossSessions: true };
   if (dark.mode === "all") {
     script.matches = ["http://*/*", "https://*/*"];
-    const skip = sitePatterns([...dark.exclude, ...darkNative]);
+    const skip = sitePatterns(dark.exclude);
     if (skip.length) script.excludeMatches = skip;
   } else {
-    script.matches = sitePatterns(dark.sites.filter((s) => !covers(s, darkNative)));
+    script.matches = sitePatterns(dark.sites);
   }
   const have = await chrome.scripting.getRegisteredContentScripts({ ids: [DARK_SCRIPT_ID] });
   if (have.length) await chrome.scripting.unregisterContentScripts({ ids: [DARK_SCRIPT_ID] });
@@ -73,9 +64,8 @@ async function syncDarkScript() {
 // Brings every open tab in line with the settings, without reloading it.
 async function syncDarkTabs() {
   const { dark } = await TT.getSettings();
-  const { darkNative = [] } = await chrome.storage.local.get("darkNative");
   for (const tab of await chrome.tabs.query({ url: ["http://*/*", "https://*/*"] })) {
-    const on = darkOn(darkSiteOf(tab.url), dark, darkNative);
+    const on = darkOn(darkSiteOf(tab.url), dark);
     const target = { tabId: tab.id };
     // Already has the stylesheet (registered or added earlier)? Then only flip the switch.
     const [res] = await chrome.scripting.executeScript({
@@ -83,7 +73,8 @@ async function syncDarkTabs() {
       func: (on) => {
         const root = document.documentElement;
         const had = !!window.__ttDark;
-        if (on) { if (root.getAttribute("data-tt-dark") === "off") root.removeAttribute("data-tt-dark"); }
+        // A page that's dark on its own stays off either way.
+        if (on) { if (root.getAttribute("data-tt-dark") === "off" && !window.__ttDarkPage) root.removeAttribute("data-tt-dark"); }
         else if (had) root.setAttribute("data-tt-dark", "off");
         return had;
       },
@@ -103,9 +94,11 @@ const queueDarkSync = (tabs) => (darkSync = darkSync.then(async () => {
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
-  if (changes.darkNative) return void queueDarkSync(false); // the page already turned itself off
   const darkOf = (tt) => JSON.stringify(TT.merge(TT.DEFAULTS, tt).dark);
   if (changes.tt && darkOf(changes.tt.oldValue) !== darkOf(changes.tt.newValue)) queueDarkSync(true);
 });
 
-chrome.runtime.onInstalled.addListener(() => queueDarkSync(false));
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.storage.local.remove("darkNative"); // 2.12.0 remembered whole sites as dark; now it's per page
+  queueDarkSync(false);
+});

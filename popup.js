@@ -147,6 +147,8 @@ async function initBlur() {
 // ---- Dark mode ----------------------------------------------------------------
 // "sites": on only where switched on; "all": on everywhere except where switched off.
 // The switch is for this tab's site (bg-dark.js keeps the lists and open tabs in step).
+// It shows the choice, not whether the page is inverted: a page that's dark on its own
+// stays as it is and says "already dark" (settings can darken such sites anyway).
 
 function initDark(isWeb) {
   const site = isWeb ? new URL(tab.url).hostname.toLowerCase().replace(/^www\./, "") : "";
@@ -154,15 +156,18 @@ function initDark(isWeb) {
   const seg = $("darkMode"), toggle = $("darkToggle");
   async function render() {
     const { dark } = await TT.getSettings();
-    const { darkNative = [] } = await chrome.storage.local.get("darkNative");
     seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.mode === dark.mode)));
-    const native = covers(darkNative);
-    setSwitch(toggle, !native && (dark.mode === "all" ? !covers(dark.exclude) : covers(dark.sites)));
+    const on = dark.mode === "all" ? !covers(dark.exclude) : covers(dark.sites);
+    setSwitch(toggle, on);
+    const [probe] = isWeb && on && !covers(dark.force)
+      ? await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => window.__ttDarkPage === true }).catch(() => [])
+      : [];
+    $("darkStatus").textContent = probe?.result ? "already dark" : "";
     toggle.disabled = !isWeb;
-    toggle.title = !isWeb ? "Not available on this page" : native ? "This site is dark already, so it's left alone — switch on to darken it anyway" : "";
+    toggle.title = isWeb ? "" : "Not available on this page";
   }
   render();
-  chrome.storage.onChanged.addListener((c, area) => area === "local" && (c.tt || c.darkNative) && render());
+  chrome.storage.onChanged.addListener((c, area) => area === "local" && c.tt && render());
   seg.querySelectorAll("button").forEach((b) => (b.onclick = () => TT.updateSettings({ dark: { mode: b.dataset.mode } })));
   toggle.onclick = () => send("darkSite", { site, on: toggle.getAttribute("aria-checked") !== "true" }).catch(fail);
   $("darkSettings").onclick = () => send("openSettings", { section: "dark" }).then(() => closePopup(), fail);
