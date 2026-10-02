@@ -92,21 +92,36 @@
     return c.map((v) => 255 - v);
   };
 
+  // Whether dark mode draws this page inverted. Asking for the page's computed filter
+  // makes Chrome restyle a big page first, so it's asked once and again only when dark
+  // mode changes (data-tt-dark), not on every update.
+  let darkCache = null;
+  const darkened = () => (darkCache ??= /invert/.test(getComputedStyle(document.documentElement).filter));
+
   function shown(hex) {
     const c = rgb(hex);
     const light = (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]) / 255 > 0.55;
     const text = light ? [0, 0, 0] : [255, 255, 255];
-    const inverted = /invert/.test(getComputedStyle(document.documentElement).filter);
+    const inverted = darkened();
     const [bg, fg] = inverted ? [beforeFilter(c), beforeFilter(text)] : [c, text];
     return { bg: `rgb(${bg.join(" ")})`, fg: `rgb(${fg.join(" ")})` };
   }
 
+  // Rules for both lists' colours, whether each list is in use right now or not: switching a
+  // list on or off then never rewrites the stylesheets (one per shadow root, hundreds on
+  // some sites), only adds or drops its marks.
+  let palette = {}; // highlight name → colour
+  let cssCache = { key: "", text: "" };
   function css() {
-    return groups.map((g) => {
-      const c = shown(g.color);
+    const key = `${darkened()}|${JSON.stringify(palette)}`;
+    if (cssCache.key === key) return cssCache.text;
+    const text = Object.entries(palette).map(([name, color]) => {
+      const c = shown(color);
       // A hairline shadow either side in the text's own colour makes the letters bolder.
-      return `::highlight(${g.name}) { background-color: ${c.bg}; color: ${c.fg}; text-shadow: .35px 0 0 ${c.fg}, -.35px 0 0 ${c.fg}; }`;
+      return `::highlight(${name}) { background-color: ${c.bg}; color: ${c.fg}; text-shadow: .35px 0 0 ${c.fg}, -.35px 0 0 ${c.fg}; }`;
     }).join("\n");
+    cssCache = { key, text };
+    return text;
   }
 
   // The colours as a stylesheet in the page, and in each open shadow root (page styles
@@ -255,8 +270,18 @@
 
   // Only what changed is redone: a list switched off loses its marks at once; a list switched
   // on (or with other words) is looked for on its own; a new colour is just restyled.
+  function paletteFor(hl) {
+    if (!hl?.enabled) return {};
+    const siteKey = Object.keys(hl.sites || {}).filter(covers).sort((a, b) => b.length - a.length)[0];
+    const out = {};
+    if (siteKey) out["tt-hl-site"] = hl.sites[siteKey].color;
+    if (hl.global) out["tt-hl-global"] = hl.global.color;
+    return out;
+  }
+
   function apply(hl) {
     const lists = listsFor(hl);
+    palette = paletteFor(hl);
     const keep = [], added = [];
     for (const g of groups) {
       const l = lists.find((x) => x.name === g.name);
@@ -281,7 +306,8 @@
       styled.clear();
       return observer.disconnect();
     }
-    [document, ...[...styled].filter((x) => x !== document)].forEach(style);
+    const before = cssCache.text;
+    if (!styled.has(document) || css() !== before) [document, ...[...styled].filter((x) => x !== document)].forEach(style);
     if (keep.length) return void (added.length && document.body && enter(document.body, added));
     observer.disconnect();
     observer.observe(document.documentElement, OBSERVE);
@@ -289,7 +315,7 @@
   }
 
   // Dark mode switching on or off changes how colours have to be drawn.
-  new MutationObserver(() => groups.length && [...styled].forEach(style))
+  new MutationObserver(() => { darkCache = null; if (groups.length) [...styled].forEach(style); })
     .observe(document.documentElement, { attributes: true, attributeFilter: ["data-tt-dark"] });
 
   document.addEventListener("visibilitychange", schedule);
