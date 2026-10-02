@@ -3,7 +3,7 @@
 (() => {
   const DEFAULTS = {
     theme: "dark", // "dark" | "light" | "auto" (follow the system)
-    openIn: "popup", // what the toolbar icon opens: "popup" | "panel" (Chrome's side panel)
+    openIn: "panel", // what the toolbar icon opens: "popup" | "panel" (Chrome's side panel)
     shot: { format: "png", quality: 92, folder: "" },
     refresh: {
       mode: "fixed", // "fixed" | "random"
@@ -42,8 +42,8 @@
     // Which of the first three popup tabs each section is in, top to bottom (settings →
     // general → tools layout). The fourth tab (backup) is fixed.
     layout: {
-      tools: ["screenshot", "blur", "dark", "refresh", "autoRefresh", "shortener", "volume", "awake", "clipboard"],
-      page: ["color", "element", "font", "remove", "highlight", "imgzoom", "imgdl", "redirect", "upload"],
+      tools: ["screenshot", "blur", "dark", "refresh", "autoRefresh", "shortener", "volume", "awake", "redirect", "highlight", "color", "font", "element", "remove", "clipboard"],
+      page: ["imgzoom", "imgdl", "upload"],
       extra: [],
     },
   };
