@@ -72,7 +72,7 @@ function syncMenus(s) {
     // Pinned clipboard entries (bg-clip.js), when that's switched on.
     const pins = await clipMenuItems(s);
     if (pins.length) {
-      const contexts = ["page", "editable", "selection", "link", "image"];
+      const contexts = ["editable"]; // only where the text can actually be typed in
       chrome.contextMenus.create({ id: "clippin", title: "Paste pinned", contexts });
       for (const p of pins) chrome.contextMenus.create({ id: p.id, parentId: "clippin", title: p.title, contexts });
     }
