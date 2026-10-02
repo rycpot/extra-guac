@@ -14,6 +14,7 @@
     bindPaths();
     initRedirect();
     initUpload();
+    initRemoved();
     showPane();
     addEventListener("hashchange", showPane);
     $("testSound").onclick = testSound;
@@ -256,5 +257,48 @@
         ? `${n} links this month`
         : `${n}/${TT.SHORTENERS[id].freeLimit} links this month`;
     }
+  }
+
+  // ---- Remove elements: one row per site, removed elements as pills ----
+
+  function initRemoved() {
+    const box = $("removeSites");
+    async function render() {
+      const { removed = {} } = await chrome.storage.local.get("removed");
+      const sites = Object.keys(removed).sort();
+      if (!sites.length) {
+        box.innerHTML = `<p class="rm-empty">Nothing removed yet.</p>`;
+        return;
+      }
+      box.replaceChildren(...sites.map((site) => {
+        const row = document.createElement("div");
+        row.className = "rm-site";
+        row.innerHTML = `<div class="rm-head"><b></b><span class="hint"></span><button type="button" class="btn ghost">clear site</button></div><div class="rm-pills"></div>`;
+        row.querySelector("b").textContent = site;
+        row.querySelector(".hint").textContent = `${removed[site].length} removed`;
+        row.querySelector("button").onclick = () => edit(site, () => []);
+        row.querySelector(".rm-pills").append(...removed[site].map((r) => {
+          const chip = document.createElement("span");
+          chip.className = "chip";
+          chip.title = `${r.selector}\nremoved ${new Date(r.at).toLocaleString()}`;
+          const text = Object.assign(document.createElement("span"), { className: "chip-text", textContent: r.selector });
+          const x = Object.assign(document.createElement("button"), { type: "button", className: "chip-x", textContent: "×" });
+          x.setAttribute("aria-label", `Stop removing ${r.selector}`);
+          x.onclick = () => edit(site, (list) => list.filter((e) => e.selector !== r.selector));
+          chip.append(text, x);
+          return chip;
+        }));
+        return row;
+      }));
+    }
+    async function edit(site, fn) {
+      const { removed = {} } = await chrome.storage.local.get("removed");
+      const list = fn(removed[site] || []);
+      if (list.length) removed[site] = list;
+      else delete removed[site];
+      await chrome.storage.local.set({ removed });
+    }
+    render();
+    chrome.storage.onChanged.addListener((c, area) => area === "local" && c.removed && render());
   }
 })();
