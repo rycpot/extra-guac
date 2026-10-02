@@ -1,4 +1,4 @@
-@font-face { font-family: "Riforma"; src: url("fonts/RiformaLLTT-Regular.ttf") format("truetype"); font-weight: 400; font-display: block; }
+@font-face { font-family: "Inter"; src: url("fonts/InterVariable.woff2") format("woff2"); font-weight: 100 900; font-display: block; } /* Inter, SIL Open Font License (fonts/Inter.LICENSE) */
 
 /* Settings window — same look as the popup: dark grain panel, hairline dividers. */
 :root {
@@ -22,7 +22,7 @@
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body { margin: 0; display: flex; background: var(--bg); color: var(--fg);
-  font: 400 12.5px/1.5 "Riforma", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  font: 400 12.5px/1.5 "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 body::after { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: var(--grain);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
 

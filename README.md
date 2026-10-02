@@ -89,6 +89,9 @@ Download the zip from [Releases](../../releases) and unzip it (or clone this rep
   (some web apps) capture only what's visible. Infinite-scroll pages stop after 80 screens.
 - Screenshots can only be saved inside Downloads (a Chrome rule for extensions).
 - While a tab's volume is below 100%, Chrome shows its "tab is being captured" indicator.
+- Privacy: everything stays in your browser unless you use a feature that sends it to a
+  service you picked (shorteners, image hosts, your own Google Drive). See [PRIVACY.md](PRIVACY.md).
+- The interface font is [Inter](https://github.com/rsms/inter) (SIL Open Font License).
 
 ## Releasing
 

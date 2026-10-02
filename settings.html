@@ -222,9 +222,13 @@ Card 4111 1111 1111 1111</textarea>
     <section>
       <h2>Alert sound</h2>
       <div class="row">
-        <input type="url" class="text" data-path="refresh.sound" placeholder="https://… (.mp3, .wav, .ogg); empty = no sound" spellcheck="false">
+        <label><input type="radio" name="soundKind" value="chime"> built-in chime</label>
+        <label><input type="radio" name="soundKind" value="link"> sound file link</label>
+        <label><input type="radio" name="soundKind" value="none"> none</label>
         <button type="button" class="btn" id="testSound">test</button>
-        <button type="button" class="btn ghost" id="resetSound">default</button>
+      </div>
+      <div class="row" id="soundLinkRow" hidden>
+        <input type="url" class="text" id="soundLink" placeholder="https://… (.mp3, .wav, .ogg)" spellcheck="false">
       </div>
       <p class="hint" id="soundError"></p>
     </section>
@@ -480,6 +484,7 @@ Card 4111 1111 1111 1111</textarea>
   <script src="pii-rules.js"></script>
   <script src="redirect-rules.js"></script>
   <script src="settings-blur.js"></script>
-  <script src="settings.js"></script>
+  <script src="chime.js"></script>
+<script src="settings.js"></script>
 </body>
 </html>

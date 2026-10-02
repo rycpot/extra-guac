@@ -30,6 +30,7 @@ const actions = {
   },
 
   async play({ url }) {
+    if (url === "chime") return playChime();
     const audio = new Audio(url);
     await audio.play();
   },

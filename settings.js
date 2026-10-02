@@ -23,7 +23,7 @@
     showPane();
     addEventListener("hashchange", showPane);
     $("testSound").onclick = testSound;
-    $("resetSound").onclick = () => setPath("refresh.sound", TT.DEFAULTS.refresh.sound, true);
+    initSound();
     chrome.storage.onChanged.addListener((c, area) => {
       if (area === "local" && c.tt && !saveTimer) {
         settings = TT.merge(TT.DEFAULTS, c.tt.newValue);
@@ -88,6 +88,7 @@
     fillUpload();
     renderLayout();
     renderClipExclude();
+    fillSound();
     update();
   }
 
@@ -98,12 +99,41 @@
 
   // ---- Alert sound ----
 
+  // Built-in chime, a link of your own, or none. The link typed in is kept while another
+  // choice is picked, so switching back to "sound file link" brings it back.
+  const soundKind = (v) => (v === "chime" ? "chime" : v ? "link" : "none");
+  let soundLinkDraft = "", linkPicked = false; // picked with the box still empty
+  function fillSound() {
+    const v = settings.refresh.sound;
+    const kind = linkPicked && !v ? "link" : soundKind(v);
+    if (kind === "link") soundLinkDraft = v;
+    for (const r of document.querySelectorAll('[name="soundKind"]')) r.checked = r.value === kind;
+    $("soundLinkRow").hidden = kind !== "link";
+    if (document.activeElement !== $("soundLink")) $("soundLink").value = soundLinkDraft;
+  }
+  function initSound() {
+    for (const r of document.querySelectorAll('[name="soundKind"]')) {
+      r.onchange = () => {
+        $("soundError").textContent = "";
+        linkPicked = r.value === "link";
+        setPath("refresh.sound", r.value === "chime" ? "chime" : r.value === "none" ? "" : soundLinkDraft.trim(), true);
+        $("soundLinkRow").hidden = r.value !== "link";
+        if (r.value === "link") $("soundLink").focus();
+      };
+    }
+    $("soundLink").oninput = () => {
+      soundLinkDraft = $("soundLink").value;
+      setPath("refresh.sound", soundLinkDraft.trim());
+    };
+  }
+
   async function testSound() {
     const err = $("soundError");
     err.textContent = "";
     const url = settings.refresh.sound;
-    if (!url) return (err.textContent = "No sound set.");
+    if (!url) return (err.textContent = $("soundLinkRow").hidden ? "No sound set." : "Paste a link to a sound file first.");
     try {
+      if (url === "chime") return await playChime();
       await new Audio(url).play();
     } catch (e) {
       err.textContent = `Couldn't play that sound: ${e.message}`;
