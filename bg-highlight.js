@@ -80,4 +80,20 @@ const queueHlSync = (tabs) => (hlSync = hlSync.then(async () => {
 }).catch(() => {}));
 
 chrome.storage.onChanged.addListener((c, area) => area === "local" && c.hl && queueHlSync(true));
-chrome.runtime.onInstalled.addListener(() => queueHlSync(false));
+// 2.17.2: the colour presets became neon; lists still on an old preset move to its neon twin.
+const HL_OLD_PRESETS = { "#ffd60a": "#fff01f", "#30d158": "#39ff14", "#64d2ff": "#00f0ff", "#ff9f0a": "#ff5f1f", "#ff6bd6": "#ff2fd6", "#bf5af2": "#b026ff" };
+async function migrateHlColors() {
+  const { hl } = await chrome.storage.local.get("hl");
+  if (!hl) return;
+  let moved = false;
+  for (const list of [hl.global, ...Object.values(hl.sites || {})]) {
+    const neon = list && HL_OLD_PRESETS[String(list.color).toLowerCase()];
+    if (neon) { list.color = neon; moved = true; }
+  }
+  if (moved) await chrome.storage.local.set({ hl });
+}
+
+chrome.runtime.onInstalled.addListener(async () => {
+  await migrateHlColors();
+  queueHlSync(false);
+});
