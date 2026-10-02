@@ -176,4 +176,7 @@ h2 #layoutReset { margin-left: 6px; padding: 2px 8px; text-transform: none; lett
 .hl-note { color: var(--muted); font-size: 12px; min-height: 16px; }
 .hl-list.off .hl-pills { opacity: .5; }
 .hl-partial { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer; }
-h2 #hlSample { margin-left: 6px; padding: 2px 8px; text-transform: none; letter-spacing: 0; font-size: 12px; }
+h2 #hlSample { margin-left: 8px; padding: 4px 11px 4px 8px; text-transform: none; letter-spacing: 0; font-size: 12px; vertical-align: 1px; }
+.btn.blue { display: inline-flex; align-items: center; gap: 5px; background: #0a84ff; color: #fff; font-weight: 500; }
+.btn.blue:hover { background: #3399ff; }
+.btn.blue svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }

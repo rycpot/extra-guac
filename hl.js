@@ -58,7 +58,7 @@
   // ---- Colours ---------------------------------------------------------------------------
 
   function rgb(hex) {
-    const m = /^#?([0-9a-f]{6})$/i.exec(hex || "") || [0, "ffd60a"];
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex || "") || [0, "fff01f"];
     const n = parseInt(m[1], 16);
     return [n >> 16, (n >> 8) & 255, n & 255];
   }
@@ -102,7 +102,8 @@
   function css() {
     return groups.map((g) => {
       const c = shown(g.color);
-      return `::highlight(${g.name}) { background-color: ${c.bg}; color: ${c.fg}; }`;
+      // A hairline shadow either side in the text's own colour makes the letters bolder.
+      return `::highlight(${g.name}) { background-color: ${c.bg}; color: ${c.fg}; text-shadow: .35px 0 0 ${c.fg}, -.35px 0 0 ${c.fg}; }`;
     }).join("\n");
   }
 

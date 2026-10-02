@@ -63,7 +63,8 @@
 
   // Highlight words (storage.local "hl"). Limits keep pages fast and the settings usable.
   const HL_LIMITS = { global: 1000, site: 300, sites: 200, length: 100 };
-  const HL_COLORS = ["#ffd60a", "#30d158", "#64d2ff", "#ff9f0a", "#ff6bd6", "#bf5af2"];
+  // Neon, so marks catch the eye even while scrolling fast: yellow, green, cyan, orange, magenta, purple.
+  const HL_COLORS = ["#fff01f", "#39ff14", "#00f0ff", "#ff5f1f", "#ff2fd6", "#b026ff"];
   function hlOf(hl) {
     const h = hl && typeof hl === "object" ? hl : {};
     const list = (l, color) => ({ on: l?.on !== false, color: /^#[0-9a-f]{6}$/i.test(l?.color || "") ? l.color : color, partial: !!l?.partial, words: Array.isArray(l?.words) ? l.words : [] });
