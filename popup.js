@@ -154,6 +154,7 @@ function initDark(isWeb) {
   const site = isWeb ? new URL(tab.url).hostname.toLowerCase().replace(/^www\./, "") : "";
   const covers = (list) => list.some((s) => site === s || site.endsWith(`.${s}`));
   const seg = $("darkMode"), toggle = $("darkToggle");
+  let ready = false, saving = false;
   async function render() {
     const { dark } = await TT.getSettings();
     seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.mode === dark.mode)));
@@ -162,14 +163,25 @@ function initDark(isWeb) {
     const [probe] = isWeb && on && !covers(dark.force)
       ? await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => window.__ttDarkPage === true }).catch(() => [])
       : [];
-    $("darkStatus").textContent = probe?.result ? "already dark" : "";
+    $("darkStatus").textContent = dark.mode === "all" && !on ? "excluded" : probe?.result ? "already dark" : "";
     toggle.disabled = !isWeb;
     toggle.title = isWeb ? "" : "Not available on this page";
+    ready = true;
   }
   render();
   chrome.storage.onChanged.addListener((c, area) => area === "local" && c.tt && render());
   seg.querySelectorAll("button").forEach((b) => (b.onclick = () => TT.updateSettings({ dark: { mode: b.dataset.mode } })));
-  toggle.onclick = () => send("darkSite", { site, on: toggle.getAttribute("aria-checked") !== "true" }).catch(fail);
+  // Flips at once and takes no second click until it's saved: reading a not-yet-redrawn
+  // switch made two quick clicks both mean "off", leaving the site excluded.
+  toggle.onclick = async () => {
+    if (!ready || saving) return;
+    const on = toggle.getAttribute("aria-checked") !== "true";
+    setSwitch(toggle, on);
+    saving = true;
+    try { await send("darkSite", { site, on }); }
+    catch (err) { fail(err); render(); }
+    finally { saving = false; }
+  };
   $("darkSettings").onclick = () => send("openSettings", { section: "dark" }).then(() => closePopup(), fail);
 }
 
