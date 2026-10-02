@@ -117,6 +117,15 @@
     if (location.pathname !== page) page = location.pathname;
     setTimeout(check, 50);
   }
+  // Apps build their page after loading (often over a loading screen of another colour),
+  // so look again a few times early on and whenever a lot of new content appears.
+  let lastBig = 0;
+  function bigChange() {
+    const now = Date.now();
+    if (now - lastBig < 2000) return;
+    lastBig = now;
+    setTimeout(check, 300);
+  }
   window.navigation?.addEventListener("navigatesuccess", recheck);
   setInterval(() => location.pathname !== page && recheck(), 1000);
   const themeWatch = new MutationObserver(recheck);
@@ -157,6 +166,7 @@
         const batch = pending;
         pending = [];
         for (const n of batch) if (n.isConnected) markTree(n);
+        if (batch.length >= 15) bigChange();
       });
     }
   });
@@ -179,6 +189,7 @@
   function start() {
     pagePicture();
     check();
+    for (const t of [300, 1000, 2500, 5000]) setTimeout(check, t);
     markTree(root);
     observer.observe(root, { childList: true, subtree: true });
     const theme = { attributes: true, attributeFilter: ["class", "style", "data-theme", "data-color-mode", "data-dark-theme"] };
