@@ -15,7 +15,7 @@
       keywords: [],
       continueAfterMatch: false,
       notify: true,
-      sound: "https://audio.jukehost.co.uk/sKgfWrjaHsuxPYeGQiFoGuWXg14F0xfV",
+      sound: "chime", // "chime" (built in) | "" (none) | a link to a sound file
     },
     shortener: {
       service: "cuttly",

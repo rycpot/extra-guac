@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Tab Toolkit: Screenshots, Auto-Refresh, PII Blur, Nuke & More",
-  "version": "2.22.0",
-  "description": "Page tools in one popup: screenshots, privacy blur, hard refresh, site-data nuke, auto-refresh, URL shortener, volume, keep awake.",
+  "version": "2.23.0",
+  "description": "Page tools in a side panel: screenshots, privacy blur, dark mode, auto-refresh, highlights, clipboard history, image saving & more.",
   "permissions": [
     "alarms",
     "bookmarks",
