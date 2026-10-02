@@ -190,3 +190,4 @@ h2 #hlSample { margin-left: 8px; padding: 4px 11px 4px 8px; text-transform: none
 .btn.blue { display: inline-flex; align-items: center; gap: 5px; background: #0a84ff; color: #fff; font-weight: 500; }
 .btn.blue:hover { background: #3399ff; }
 .btn.blue svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+#clipboard .row label { min-width: 0; margin-right: 8px; }

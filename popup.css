@@ -216,3 +216,13 @@ output { width: 38px; text-align: right; color: var(--text2); font-variant-numer
 /* Sections are placed by the saved layout before the tabs show. */
 main:not(.laid-out) .panel { visibility: hidden; }
 .empty-panel { margin: 18px 4px; color: var(--text3); font-size: 12px; text-align: center; }
+
+/* Clipboard history */
+.clip-search { margin-top: 10px; }
+.clip-list li { align-items: flex-start; cursor: pointer; }
+.clip-list li:hover { background: var(--hover); }
+.clip-list .clip-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; word-break: break-word; }
+.clip-list .clip-meta { display: block; color: var(--text3); font-size: 11px; margin-top: 3px; }
+.clip-list li.pinned { box-shadow: inset 2px 0 0 var(--yellow); }
+.clip-list .icon-btn.on { color: var(--yellow); }
+.clip-list .actions { flex: none; }

@@ -19,6 +19,7 @@
     initBackup();
     initLayout();
     initHighlight();
+    initClipboard();
     showPane();
     addEventListener("hashchange", showPane);
     $("testSound").onclick = testSound;
@@ -64,7 +65,7 @@
     for (const el of document.querySelectorAll("[data-path]")) {
       el.addEventListener(["text", "url", "password"].includes(el.type) ? "input" : "change", () => {
         const value = el.type === "checkbox" ? el.checked
-          : el.type === "range" || el.type === "number" ? +el.value
+          : el.type === "range" || el.type === "number" || el.dataset.number !== undefined ? +el.value
           : el.value;
         if (el.type === "radio" && !el.checked) return;
         setPath(el.dataset.path, value);
@@ -79,13 +80,14 @@
     for (const el of document.querySelectorAll("[data-path]")) {
       const v = getPath(el.dataset.path);
       if (el.type === "checkbox") el.checked = !!v;
-      else if (el.type === "radio") el.checked = el.value === v;
+      else if (el.type === "radio") el.checked = el.value === String(v);
       else if (document.activeElement !== el) el.value = v ?? "";
     }
     fillServices();
     renderRules();
     fillUpload();
     renderLayout();
+    renderClipExclude();
     update();
   }
 
@@ -821,4 +823,50 @@
     load();
     chrome.storage.onChanged.addListener((c, area) => area === "local" && c.hl && load());
   }
+  // ---- Clipboard history: excluded sites, count, clear ----
+
+  function initClipboard() {
+    const siteName = (raw) => {
+      let v = String(raw || "").trim().toLowerCase();
+      try { if (/^[a-z]+:\/\//.test(v)) v = new URL(v).hostname; } catch {}
+      v = v.replace(/^www\./, "").replace(/[/?#].*$/, "");
+      return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(v) ? v : "";
+    };
+    function renderExclude() {
+      const box = $("clipExcludePills");
+      box.replaceChildren(...settings.clip.exclude.map((site) => {
+        const chip = document.createElement("span");
+        chip.className = "chip";
+        const text = Object.assign(document.createElement("span"), { className: "chip-text", textContent: site });
+        const x = Object.assign(document.createElement("button"), { type: "button", className: "chip-x", textContent: "×" });
+        x.setAttribute("aria-label", `Record on ${site} again`);
+        x.onclick = () => setPath("clip.exclude", settings.clip.exclude.filter((s) => s !== site), true);
+        chip.append(text, x);
+        return chip;
+      }));
+    }
+    async function renderCount() {
+      const res = await chrome.runtime.sendMessage({ type: "clipList" }).catch(() => null);
+      const items = res?.items || [];
+      const pinned = items.filter((e) => e.pinned).length;
+      $("clipCount").textContent = `${items.length - pinned} saved · ${pinned} pinned`;
+    }
+    const add = () => {
+      const site = siteName($("clipExcludeAdd").value);
+      if (!site) return void ($("clipExcludeAdd").value && alert("That doesn't look like a site, e.g. example.com"));
+      $("clipExcludeAdd").value = "";
+      setPath("clip.exclude", [...new Set([...settings.clip.exclude, site])].sort(), true);
+    };
+    $("clipExcludeBtn").onclick = add;
+    $("clipExcludeAdd").onkeydown = (e) => { if (e.key === "Enter") add(); };
+    $("clipClearAll").onclick = async () => {
+      if (!confirm("Delete the clipboard history? Pinned entries are kept.")) return;
+      await chrome.runtime.sendMessage({ type: "clipClear" });
+    };
+    renderExclude();
+    renderCount();
+    renderClipExclude = renderExclude;
+    chrome.storage.onChanged.addListener((c, area) => area === "local" && c.clipIndex && renderCount());
+  }
+  let renderClipExclude = () => {};
 })();
