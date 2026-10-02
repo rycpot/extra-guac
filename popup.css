@@ -79,6 +79,8 @@ section { border-top: 1px solid var(--divider); }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 52px; }
 .row.tight { min-height: 0; padding: 12px 0 8px; }
 section.block { padding-bottom: 12px; }
+/* Nothing shown under the heading (no latest pick, no options): as much space below it as above. */
+section.block:not(:has(> :nth-child(n+2):not([hidden]))) { padding-bottom: 4px; }
 .label { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--text); white-space: nowrap; }
 .label svg { width: 17px; height: 17px; color: var(--text2); }
 .actions { display: flex; align-items: center; gap: 4px; }
