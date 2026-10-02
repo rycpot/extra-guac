@@ -36,11 +36,14 @@
     clip: { enabled: false, limit: 200, maxAgeDays: 0, menu: false, exclude: [] },
     // Zoom & rotate images: modifier + scroll over an image ("alt" = Option on a Mac).
     imgZoom: { enabled: false, modifier: "alt" },
+    // Save images on click: modifier + click; format "original" | "png" | "jpg" | "webp";
+    // folder = sub-folder of Downloads ("" = Downloads itself).
+    imgDl: { enabled: false, modifier: "alt", format: "original", folder: "" },
     // Which of the first three popup tabs each section is in, top to bottom (settings →
     // general → tools layout). The fourth tab (backup) is fixed.
     layout: {
       tools: ["screenshot", "blur", "dark", "refresh", "autoRefresh", "shortener", "volume", "awake", "clipboard"],
-      page: ["color", "element", "font", "remove", "highlight", "imgzoom", "redirect", "upload"],
+      page: ["color", "element", "font", "remove", "highlight", "imgzoom", "imgdl", "redirect", "upload"],
       extra: [],
     },
   };
@@ -50,7 +53,7 @@
   const SECTIONS = {
     screenshot: "screenshot", blur: "privacy blur", dark: "dark mode", refresh: "refresh", autoRefresh: "auto-refresh",
     shortener: "URL shorten", volume: "volume", awake: "awake", color: "what color?", element: "what element?",
-    font: "what font?", remove: "remove elements", highlight: "highlight words", imgzoom: "zoom & rotate images", clipboard: "clipboard history", redirect: "URL auto redirect", upload: "upload images",
+    font: "what font?", remove: "remove elements", highlight: "highlight words", imgzoom: "zoom & rotate images", imgdl: "save images on click", clipboard: "clipboard history", redirect: "URL auto redirect", upload: "upload images",
   };
 
   // A saved layout with unknown sections dropped and any missing ones (new in an update)

@@ -46,6 +46,7 @@
       <symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 3.5h6l-1 5.5 3.5 3v1.5h-11V12L10 9z"/><path d="M12 13.5V21"/></symbol>
       <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/></symbol>
       <symbol id="i-zoom" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8M10.5 8v5M8 10.5h5"/></symbol>
+      <symbol id="i-imgdl" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="2.5"/><circle cx="9" cy="9" r="1.6"/><path d="M20.5 14.5 16 10l-5.5 5.5"/><path d="M12 13v7M9.5 17.5 12 20l2.5-2.5"/></symbol>
       <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></symbol>
     </defs>
   </svg>
@@ -298,6 +299,32 @@
           <button data-mod="alt" role="radio"></button>
           <button data-mod="ctrl" role="radio">ctrl</button>
           <button data-mod="shift" role="radio">shift</button>
+        </div>
+      </div>
+    </section>
+    <section data-section="imgdl" class="block" id="imgDlRow">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-imgdl"/></svg><span class="titles">save images on click<span class="sub" id="imgDlHint"></span></span></div>
+        <div class="actions">
+          <button class="icon-btn small" id="imgDlSettings" title="Folder for saved images"><svg><use href="#i-sliders"/></svg></button>
+          <button class="switch" id="imgDlToggle" role="switch" aria-checked="false" aria-label="Save images on click"></button>
+        </div>
+      </div>
+      <div class="row tight sub-row" id="imgDlKeyRow" hidden>
+        <span class="status">hold and click an image</span>
+        <div class="seg" id="imgDlMod" role="radiogroup" aria-label="Key to hold while clicking">
+          <button data-mod="alt" role="radio"></button>
+          <button data-mod="ctrl" role="radio"></button>
+          <button data-mod="shift" role="radio">shift</button>
+        </div>
+      </div>
+      <div class="row tight sub-row" id="imgDlFmtRow" hidden>
+        <span class="status">save as</span>
+        <div class="seg" id="imgDlFmt" role="radiogroup" aria-label="Save as">
+          <button data-fmt="original" role="radio" title="As the site serves it">original</button>
+          <button data-fmt="png" role="radio">png</button>
+          <button data-fmt="jpg" role="radio">jpg</button>
+          <button data-fmt="webp" role="radio">webp</button>
         </div>
       </div>
     </section>
