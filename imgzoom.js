@@ -1,7 +1,8 @@
 // Zoom & rotate images (settings.imgZoom). Holding the chosen key (Option/Alt by default,
 // or Ctrl or Shift) and scrolling over an image zooms it, always around the image's own
-// centre, wherever the cursor is. Right-click an image → "Image controls" shows faint
-// controls at the bottom-right of the window: rotate left, rotate right, back to 1:1, a
+// centre, wherever the cursor is. Zooming brings up faint controls at the bottom-right of
+// the window (they go again 3 s after the last zoom unless pointed at); right-click an
+// image → "Image controls" shows them until closed: rotate left, rotate right, back to 1:1, a
 // zoom slider (10%–500%) and ✕. Only the image's inline styles change; 1:1 puts them back.
 //
 // Zooming follows how far you scroll (a trackpad's small steps zoom a little, a mouse
@@ -109,6 +110,7 @@
     const raw = (modifier === "shift" && !e.deltaY ? e.deltaX : e.deltaY) * unit;
     const d = Math.max(-120, Math.min(120, raw)); // one event never jumps more than a notch
     gesture = { img, at: performance.now() };
+    autoShow(img); // the %, 1:1 and the rest show up while zooming
     if (!d) return;
     const st = stateOf(img);
     let target = clamp(st.target * Math.exp(-d * SENSITIVITY));
@@ -122,6 +124,19 @@
   addEventListener("contextmenu", (e) => { lastRightClicked = imageIn(e); }, true);
 
   let host = null, root = null, shownFor = null;
+  // Shown by zooming (not the menu): they go 3 s after the last zoom, unless the pointer is
+  // on them, which keeps them until closed.
+  let auto = false, autoTimer = 0;
+  const AUTO_HIDE_MS = 3000;
+  function autoShow(img) {
+    if (shownFor !== img) {
+      showControls(img);
+      auto = true;
+    }
+    if (!auto) return;
+    clearTimeout(autoTimer);
+    autoTimer = setTimeout(() => { if (auto) hideControls(); }, AUTO_HIDE_MS);
+  }
   const ICON = {
     left: '<path d="M8 4.5 4.5 8 8 11.5"/><path d="M4.5 8H14a5.5 5.5 0 0 1 0 11h-3"/>',
     right: '<path d="M16 4.5 19.5 8 16 11.5"/><path d="M19.5 8H10a5.5 5.5 0 0 0 0 11h3"/>',
@@ -160,6 +175,7 @@
     $(".right").onclick = () => shownFor && rotate(shownFor, 90);
     $(".one").onclick = () => shownFor && reset(shownFor);
     $(".x").onclick = hideControls;
+    $(".bar").addEventListener("pointerenter", () => { auto = false; clearTimeout(autoTimer); }); // touched: stays
     $("input").oninput = (e) => shownFor && zoomTo(shownFor, e.target.value / 100, true);
     // Scrolling over the controls zooms too, no key needed.
     $(".bar").addEventListener("wheel", (e) => {
@@ -173,6 +189,8 @@
 
   function showControls(img) {
     if (!img?.isConnected) return;
+    auto = false;
+    clearTimeout(autoTimer);
     if (!host) buildControls();
     shownFor = img;
     document.documentElement.append(host);
@@ -181,6 +199,8 @@
 
   function hideControls() {
     shownFor = null;
+    auto = false;
+    clearTimeout(autoTimer);
     host?.remove();
   }
 
