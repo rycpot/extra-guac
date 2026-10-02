@@ -17,6 +17,7 @@
     <a href="#redirect">url auto redirect</a>
     <a href="#upload">image upload</a>
     <a href="#remove">remove elements</a>
+    <a href="#highlight">highlight words</a>
     <a href="#backup">backup</a>
   </nav>
 
@@ -281,6 +282,33 @@ Card 4111 1111 1111 1111</textarea>
         later visit — the page is held back until they're hidden, so they never flash, even on slow loads.
         <b>Show removed on this site</b> brings them back with a red dashed outline until you switch it off or restart Chrome.</p>
     </section>
+  </div>
+
+  <div class="pane" id="highlight">
+    <header class="pane-head">
+      <h1>highlight words</h1>
+      <label class="toggle"><input type="checkbox" role="switch" id="hlEnabled"><span>on</span></label>
+    </header>
+    <section id="hlGlobal"></section>
+    <section>
+      <h2>Excluded from global <span class="hint">the global list isn't used on these sites (their own lists still are)</span></h2>
+      <div class="rm-pills wrap" id="hlExcludePills"></div>
+      <div class="add-row"><input type="text" class="text" id="hlExcludeAdd" placeholder="example.com" spellcheck="false"><button type="button" class="btn" id="hlExcludeBtn">exclude</button></div>
+    </section>
+    <section>
+      <h2>Site lists <span class="hint" id="hlSitesCount"></span></h2>
+      <div class="add-row"><input type="text" class="text" id="hlSiteAdd" placeholder="add a site, e.g. example.com" spellcheck="false"><button type="button" class="btn" id="hlSiteBtn">add site</button></div>
+      <div id="hlSites"></div>
+    </section>
+    <section>
+      <h2>How it works</h2>
+      <p class="hint">Words and phrases are matched as whole words, any case, and marked as pages load and change (infinite scroll,
+        in-app navigation, live updates) without touching the page itself. A site's own list is drawn over the global one where both match.
+        Limits: 1,000 global words, 300 per site, 200 sites, 100 characters each; at most 5,000 marks per page.
+        CSV: one word or phrase per row (first column; a "word" header is fine). Import adds to the list and skips duplicates.
+        In the tools: the main switch, <b>exclude &lt;site&gt; from global</b>, and <b>&lt;site&gt; list</b> to switch a site's list off without deleting it.</p>
+    </section>
+    <input type="file" id="hlImportFile" accept=".csv,.txt,text/csv,text/plain" hidden>
   </div>
 
   <div class="pane" id="upload">

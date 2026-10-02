@@ -156,3 +156,22 @@ h2 #layoutReset { margin-left: 6px; padding: 2px 8px; text-transform: none; lett
 .board .card:hover { background: var(--hover); outline: 1px solid var(--line); }
 .board .card.dragging { opacity: .4; }
 .board .cards:empty::after { content: "drop sections here"; color: var(--muted); font-size: 11.5px; margin: auto; }
+
+/* Highlight words */
+.rm-pills.wrap, .hl-pills { flex-wrap: wrap; overflow: visible; }
+.hl-pills { display: flex; gap: 6px; max-height: 180px; overflow-y: auto; padding: 2px 0 6px; scrollbar-width: thin; }
+.hl-pills:empty::after, .rm-pills.wrap:empty::after { content: "none yet"; color: var(--muted); font-size: 12px; }
+.hl-list { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.hl-list:last-child { border-bottom: 0; }
+.hl-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.hl-head b { font-weight: 600; }
+.hl-head .hint { margin: 0; }
+.hl-head .grow { flex: 1; }
+.hl-head .btn { padding: 4px 9px; font-size: 12px; }
+.hl-colors { display: inline-flex; align-items: center; gap: 4px; }
+.hl-colors .sw { width: 16px; height: 16px; border-radius: 50%; border: 0; padding: 0; cursor: pointer; outline-offset: 2px; }
+.hl-colors .sw.on { outline: 2px solid var(--fg); }
+.hl-colors input[type="color"] { width: 22px; height: 20px; border: 0; padding: 0; background: none; cursor: pointer; }
+.hl-colors input.hex { width: 74px; flex: none; padding: 3px 6px; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.hl-note { color: var(--muted); font-size: 12px; min-height: 16px; }
+.hl-list.off .hl-pills { opacity: .5; }
