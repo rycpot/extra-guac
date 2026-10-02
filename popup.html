@@ -256,10 +256,11 @@
 
     <section data-section="remove" class="block" id="removeRow">
       <div class="row tight">
-        <div class="label"><svg><use href="#i-eraser"/></svg>remove elements
+        <div class="label"><svg><use href="#i-eraser"/></svg>remove elements</div>
+        <div class="actions"><span class="status" id="removeStatus"></span>
           <button class="icon-btn small" id="removeSettings" title="All removed elements, by site"><svg><use href="#i-sliders"/></svg></button>
+          <button class="text-btn" id="pickRemove">pick</button>
         </div>
-        <div class="actions"><span class="status" id="removeStatus"></span><button class="text-btn" id="pickRemove">pick</button></div>
       </div>
       <div class="row tight sub-row">
         <span class="status">show removed on this site</span>
@@ -269,10 +270,9 @@
 
     <section data-section="highlight" class="block" id="hlRow">
       <div class="row tight">
-        <div class="label"><svg><use href="#i-marker"/></svg>highlight words
-          <button class="icon-btn small" id="hlSettings" title="Word lists"><svg><use href="#i-sliders"/></svg></button>
-        </div>
+        <div class="label"><svg><use href="#i-marker"/></svg>highlight words</div>
         <div class="actions"><span class="status" id="hlStatus"></span>
+          <button class="icon-btn small" id="hlSettings" title="Word lists"><svg><use href="#i-sliders"/></svg></button>
           <button class="switch" id="hlToggle" role="switch" aria-checked="false" aria-label="Highlight words, on or off everywhere"></button>
         </div>
       </div>
@@ -366,10 +366,11 @@
     <div class="panel" id="panel-backup" hidden>
     <section data-section="drive" class="block" id="driveRow">
       <div class="row tight">
-        <div class="label"><svg><use href="#i-cloud"/></svg>drive backup
+        <div class="label"><svg><use href="#i-cloud"/></svg>drive backup</div>
+        <div class="actions"><span class="status" id="driveStatus"></span>
           <button class="icon-btn small" id="driveSettings" title="Drive setup, snapshots and restore"><svg><use href="#i-sliders"/></svg></button>
+          <button class="text-btn" id="driveNow">sync now</button>
         </div>
-        <div class="actions"><span class="status" id="driveStatus"></span><button class="text-btn" id="driveNow">sync now</button></div>
       </div>
       <div class="row tight sub-row">
         <span class="status">auto-sync</span>
