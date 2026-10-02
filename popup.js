@@ -147,7 +147,9 @@ function initScreenshot() {
         const res = await send("shot", { mode });
         if (mode === "area") return closePopup(); // the page shows the selection overlay
         const n = res.files.length;
-        toast(n > 1 ? `Saved ${n} parts to Downloads` : `Saved ${res.files[0].split("/").pop()}`);
+        const saved = n > 1 ? `Saved ${n} parts to Downloads` : `Saved ${res.files[0].split("/").pop()}`;
+        if (res.truncated) toast(`${saved}. The page is longer than ${res.screens} screens, so only the top part was captured.`, true);
+        else toast(saved);
       } catch (err) {
         fail(/Cannot access|cannot be scripted|chrome:\/\//i.test(err.message)
           ? new Error("Chrome doesn't allow capturing this page") : err);

@@ -59,8 +59,10 @@ async function captureFullPage(tab) {
 
   const page = await run(pageBegin);
   const slices = [];
+  let truncated = false; // stopped at MAX_SCREENS before reaching the end of the page
   try {
-    for (let y = 0, i = 0; i < MAX_SCREENS; i++) {
+    for (let y = 0, i = 0; ; i++) {
+      if (i >= MAX_SCREENS) { truncated = true; break; }
       const pos = await run(pageScrollTo, [y, i > 0]);
       if (i > 0 && pos.y <= slices[slices.length - 1].y) break; // couldn't scroll any further
       slices.push({ y: pos.y, bmp: await toBitmap(await grab(tab.windowId)) });
@@ -86,7 +88,7 @@ async function captureFullPage(tab) {
     for (const s of slices) ctx.drawImage(s.bmp, 0, Math.round(s.y * scale) - top);
     files.push(await saveShot(await canvasToDataUrl(canvas, shot), tab, shot, parts > 1 ? p + 1 : 0));
   }
-  return { files };
+  return { files, truncated, screens: MAX_SCREENS };
 }
 
 // ---- Functions injected into the page (must be self-contained) ----
