@@ -36,6 +36,7 @@
     const keyword = find(keywords);
     if (!keyword) return;
     reported = true; // once per page load; the background decides what happens next
+    if (!chrome.runtime?.id) return void observer?.disconnect(); // cut off by an extension reload or update
     chrome.runtime.sendMessage({ type: "refreshHit", keyword }).catch(() => {});
   }
 

@@ -56,7 +56,7 @@
     return `${el.localName} ${Math.round(r.width)}×${Math.round(r.height)}`;
   }
 
-  const send = (type, payload = {}) => chrome.runtime.sendMessage({ type, ...payload }).catch(() => null);
+  const send = (type, payload = {}) => (chrome.runtime?.id ? chrome.runtime.sendMessage({ type, ...payload }).catch(() => null) : Promise.resolve(null));
 
   window.__ttRemovePicker = () => {
     window.__ttRemovePicker.active?.();

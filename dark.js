@@ -234,8 +234,12 @@
 
   // Stays inverted if the site is on the "darken anyway" list.
   let checking = false;
+  // After the extension is reloaded or updated, this copy is cut off from it (no
+  // chrome.runtime): it leaves the page as it is and stops checking.
+  const cutOff = () => !chrome.runtime?.id;
+
   function check() {
-    if (checking || !document.body) return;
+    if (checking || !document.body || cutOff()) return;
     const path = location.pathname;
     if (native) return keepNative(path);
     const dark = alreadyDark();
@@ -249,7 +253,9 @@
       return;
     }
     checking = true;
-    chrome.runtime.sendMessage({ type: "darkNative" }).then(
+    let asked;
+    try { asked = chrome.runtime.sendMessage({ type: "darkNative" }); } catch { asked = Promise.reject(); }
+    asked.then(
       (r) => setSelfOff(!r?.keep),
       () => setSelfOff(true),
     ).finally(() => (checking = false));
