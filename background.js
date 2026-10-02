@@ -1,7 +1,7 @@
 importScripts(
   "pii-rules.js", "shared.js", "redirect-rules.js",
   "bg-capture.js", "bg-refresh.js", "bg-shortener.js", "bg-media.js", "bg-pickers.js", "bg-redirect.js", "bg-upload.js",
-  "bg-remove.js", "bg-dark.js", "bg-backup.js", "bg-highlight.js",
+  "bg-remove.js", "bg-dark.js", "bg-backup.js", "bg-highlight.js", "bg-clip.js",
 );
 
 // Messages from the popup, settings window, page overlays and the offscreen document.
@@ -21,6 +21,7 @@ const handlers = {
   ...darkHandlers,
   ...backupHandlers,
   ...hlHandlers,
+  ...clipHandlers,
 };
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
@@ -68,6 +69,13 @@ function syncMenus(s) {
       chrome.contextMenus.create({ id: "upload", title: "Upload image to", contexts: ["image"] });
       for (const h of hosts) chrome.contextMenus.create({ id: `upload:${h}`, parentId: "upload", title: h, contexts: ["image"] });
     }
+    // Pinned clipboard entries (bg-clip.js), when that's switched on.
+    const pins = await clipMenuItems(s);
+    if (pins.length) {
+      const contexts = ["page", "editable", "selection", "link", "image"];
+      chrome.contextMenus.create({ id: "clippin", title: "Paste pinned", contexts });
+      for (const p of pins) chrome.contextMenus.create({ id: p.id, parentId: "clippin", title: p.title, contexts });
+    }
   }).catch((err) => console.error("menus", err));
   return menuSync;
 }
@@ -82,6 +90,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (!tab) return;
   if (info.menuItemId === "redirect") return runManualRedirect(tab);
+  if (String(info.menuItemId).startsWith("clippin:")) return onClipMenu(info, tab);
   const m = String(info.menuItemId).match(/^upload:(\w+)$/);
   if (m && info.srcUrl) uploadImage(m[1], info.srcUrl, tab);
 });

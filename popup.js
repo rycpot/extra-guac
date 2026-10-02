@@ -42,6 +42,7 @@ async function init() {
   initRedirect();
   initUploads();
   initBackup();
+  initClipboard();
 }
 
 // Puts each section in the tab and order chosen in settings → general → tools layout.
@@ -895,4 +896,84 @@ function initBackup() {
     render();
   };
   $("exportLocal").onclick = () => send("backupExportLocal").then(() => closePopup(), fail);
+}
+
+// ---- Clipboard history ----
+
+function initClipboard() {
+  let enabled = false, query = "";
+  const copy = (text) => navigator.clipboard.writeText(text).then(() => toast("Copied"), fail);
+  const oneLine = (t) => t.replace(/\s+/g, " ").trim();
+
+  async function render() {
+    ({ clip: { enabled } } = await TT.getSettings());
+    setSwitch($("clipToggle"), enabled);
+    const { items } = await send("clipList").catch(() => ({ items: [] }));
+    const unpinned = items.filter((e) => !e.pinned).length, pinned = items.length - unpinned;
+    $("clipStatus").textContent = enabled ? `${unpinned} saved${pinned ? ` · ${pinned} pinned` : ""}` : "";
+    const latest = items[0];
+    $("clipLatest").hidden = !enabled || !latest;
+    if (latest) {
+      $("clipLatest").querySelector(".link-text").textContent = oneLine(latest.text);
+      $("clipLatest").querySelector("[data-copy]").onclick = () => copy(latest.text);
+    }
+    if (!$("clipSheet").hidden) renderList(items);
+  }
+
+  function renderList(items) {
+    const q = query.toLowerCase();
+    const shown = items.filter((e) => !q || e.text.toLowerCase().includes(q) || e.site.includes(q))
+      .sort((a, b) => (b.pinned - a.pinned) || (b.at - a.at));
+    const list = $("clipList");
+    if (!shown.length) {
+      list.innerHTML = `<li class="empty"></li>`;
+      list.firstChild.textContent = items.length ? "Nothing matches" : enabled ? "Copy some text on a page and it shows up here" : "Switch clipboard history on to start saving copied text";
+      return;
+    }
+    list.replaceChildren(...shown.map((e) => {
+      const li = document.createElement("li");
+      li.className = e.pinned ? "pinned" : "";
+      li.title = "Click to copy";
+      li.innerHTML = `<div class="meta"><span class="clip-text"></span><span class="clip-meta"></span></div>
+        <div class="actions">
+          <button class="icon-btn small pin" title="${e.pinned ? "Unpin" : "Pin: kept for good"}"><svg><use href="#i-pin"/></svg></button>
+          <button class="icon-btn small del" title="Delete"><svg><use href="#i-close"/></svg></button>
+        </div>`;
+      li.querySelector(".clip-text").textContent = e.text.length > 600 ? `${e.text.slice(0, 600)}…` : e.text;
+      li.querySelector(".clip-meta").textContent = `${e.site} · ${ago(e.at)} · ${e.text.length.toLocaleString()} chars${e.trimmed ? " (trimmed)" : ""}`;
+      li.querySelector(".pin").classList.toggle("on", e.pinned);
+      li.onclick = (ev) => { if (!ev.target.closest("button")) copy(e.text); };
+      li.querySelector(".pin").onclick = () => send("clipPin", { id: e.id, pinned: !e.pinned }).catch(fail);
+      li.querySelector(".del").onclick = () => send("clipDelete", { id: e.id }).catch(fail);
+      return li;
+    }));
+  }
+
+  render();
+  chrome.storage.onChanged.addListener((c, area) => area === "local" && (c.clipIndex || c.tt) && render());
+  $("clipToggle").onclick = async () => {
+    const on = $("clipToggle").getAttribute("aria-checked") !== "true";
+    setSwitch($("clipToggle"), on);
+    await TT.updateSettings({ clip: { enabled: on } }).catch(fail);
+    if (on) toast("Copies on web pages are saved from now on");
+  };
+  $("clipListBtn").onclick = () => { $("clipSheet").hidden = false; query = $("clipSearch").value = ""; render(); $("clipSearch").focus(); };
+  $("clipClose").onclick = () => ($("clipSheet").hidden = true);
+  $("clipSearch").oninput = () => { query = $("clipSearch").value.trim(); render(); };
+  $("clipSettings").onclick = () => send("openSettings", { section: "clipboard" }).then(() => closePopup(), fail);
+  // Clearing asks for a second click, like the other lists.
+  let armed = 0;
+  $("clipClear").onclick = () => {
+    const b = $("clipClear");
+    if (!b.classList.contains("armed")) {
+      b.classList.add("armed", "danger");
+      b.textContent = "sure?";
+      armed = setTimeout(() => { b.classList.remove("armed"); b.textContent = "clear"; }, 3000);
+      return;
+    }
+    clearTimeout(armed);
+    b.classList.remove("armed");
+    b.textContent = "clear";
+    send("clipClear").catch(fail);
+  };
 }

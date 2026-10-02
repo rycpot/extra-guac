@@ -227,6 +227,7 @@ function trimBookmarks(node) {
 
 async function buildSnapshot(withBookmarks = true) {
   const data = await chrome.storage.local.get(BACKUP_KEYS);
+  data.clips = await clipExport(); // clipboard history: one key per entry (bg-clip.js)
   const snap = { app: "Tab Toolkit", format: 1, version: chrome.runtime.getManifest().version, createdAt: new Date().toISOString(), data };
   if (withBookmarks) snap.bookmarks = (await chrome.bookmarks.getTree())[0].children.map(trimBookmarks);
   return snap;
@@ -406,6 +407,7 @@ async function applyData(data) {
   }
   if (remove.length) await chrome.storage.local.remove(remove);
   await chrome.storage.local.set(set);
+  if (Array.isArray(data.clips)) await clipImport(data.clips); // older backups have none: keep what's there
 }
 
 // Bookmarks come back next to the current ones, in a new folder under "Other bookmarks".

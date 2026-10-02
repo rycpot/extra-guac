@@ -18,6 +18,7 @@
     <a href="#upload">image upload</a>
     <a href="#remove">remove elements</a>
     <a href="#highlight">highlight words</a>
+    <a href="#clipboard">clipboard history</a>
     <a href="#backup">backup</a>
   </nav>
 
@@ -309,6 +310,47 @@ Card 4111 1111 1111 1111</textarea>
         In the tools: the main switch, <b>exclude &lt;site&gt; from global</b>, and <b>&lt;site&gt; list</b> to switch a site's list off without deleting it.</p>
     </section>
     <input type="file" id="hlImportFile" accept=".csv,.txt,text/csv,text/plain" hidden>
+  </div>
+
+  <div class="pane" id="clipboard">
+    <header class="pane-head">
+      <h1>clipboard history</h1>
+      <label class="toggle"><input type="checkbox" role="switch" data-path="clip.enabled"><span>on</span></label>
+    </header>
+    <section>
+      <h2>Keep</h2>
+      <div class="row">
+        <label><input type="radio" name="clipLimit" value="50" data-path="clip.limit" data-number> last 50</label>
+        <label><input type="radio" name="clipLimit" value="100" data-path="clip.limit" data-number> 100</label>
+        <label><input type="radio" name="clipLimit" value="200" data-path="clip.limit" data-number> 200</label>
+        <label><input type="radio" name="clipLimit" value="500" data-path="clip.limit" data-number> 500</label>
+      </div>
+      <div class="row">
+        <span class="hint" style="margin:0">and delete entries older than</span>
+        <label><input type="radio" name="clipAge" value="0" data-path="clip.maxAgeDays" data-number> never</label>
+        <label><input type="radio" name="clipAge" value="1" data-path="clip.maxAgeDays" data-number> 1 day</label>
+        <label><input type="radio" name="clipAge" value="7" data-path="clip.maxAgeDays" data-number> 7 days</label>
+        <label><input type="radio" name="clipAge" value="30" data-path="clip.maxAgeDays" data-number> 30 days</label>
+      </div>
+      <p class="hint">Pinned entries are kept for good and don't count towards the limit. Each entry holds up to 20,000 characters;
+        longer copies are trimmed. Copying the same text again moves it to the top.</p>
+    </section>
+    <section>
+      <h2>Right-click menu</h2>
+      <label class="row"><input type="checkbox" data-path="clip.menu"> Show pinned entries in the right-click menu (<i>Paste pinned</i>)</label>
+      <p class="hint">Up to 20 pinned entries. Choosing one types it into the field you right-clicked, or copies it when you right-clicked anywhere else.</p>
+    </section>
+    <section>
+      <h2>Never record on <span class="hint">sites where copied text isn't saved, e.g. your bank or password manager</span></h2>
+      <div class="rm-pills wrap" id="clipExcludePills"></div>
+      <div class="add-row"><input type="text" class="text" id="clipExcludeAdd" placeholder="example.com" spellcheck="false"><button type="button" class="btn" id="clipExcludeBtn">add</button></div>
+    </section>
+    <section>
+      <h2>History <span class="hint" id="clipCount"></span> <button type="button" class="btn ghost" id="clipClearAll">clear (keeps pinned)</button></h2>
+      <p class="hint">Saved: text you copy or cut on web pages with the keyboard, the right-click menu or a site's copy button.
+        Not saved: copies in other apps or on Chrome's own pages, anything from password and one-time-code fields, and copies on the sites above.
+        The history stays in this browser and is part of Drive backups and the settings file. Browse, search, pin and copy it from the tools.</p>
+    </section>
   </div>
 
   <div class="pane" id="upload">
