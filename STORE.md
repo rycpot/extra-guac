@@ -87,7 +87,7 @@ Then tick all three statements:
 - I do not use or transfer user data for purposes that are unrelated to my item's single purpose.
 - I do not use or transfer user data to determine creditworthiness or for lending purposes.
 
-**Privacy policy URL:** https://github.com/rycpot/tab-toolkit/blob/claude/stoic-meitner-y26kmg/PRIVACY.md. The repository must be public for reviewers to open it; otherwise host `PRIVACY.md` somewhere public, such as GitHub Pages or a gist.
+**Privacy policy URL:** https://github.com/rycpot/extra-guac/blob/claude/stoic-meitner-y26kmg/PRIVACY.md. The repository must be public for reviewers to open it; otherwise host `PRIVACY.md` somewhere public, such as GitHub Pages or a gist.
 
 ## Before submitting
 

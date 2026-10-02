@@ -54,4 +54,4 @@ If this policy changes, the new version will be published here with a new date.
 
 ## Contact
 
-Questions about this policy: open an issue at https://github.com/rycpot/tab-toolkit/issues.
+Questions about this policy: open an issue at https://github.com/rycpot/extra-guac/issues.
