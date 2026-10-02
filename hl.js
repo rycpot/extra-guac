@@ -4,8 +4,10 @@
 // Uses Chrome's highlight API (CSS.highlights): text ranges are coloured without
 // touching the page's HTML, so nothing can break and removing them is instant. Each list
 // becomes one pattern built like a tree of shared beginnings, so a long list costs
-// about as much as a short one. Work runs in small slices when the browser is idle and
-// pauses while the tab is hidden. Lists live in storage.local "hl" (see bg-highlight.js).
+// about as much as a short one. Work runs in short slices back to back (the page stays
+// responsive) and pauses while the tab is hidden. Switching one list on or off only
+// touches that list: its marks go at once, or the page is scanned for it alone, and the
+// other list's marks stay put. Lists live in storage.local "hl" (see bg-highlight.js).
 (() => {
   if (window.__ttHl || !globalThis.CSS?.highlights || !globalThis.Highlight) return;
   window.__ttHl = true;
@@ -16,9 +18,9 @@
   const covers = (s) => host === s || host.endsWith(`.${s}`);
   const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEXTAREA", "TEMPLATE", "SELECT", "OPTION", "TITLE", "HEAD"]);
 
-  let groups = []; // { name, color, re, marks: Highlight }
-  let total = 0, signature = "";
-  let nodeMarks = new WeakMap(); // text node → its ranges, so a changed node is redone
+  let groups = []; // { name, key, color, re, marks: Highlight }, the site's list first
+  let nodeMarks = new WeakMap(); // text node → Map(group → its ranges there), so a changed node is redone
+  const total = () => groups.reduce((n, g) => n + g.marks.size, 0);
   const styled = new Set(); // document and open shadow roots carrying the colours
 
   // ---- Lists → patterns ----------------------------------------------------------------
@@ -48,9 +50,9 @@
     const out = [];
     const siteKey = Object.keys(hl.sites || {}).filter(covers).sort((a, b) => b.length - a.length)[0];
     const site = siteKey && hl.sites[siteKey];
-    if (site?.on && site.words?.length) out.push({ name: "tt-hl-site", color: site.color, partial: !!site.partial, words: site.words });
+    if (site?.on && site.words?.length) out.push({ name: "tt-hl-site", color: site.color, partial: !!site.partial, words: site.words, key: `${siteKey}|${!!site.partial}|${site.words.join("\n")}` });
     if (hl.global?.on && hl.global.words?.length && !(hl.exclude || []).some(covers)) {
-      out.push({ name: "tt-hl-global", color: hl.global.color, partial: !!hl.global.partial, words: hl.global.words });
+      out.push({ name: "tt-hl-global", color: hl.global.color, partial: !!hl.global.partial, words: hl.global.words, key: `${!!hl.global.partial}|${hl.global.words.join("\n")}` });
     }
     return out;
   }
@@ -124,7 +126,7 @@
 
   // ---- Scanning --------------------------------------------------------------------------
 
-  const queue = []; // TreeWalkers still to go through
+  const queue = []; // { walker, groups }: page parts still to go through, and for which lists
   let scheduled = false;
 
   function accept(node) {
@@ -136,9 +138,9 @@
     return node.data.trim().length > 1 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
   }
 
-  function enter(root) {
-    if (!groups.length) return;
-    queue.push(document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, accept));
+  function enter(root, gs = groups) {
+    if (!gs.length) return;
+    queue.push({ walker: document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, accept), groups: gs });
     schedule();
   }
 
@@ -148,48 +150,53 @@
     observer.observe(shadow, OBSERVE);
   }
 
-  function mark(text) {
-    unmark(text);
-    if (total >= MAX_MARKS) return;
-    const ranges = [];
-    for (const g of groups) {
-      g.re.lastIndex = 0;
+  function mark(text, gs = groups) {
+    unmark(text, gs);
+    let left = MAX_MARKS - total();
+    if (left <= 0) return;
+    let mine = nodeMarks.get(text);
+    for (const g of gs) {
+      const ranges = [];
       for (const m of text.data.matchAll(g.re)) {
-        if (total >= MAX_MARKS) break;
+        if (left-- <= 0) break;
         const r = new Range();
         r.setStart(text, m.index);
         r.setEnd(text, m.index + m[0].length);
         g.marks.add(r);
-        ranges.push([g, r]);
-        total++;
+        ranges.push(r);
       }
+      if (ranges.length) (mine ??= nodeMarks.set(text, new Map()).get(text)).set(g, ranges);
     }
-    if (ranges.length) nodeMarks.set(text, ranges);
   }
 
-  function unmark(text) {
-    const ranges = nodeMarks.get(text);
-    if (!ranges) return;
-    for (const [g, r] of ranges) if (g.marks.delete(r)) total--;
-    nodeMarks.delete(text);
+  function unmark(text, gs = groups) {
+    const mine = nodeMarks.get(text);
+    if (!mine) return;
+    for (const g of gs) {
+      for (const r of mine.get(g) || []) g.marks.delete(r);
+      mine.delete(g);
+    }
+    if (!mine.size) nodeMarks.delete(text);
   }
 
+  // Short slices one after another: a big page is done in a fraction of a second, and the
+  // page gets the main thread back between slices.
   function schedule() {
     if (scheduled || document.hidden || !queue.length) return;
     scheduled = true;
-    (window.requestIdleCallback || ((fn) => setTimeout(fn, 50)))(work, { timeout: 500 });
+    setTimeout(work, 0);
   }
 
   function work() {
     scheduled = false;
     if (document.hidden) return;
-    if (!document.getElementById("tt-hl-style")) style(document); // the page replaced <head>
+    if (groups.length && !document.getElementById("tt-hl-style")) style(document); // the page replaced <head>
     const end = performance.now() + SLICE_MS;
     while (queue.length && performance.now() < end) {
-      const walker = queue[0];
+      const { walker, groups: gs } = queue[0];
       let node, n = 0;
       while ((node = walker.nextNode())) {
-        mark(node);
+        mark(node, gs);
         if (++n % 50 === 0 && performance.now() >= end) break;
       }
       if (!node) queue.shift();
@@ -204,7 +211,7 @@
     lastPrune = performance.now();
     for (const g of groups) {
       // Text the page replaced: the range is left empty or points at text that's gone.
-      for (const r of g.marks) if (r.collapsed || !r.startContainer.isConnected) { g.marks.delete(r); total--; }
+      for (const r of g.marks) if (r.collapsed || !r.startContainer.isConnected) g.marks.delete(r);
     }
   }
 
@@ -240,34 +247,45 @@
 
   // ---- Settings ----------------------------------------------------------------------------
 
-  function clear() {
-    for (const g of groups) { g.marks.clear(); CSS.highlights.delete(g.name); }
-    groups = [];
-    total = 0;
-    nodeMarks = new WeakMap();
-    changed.clear();
-    queue.length = 0;
-    for (const scope of styled) (scope === document ? document.getElementById("tt-hl-style") : scope.querySelector(":scope > style[data-tt-hl]"))?.remove();
-    styled.clear();
+  function drop(g) {
+    g.marks.clear();
+    CSS.highlights.delete(g.name);
+    for (const item of queue) item.groups = item.groups.filter((x) => x !== g);
   }
 
+  // Only what changed is redone: a list switched off loses its marks at once; a list switched
+  // on (or with other words) is looked for on its own; a new colour is just restyled.
   function apply(hl) {
     const lists = listsFor(hl);
-    const sig = JSON.stringify(lists);
-    if (sig === signature) return;
-    signature = sig;
-    clear();
-    if (!lists.length) return observer.disconnect();
-    groups = lists.map((l, i) => {
+    const keep = [], added = [];
+    for (const g of groups) {
+      const l = lists.find((x) => x.name === g.name);
+      if (l && l.key === g.key) { g.color = l.color; keep.push(g); }
+      else drop(g);
+    }
+    for (const l of lists) {
+      if (keep.some((g) => g.name === l.name)) continue;
       const marks = new Highlight();
-      marks.priority = lists.length - i; // the site's own list wins where both match
       CSS.highlights.set(l.name, marks);
-      return { name: l.name, color: l.color, re: pattern(l.words, l.partial), marks };
-    });
-    style(document);
+      added.push({ name: l.name, key: l.key, color: l.color, re: pattern(l.words, l.partial), marks });
+    }
+    groups = lists.map((l) => keep.find((g) => g.name === l.name) || added.find((g) => g.name === l.name));
+    groups.forEach((g, i) => (g.marks.priority = groups.length - i)); // the site's own list wins where both match
+    for (let i = queue.length - 1; i >= 0; i--) if (!queue[i].groups.length) queue.splice(i, 1);
+
+    if (!groups.length) {
+      changed.clear();
+      queue.length = 0;
+      nodeMarks = new WeakMap();
+      for (const scope of styled) (scope === document ? document.getElementById("tt-hl-style") : scope.querySelector(":scope > style[data-tt-hl]"))?.remove();
+      styled.clear();
+      return observer.disconnect();
+    }
+    [document, ...[...styled].filter((x) => x !== document)].forEach(style);
+    if (keep.length) return void (added.length && document.body && enter(document.body, added));
     observer.disconnect();
     observer.observe(document.documentElement, OBSERVE);
-    if (document.body) enter(document.body);
+    if (document.body) enter(document.body, added);
   }
 
   // Dark mode switching on or off changes how colours have to be drawn.
@@ -277,7 +295,7 @@
   document.addEventListener("visibilitychange", schedule);
 
   // For the popup: how many marks are on the page now.
-  window.__ttHlCount = () => (prune(true), total);
+  window.__ttHlCount = () => (prune(true), total());
 
   chrome.storage.local.get("hl").then(({ hl }) => apply(hl));
   chrome.storage.onChanged.addListener((c, area) => {
