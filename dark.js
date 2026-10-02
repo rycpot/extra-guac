@@ -59,9 +59,45 @@
     }
     return total ? light / total : 0;
   }
-  // Dark when most of what's on screen is dark: a 7×6 grid of points over the viewport.
-  // Too few readable points (pictures everywhere) or a split screen: decide by the text.
+  // What the page says about itself: a strict <meta name="color-scheme">, color-scheme on
+  // the root, or a dark/light class or data-theme/-mode/-color-mode on html or body.
+  // true = dark, false = light, null = it doesn't say.
+  function declared() {
+    const meta = document.querySelector('meta[name="color-scheme"]')?.content.trim().toLowerCase();
+    if (meta === "dark" || meta === "only dark") return true;
+    if (meta === "light" || meta === "only light") return false;
+    if (getComputedStyle(root).colorScheme.trim() === "dark") return true;
+    for (const el of [root, document.body]) {
+      if (!el) continue;
+      if (el.classList.contains("dark")) return true;
+      if (el.classList.contains("light")) return false;
+      for (const key of ["theme", "mode", "colorMode", "colorScheme"]) {
+        const v = el.dataset[key]?.toLowerCase();
+        if (v === "dark") return true;
+        if (v === "light") return false;
+      }
+    }
+    return null;
+  }
+  // Too early to judge: no real content yet, or no styles loaded.
+  // (Content can be all position:fixed, which leaves body 0 px tall, so look at the boxes.)
+  function ready() {
+    const body = document.body;
+    if (!body) return false;
+    const content = [...body.children].some((c) => {
+      if (/^(SCRIPT|STYLE|LINK|NOSCRIPT|TEMPLATE)$/.test(c.tagName)) return false;
+      const r = c.getBoundingClientRect();
+      return r.width >= 32 && r.height >= 32;
+    });
+    return content && (document.styleSheets.length > 0 || !!root.style.backgroundColor || !!body.style.backgroundColor);
+  }
+  // Dark when it says so; otherwise when nearly all of what's on screen is dark (a 7×6 grid
+  // of points over the viewport; one light page area among dark ones is enough to call it
+  // light). Too few readable points (pictures, canvas): decide by the text.
   function alreadyDark() {
+    const said = declared();
+    if (said !== null) return said;
+    if (!ready()) return null;
     let dark = 0, known = 0;
     for (let i = 0; i < 7; i++) {
       for (let j = 0; j < 6; j++) {
@@ -71,8 +107,7 @@
         if (l < 0.4) dark++;
       }
     }
-    const share = known ? dark / known : 0;
-    if (known >= 10 && (share >= 0.65 || share <= 0.35)) return share >= 0.65;
+    if (known >= 6) return dark / known >= 0.8;
     return textLight() > 0.6;
   }
 
@@ -101,6 +136,7 @@
   function check() {
     if (checking || !document.body) return;
     const path = location.pathname, dark = alreadyDark();
+    if (dark === null) return; // nothing to judge yet; the later checks will
     window.__ttDarkPage = dark;
     remember(path, dark);
     if (!dark) return setSelfOff(false);
