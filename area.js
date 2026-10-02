@@ -1,6 +1,7 @@
 // Area screenshot overlay: drag a box over the visible page, resize it with the
 // handles or move it by dragging inside, then confirm with ✓ (or Enter) at its
 // bottom-right. ✕ or Esc cancels. Runs in a closed shadow root so page CSS can't touch it.
+// Injected by bg-capture.js (startAreaSelection), which takes the shot on "areaSelected".
 (() => {
   if (window.__ttArea) return;
   window.__ttArea = true;

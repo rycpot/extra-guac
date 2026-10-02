@@ -1,4 +1,5 @@
 // Blur section of the settings window (kept in its own scope; see settings.js for the rest).
+// Loaded by settings.html after pii-rules.js (PIIRules), before settings.js.
 (() => {
 const R = PIIRules;
 const $ = (id) => document.getElementById(id);

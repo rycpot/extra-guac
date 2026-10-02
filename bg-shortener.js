@@ -1,6 +1,7 @@
 // URL shortener: cutt.ly, tinyurl.com or dub.co, with API keys from settings.
 // None of the APIs reliably report remaining quota, so links are counted locally
 // per service per calendar month ("shortCounts") and kept in "shortHistory".
+// Loaded by background.js; shortenerHandlers join its message handlers.
 
 const shortenerHandlers = {
   shorten: ({ service, url }) => shorten(service, url),
