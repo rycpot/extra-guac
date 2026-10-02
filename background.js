@@ -72,9 +72,13 @@ function syncMenus(s) {
     // Pinned clipboard entries (bg-clip.js), when that's switched on.
     const pins = await clipMenuItems(s);
     if (pins.length) {
-      const contexts = ["editable"]; // only where the text can actually be typed in
-      chrome.contextMenus.create({ id: "clippin", title: "Paste pinned", contexts });
-      for (const p of pins) chrome.contextMenus.create({ id: p.id, parentId: "clippin", title: p.title, contexts });
+      // Only where the text can actually be typed in: text fields on web pages and local
+      // files. Other extensions' pages and frames and Chrome's own pages are off limits to
+      // extensions, so the menu isn't offered there.
+      const contexts = ["editable"];
+      const documentUrlPatterns = ["http://*/*", "https://*/*", "file:///*"];
+      chrome.contextMenus.create({ id: "clippin", title: "Paste pinned", contexts, documentUrlPatterns });
+      for (const p of pins) chrome.contextMenus.create({ id: p.id, parentId: "clippin", title: p.title, contexts, documentUrlPatterns });
     }
   }).catch((err) => console.error("menus", err));
   return menuSync;

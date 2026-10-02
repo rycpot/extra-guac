@@ -193,7 +193,14 @@ async function onClipMenu(info, tab) {
     }).catch(() => []);
     if (res?.result) return;
   }
-  await copyToClipboard(entry.text, tab);
+  // Couldn't type it in (e.g. a field the page keeps out of reach): copy it and say so.
+  const copied = await copyToClipboard(entry.text, tab);
+  chrome.notifications.create(`clippin-${Date.now()}`, {
+    type: "basic",
+    iconUrl: "icons/icon128.png",
+    title: copied ? "Copied instead" : "Couldn't paste here",
+    message: copied ? `Couldn't type into that field. Press ${/Mac/.test(navigator.userAgent) ? "⌘V" : "Ctrl+V"} to paste it.` : "That field can't be reached from an extension.",
+  });
 }
 
 chrome.storage.onChanged.addListener(async (c, area) => {
