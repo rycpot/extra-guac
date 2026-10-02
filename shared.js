@@ -31,7 +31,33 @@
     // everywhere except exclude; force = dark pages darkened (inverted) anyway.
     dark: { enabled: false, mode: "sites", sites: [], exclude: [], force: [] },
     upload: { catbox: false, x02: false, catboxUserhash: "", x02Key: "", x02Verified: false },
+    // Which popup tab each section is in, top to bottom (settings → general → tools layout).
+    layout: {
+      tools: ["screenshot", "blur", "dark", "refresh", "autoRefresh", "shortener", "volume", "awake"],
+      page: ["color", "element", "font", "remove", "redirect", "upload"],
+      backup: ["drive", "settingsFile"],
+    },
   };
+
+  // Popup tabs that hold sections, and the sections' names.
+  const PANELS = { tools: "tools", page: "page", backup: "backup" };
+  const SECTIONS = {
+    screenshot: "screenshot", blur: "privacy blur", dark: "dark mode", refresh: "refresh", autoRefresh: "auto-refresh",
+    shortener: "URL shorten", volume: "volume", awake: "awake", color: "what color?", element: "what element?",
+    font: "what font?", remove: "remove elements", redirect: "URL auto redirect", upload: "upload images",
+    drive: "drive backup", settingsFile: "settings file",
+  };
+
+  // A saved layout with unknown sections dropped and any missing ones (new in an update)
+  // added to the end of their usual tab.
+  function layoutOf(saved) {
+    const out = {}, seen = new Set();
+    for (const p of Object.keys(PANELS)) {
+      out[p] = (Array.isArray(saved?.[p]) ? saved[p] : []).filter((id) => SECTIONS[id] && !seen.has(id) && seen.add(id));
+    }
+    for (const [p, ids] of Object.entries(DEFAULTS.layout)) for (const id of ids) if (!seen.has(id)) out[p].push(id);
+    return out;
+  }
 
   const MAX_KEYWORDS = 20;
 
@@ -80,5 +106,5 @@
     });
   }
 
-  globalThis.TT = { DEFAULTS, MAX_KEYWORDS, SHORTENERS, merge, getSettings, updateSettings, monthKey, cleanFolder, applyTheme };
+  globalThis.TT = { DEFAULTS, MAX_KEYWORDS, SHORTENERS, PANELS, SECTIONS, layoutOf, merge, getSettings, updateSettings, monthKey, cleanFolder, applyTheme };
 })();

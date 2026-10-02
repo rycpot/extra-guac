@@ -9,11 +9,17 @@ const closePopup = () => inPopup && window.close();
 
 TT.applyTheme();
 init();
+setTimeout(() => $("main").classList.add("laid-out"), 600); // never stay blank if setup fails
 
 async function init() {
   [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   settings = await TT.getSettings();
   document.body.classList.toggle("side-panel", !inPopup);
+  applyLayout(settings.layout);
+  chrome.storage.onChanged.addListener((c, area) => {
+    const layout = (tt) => JSON.stringify(TT.merge(TT.DEFAULTS, tt).layout);
+    if (area === "local" && c.tt && layout(c.tt.oldValue) !== layout(c.tt.newValue)) applyLayout(TT.merge(TT.DEFAULTS, c.tt.newValue).layout);
+  });
   if (!inPopup) followActiveTab();
   const isWeb = /^https?:/i.test(tab?.url || "");
 
@@ -35,6 +41,23 @@ async function init() {
   initRedirect();
   initUploads();
   initBackup();
+}
+
+// Puts each section in the tab and order chosen in settings → general → tools layout.
+function applyLayout(saved) {
+  try {
+    for (const [panel, ids] of Object.entries(TT.layoutOf(saved))) {
+      const box = $(`panel-${panel}`);
+      box.querySelector(".empty-panel")?.remove();
+      for (const id of ids) {
+        const section = document.querySelector(`[data-section="${id}"]`);
+        if (section) box.append(section);
+      }
+      if (!ids.length) box.insertAdjacentHTML("beforeend", `<p class="empty-panel">Nothing here yet. Drag sections into this tab in settings → general.</p>`);
+    }
+  } finally {
+    $("main").classList.add("laid-out");
+  }
 }
 
 // Side panel: start over for the tab you switch to, or when this tab goes to another page.

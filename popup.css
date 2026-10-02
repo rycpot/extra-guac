@@ -212,3 +212,7 @@ output { width: 38px; text-align: right; color: var(--text2); font-variant-numer
 .host[aria-pressed="true"] i { background: var(--green); }
 .host:disabled { opacity: .45; cursor: default; }
 .host:not(:disabled):hover { color: var(--text); }
+
+/* Sections are placed by the saved layout before the tabs show. */
+main:not(.laid-out) .panel { visibility: hidden; }
+.empty-panel { margin: 18px 4px; color: var(--text3); font-size: 12px; text-align: center; }

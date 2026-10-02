@@ -60,7 +60,7 @@
     </header>
 
     <div class="panel" id="panel-tools">
-    <section class="row">
+    <section data-section="screenshot" class="row">
       <div class="label"><svg><use href="#i-camera"/></svg>screenshot</div>
       <div class="actions">
         <button class="text-btn" data-shot="area"><svg><use href="#i-area"/></svg>area</button>
@@ -69,7 +69,7 @@
       </div>
     </section>
 
-    <section class="row">
+    <section data-section="blur" class="row">
       <div class="label"><svg><use href="#i-eye-off"/></svg>privacy blur</div>
       <div class="actions">
         <button class="icon-btn small" id="blurSettings" title="Blur rules & style"><svg><use href="#i-sliders"/></svg></button>
@@ -77,7 +77,7 @@
       </div>
     </section>
 
-    <section class="block" id="darkRow">
+    <section data-section="dark" class="block" id="darkRow">
       <div class="row tight">
         <div class="label"><svg><use href="#i-contrast"/></svg>dark mode</div>
         <div class="actions">
@@ -98,7 +98,7 @@
       </div>
     </section>
 
-    <section class="row" id="refreshRow">
+    <section data-section="refresh" class="row" id="refreshRow">
       <div class="label"><svg><use href="#i-refresh"/></svg>refresh</div>
       <div class="actions" id="refreshActions">
         <button class="text-btn" id="hardRefresh" title="Reload bypassing the cache (Cmd/Ctrl+Shift+R)"><svg><use href="#i-refresh"/></svg>hard</button>
@@ -110,7 +110,7 @@
       </div>
     </section>
 
-    <section class="block" id="autoRefresh">
+    <section data-section="autoRefresh" class="block" id="autoRefresh">
       <div class="row tight">
         <div class="label"><svg><use href="#i-timer"/></svg>auto-refresh</div>
         <div class="actions">
@@ -134,7 +134,7 @@
       <p class="kw-note">Keyword detection only works in the foreground tab.</p>
     </section>
 
-    <section class="block" id="shortener">
+    <section data-section="shortener" class="block" id="shortener">
       <div class="row tight">
         <div class="label"><svg><use href="#i-link"/></svg>URL shorten
           <button class="icon-btn small" id="historyBtn" title="All shortened links"><svg><use href="#i-expand"/></svg></button>
@@ -154,7 +154,7 @@
       </div>
     </section>
 
-    <section class="row">
+    <section data-section="volume" class="row">
       <div class="label"><svg><use href="#i-volume"/></svg>volume</div>
       <div class="actions volume">
         <input type="range" id="volume" min="0" max="100" step="1" value="100" aria-label="Tab volume">
@@ -162,7 +162,7 @@
       </div>
     </section>
 
-    <section class="block" id="awake">
+    <section data-section="awake" class="block" id="awake">
       <div class="row tight">
         <div class="label"><svg><use href="#i-moon"/></svg>awake</div>
         <div class="actions presets" id="awakePresets">
@@ -185,7 +185,7 @@
     </div>
 
     <div class="panel" id="panel-page" hidden>
-    <section class="block">
+    <section data-section="color" class="block">
       <div class="row tight">
         <div class="label"><svg><use href="#i-dropper"/></svg>what color?
           <button class="icon-btn small" id="colorHistoryBtn" title="Picked colors"><svg><use href="#i-expand"/></svg></button>
@@ -199,7 +199,7 @@
       </div>
     </section>
 
-    <section class="block">
+    <section data-section="element" class="block">
       <div class="row tight">
         <div class="label"><svg><use href="#i-pointer"/></svg>what element?
           <button class="icon-btn small" id="selectorHistoryBtn" title="Picked selectors"><svg><use href="#i-expand"/></svg></button>
@@ -219,7 +219,7 @@
       </div>
     </section>
 
-    <section class="block">
+    <section data-section="font" class="block">
       <div class="row tight">
         <div class="label"><svg><use href="#i-font"/></svg>what font?
           <button class="icon-btn small" id="fontHistoryBtn" title="Picked fonts"><svg><use href="#i-expand"/></svg></button>
@@ -233,7 +233,7 @@
       </div>
     </section>
 
-    <section class="block" id="removeRow">
+    <section data-section="remove" class="block" id="removeRow">
       <div class="row tight">
         <div class="label"><svg><use href="#i-eraser"/></svg>remove elements
           <button class="icon-btn small" id="removeSettings" title="All removed elements, by site"><svg><use href="#i-open"/></svg></button>
@@ -246,17 +246,17 @@
       </div>
     </section>
 
-    <section class="row">
+    <section data-section="redirect" class="row">
       <div class="label"><svg><use href="#i-redirect"/></svg>URL auto redirect</div>
       <div class="actions">
         <span class="status" id="redirectStatus"></span>
         <button class="text-btn" id="redirectNow" title="Run the redirect rules on this page now (for pages without a right-click menu)">go</button>
         <button class="icon-btn small" id="redirectSettings" title="Redirect rules"><svg><use href="#i-open"/></svg></button>
-        <button class="switch" id="redirectToggle" role="switch" aria-checked="false" aria-label="Auto redirect"></button>
+        <button class="switch" id="redirectToggle" role="switch" aria-checked="false" aria-label="URL auto redirect"></button>
       </div>
     </section>
 
-    <section class="block" id="uploader">
+    <section data-section="upload" class="block" id="uploader">
       <div class="row tight">
         <div class="label"><svg><use href="#i-upload"/></svg>upload images
           <button class="icon-btn small" id="uploadHistoryBtn" title="All uploads"><svg><use href="#i-expand"/></svg></button>
@@ -281,7 +281,7 @@
     </div>
 
     <div class="panel" id="panel-backup" hidden>
-    <section class="block" id="driveRow">
+    <section data-section="drive" class="block" id="driveRow">
       <div class="row tight">
         <div class="label"><svg><use href="#i-cloud"/></svg>drive backup
           <button class="icon-btn small" id="driveSettings" title="Drive setup, snapshots and restore"><svg><use href="#i-open"/></svg></button>
@@ -299,7 +299,7 @@
       <p class="note" id="driveNote">Bookmarks and Tab Toolkit's settings &amp; data, kept as a time machine: latest, ~1 week, ~2 weeks, ~1 month, ~2 months, ~6 months, ~1 year and the oldest.</p>
     </section>
 
-    <section class="row">
+    <section data-section="settingsFile" class="row">
       <div class="label"><svg><use href="#i-file"/></svg>settings file</div>
       <div class="actions">
         <button class="text-btn" id="exportLocal" title="Save Tab Toolkit's settings and data (API keys included) as a .json file">export</button>
