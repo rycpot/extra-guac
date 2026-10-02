@@ -708,11 +708,18 @@
         input.value = "";
       };
       add.querySelector("button").onclick = go;
-      input.onkeydown = (e) => e.key === "Enter" && go();
+      input.onkeydown = (e) => { if (e.key === "Enter") go(); };
       const note = Object.assign(document.createElement("div"), { className: "hl-note", textContent: notes[key] || "" });
       const colors = document.createElement("div");
       colors.className = "hl-head";
-      colors.append(Object.assign(document.createElement("span"), { className: "hint", textContent: "colour" }), colorPicker(list.color, (c) => edit((h) => { if (at(h)) at(h).color = c; })));
+      const partial = document.createElement("label");
+      partial.className = "hl-partial";
+      partial.title = "Also mark the words inside longer words: \"cat\" in \"category\"";
+      partial.innerHTML = `<input type="checkbox"> partial matches`;
+      partial.querySelector("input").checked = list.partial;
+      partial.querySelector("input").onchange = (e) => edit((h) => { if (at(h)) at(h).partial = e.target.checked; });
+      colors.append(Object.assign(document.createElement("span"), { className: "hint", textContent: "colour" }), colorPicker(list.color, (c) => edit((h) => { if (at(h)) at(h).color = c; })),
+        Object.assign(document.createElement("span"), { className: "grow" }), partial);
       card.append(head, colors, pills(list.words, (w) => edit((h) => { if (at(h)) at(h).words = at(h).words.filter((x) => x !== w); })), add, note);
       return card;
     }
@@ -732,6 +739,13 @@
       render();
     }
 
+    // An example to fill in: header, single words, a phrase, one with a comma (quoted), symbols.
+    $("hlSample").onclick = () => {
+      const sample = ["word", "apple", "machine learning", "\"red, ripe apple\"", "C++", "node.js"].join("\n") + "\n";
+      const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([sample], { type: "text/csv" })), download: "highlight-sample.csv" });
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    };
     $("hlEnabled").onchange = (e) => edit((h) => (h.enabled = e.target.checked));
     const addExclude = () => {
       const site = siteName($("hlExcludeAdd").value);
@@ -740,7 +754,7 @@
       edit((h) => (h.exclude = [...new Set([...h.exclude, site])].sort()));
     };
     $("hlExcludeBtn").onclick = addExclude;
-    $("hlExcludeAdd").onkeydown = (e) => e.key === "Enter" && addExclude();
+    $("hlExcludeAdd").onkeydown = (e) => { if (e.key === "Enter") addExclude(); };
     const addSite = () => {
       const site = siteName($("hlSiteAdd").value);
       if (!site) return void ($("hlSiteAdd").value && alert("That doesn't look like a site, e.g. example.com"));
@@ -752,7 +766,7 @@
       });
     };
     $("hlSiteBtn").onclick = addSite;
-    $("hlSiteAdd").onkeydown = (e) => e.key === "Enter" && addSite();
+    $("hlSiteAdd").onkeydown = (e) => { if (e.key === "Enter") addSite(); };
     $("hlImportFile").onchange = async () => {
       const file = $("hlImportFile").files[0];
       $("hlImportFile").value = "";

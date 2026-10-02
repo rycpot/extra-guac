@@ -175,3 +175,5 @@ h2 #layoutReset { margin-left: 6px; padding: 2px 8px; text-transform: none; lett
 .hl-colors input.hex { width: 74px; flex: none; padding: 3px 6px; font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .hl-note { color: var(--muted); font-size: 12px; min-height: 16px; }
 .hl-list.off .hl-pills { opacity: .5; }
+.hl-partial { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); cursor: pointer; }
+h2 #hlSample { margin-left: 6px; padding: 2px 8px; text-transform: none; letter-spacing: 0; font-size: 12px; }

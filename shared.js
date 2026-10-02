@@ -66,7 +66,7 @@
   const HL_COLORS = ["#ffd60a", "#30d158", "#64d2ff", "#ff9f0a", "#ff6bd6", "#bf5af2"];
   function hlOf(hl) {
     const h = hl && typeof hl === "object" ? hl : {};
-    const list = (l, color) => ({ on: l?.on !== false, color: /^#[0-9a-f]{6}$/i.test(l?.color || "") ? l.color : color, words: Array.isArray(l?.words) ? l.words : [] });
+    const list = (l, color) => ({ on: l?.on !== false, color: /^#[0-9a-f]{6}$/i.test(l?.color || "") ? l.color : color, partial: !!l?.partial, words: Array.isArray(l?.words) ? l.words : [] });
     const sites = {};
     for (const [site, l] of Object.entries(h.sites || {})) sites[site] = list(l, HL_COLORS[2]);
     return { enabled: !!h.enabled, global: list(h.global, HL_COLORS[0]), exclude: Array.isArray(h.exclude) ? h.exclude : [], sites };
