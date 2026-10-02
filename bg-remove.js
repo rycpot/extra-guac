@@ -15,10 +15,14 @@
 
 const removeHandlers = {
   removeAttach: (_msg, sender) => attachDocument(sender),
+  // Says whether the selector was already listed (and on), so the picker's undo and
+  // "discard all" can put an earlier removal back the way it was instead of deleting it.
   removeAdd: ({ selector, label }, sender) => editRemoved(sender, null, (list) => {
     const had = list.find((r) => r.selector === selector);
-    if (had) had.enabled = true;
-    else list.push({ selector, at: Date.now(), label: String(label || "").slice(0, 80), enabled: true });
+    if (!had) return void list.push({ selector, at: Date.now(), label: String(label || "").slice(0, 80), enabled: true });
+    const was = { existed: true, enabled: had.enabled !== false };
+    had.enabled = true;
+    return was;
   }),
   removeUndo: ({ selector, site }, sender) => editRemoved(sender, site, (list) => {
     const i = list.findIndex((r) => r.selector === selector);
@@ -89,10 +93,11 @@ async function applyRemoveEdit(sender, named, fn) {
   if (!site || (sender.tab && own !== site && !own.endsWith(`.${site}`))) return;
   const { removed = {} } = await chrome.storage.local.get("removed");
   const list = removed[site] || [];
-  fn(list);
+  const result = fn(list);
   if (list.length) removed[site] = list;
   else delete removed[site];
   await chrome.storage.local.set({ removed });
+  return result;
 }
 
 // ---- Documents with the stylesheet ------------------------------------------------
