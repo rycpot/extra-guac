@@ -154,7 +154,8 @@
     root.innerHTML = `
       <style>
         .bar { display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 12px; background: rgba(16,16,16,.8);
-          color: #fff; font: 600 11px system-ui, sans-serif; opacity: .3; box-shadow: 0 4px 18px rgba(0,0,0,.3); }
+          color: #fff; font: 600 11px system-ui, sans-serif; opacity: .6; box-shadow: 0 4px 18px rgba(0,0,0,.35);
+          outline: 1px solid rgba(255,255,255,.28); outline-offset: -1px; } /* the edge keeps it visible on dark pages */
         /* Stays faint even while used; only the button under the pointer is marked, lightly. */
         button { all: unset; height: 26px; min-width: 26px; display: grid; place-items: center; border-radius: 8px; cursor: pointer; }
         button:hover { background: rgba(255,255,255,.12); }
