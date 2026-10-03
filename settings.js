@@ -95,6 +95,13 @@
   function update() {
     for (const out of document.querySelectorAll("output[data-for]")) out.textContent = $(out.dataset.for).value;
     $("qualityRow").hidden = settings.shot.format !== "jpeg";
+    // Which image hosts can take uploads (switched on in the tools; x02 with a verified key).
+    const u = settings.upload;
+    const on = [u.catbox && "catbox", u.x02 && u.x02Verified && "x02"].filter(Boolean);
+    $("shotHostHint").textContent = !on.length
+      ? "Neither host is on: switch catbox or x02 on in the tools (upload images) to upload screenshots. Uploaded screenshots are public links."
+      : on.includes(settings.shot.host) ? `Uploaded screenshots are public links. If ${settings.shot.host} fails, the card offers ${on.length > 1 ? "the other host or " : ""}saving instead.`
+      : `${settings.shot.host} isn't on, so ${on[0]} is used. Uploaded screenshots are public links.`;
   }
 
   // ---- Alert sound ----

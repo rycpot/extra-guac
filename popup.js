@@ -149,6 +149,12 @@ function initScreenshot() {
       try {
         const res = await send("shot", { mode });
         if (mode === "area") return closePopup(); // the page shows the selection overlay
+        if (res.card) {
+          // The card on the page takes it from here (save / upload, then the link).
+          const cut = res.truncated ? ` Only the top ${res.screens} screens were captured.` : "";
+          toast((res.card === "preview" ? "Preview at the bottom-right of the page" : res.card === "cloud" ? "Uploading; the link shows on the page" : "Uploaded, link copied") + cut, !!cut);
+          return;
+        }
         const n = res.files.length;
         const saved = n > 1 ? `Saved ${n} parts to Downloads` : `Saved ${res.files[0].split("/").pop()}`;
         if (res.truncated) toast(`${saved}. The page is longer than ${res.screens} screens, so only the top part was captured.`, true);

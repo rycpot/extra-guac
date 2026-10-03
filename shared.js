@@ -4,7 +4,9 @@
   const DEFAULTS = {
     theme: "dark", // "dark" | "light" | "auto" (follow the system)
     openIn: "panel", // what the toolbar icon opens: "popup" | "panel" (Chrome's side panel)
-    shot: { format: "png", quality: 92, folder: "" },
+    // tab / full: after the shot, "preview" (card on the page) | "local" (save) | "cloud"
+    // (upload to host, the default image host: "catbox" | "x02").
+    shot: { format: "png", quality: 92, folder: "", tab: "preview", full: "preview", host: "catbox" },
     refresh: {
       mode: "fixed", // "fixed" | "random"
       fixed: 30,

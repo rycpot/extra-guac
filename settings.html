@@ -108,6 +108,33 @@
       </div>
     </section>
     <section>
+      <h2>After a tab or full-page shot</h2>
+      <div class="row">
+        <span class="row-label">tab</span>
+        <label><input type="radio" name="shotTab" value="preview" data-path="shot.tab"> preview card</label>
+        <label><input type="radio" name="shotTab" value="local" data-path="shot.tab"> save only</label>
+        <label><input type="radio" name="shotTab" value="cloud" data-path="shot.tab"> upload</label>
+      </div>
+      <div class="row">
+        <span class="row-label">full page</span>
+        <label><input type="radio" name="shotFull" value="preview" data-path="shot.full"> preview card</label>
+        <label><input type="radio" name="shotFull" value="local" data-path="shot.full"> save only</label>
+        <label><input type="radio" name="shotFull" value="cloud" data-path="shot.full"> upload</label>
+      </div>
+      <p class="hint"><b>Preview card:</b> a faint card at the bottom-right of the page shows the shot with ↓ save and ☁ upload;
+        nothing is saved until you pick one, and it goes after a few seconds unless you point at it.
+        <b>Save only:</b> straight to the folder below. <b>Upload:</b> straight to the image host below; the card shows the link.
+        Area shots have both on the selection: ☁ uploads, ✓ saves.</p>
+    </section>
+    <section>
+      <h2>Upload screenshots to</h2>
+      <div class="row">
+        <label><input type="radio" name="shotHost" value="catbox" data-path="shot.host"> catbox</label>
+        <label><input type="radio" name="shotHost" value="x02" data-path="shot.host"> x02</label>
+      </div>
+      <p class="hint" id="shotHostHint"></p>
+    </section>
+    <section>
       <h2>Save to</h2>
       <div class="row folder">
         <span class="prefix">Downloads/</span>
@@ -118,7 +145,7 @@
     </section>
     <section>
       <h2>How it works</h2>
-      <p class="hint"><b>Area:</b> drag a box on the page, adjust it with the handles, then ✓ (or Enter) at its bottom-right.
+      <p class="hint"><b>Area:</b> drag a box on the page, adjust it with the handles, then ✓ (or Enter) at its bottom-right to save it, or ☁ to upload it.
         <b>Tab:</b> what's visible in the tab. <b>Full:</b> scrolls to the end of the page and stitches it together;
         very long pages are saved in numbered parts.</p>
     </section>

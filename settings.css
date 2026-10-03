@@ -62,6 +62,7 @@ h2 .hint { text-transform: none; letter-spacing: 0; font-weight: normal; }
 section { border-top: 1px solid var(--line); padding: 14px 0; }
 .row { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
 .row label { min-width: 100px; }
+.row .row-label { min-width: 72px; color: var(--muted); }
 input[type=range] { flex: 1; accent-color: var(--accent); }
 input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
 select { padding: 3px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--field); color: var(--fg); }

@@ -87,6 +87,37 @@ async function verifyX02(key) {
   return { verified: ok, error };
 }
 
+// Hosts that can take an upload right now: switched on (and, for x02, a verified key).
+const uploadHostsOn = (s) => [s.catbox && "catbox", s.x02 && s.x02Verified && s.x02Key.trim() && "x02"].filter(Boolean);
+
+async function recordUploads(entries) {
+  const { uploadHistory = [] } = await chrome.storage.local.get("uploadHistory");
+  uploadHistory.unshift(...entries);
+  await chrome.storage.local.set({ uploadHistory: uploadHistory.slice(0, UPLOAD_HISTORY_LIMIT) });
+}
+
+// Screenshot upload (bg-capture.js / shot-card.js): every part goes up as a file; the
+// links are copied (one per line) and kept in the upload history. first = the first
+// screenshot ever uploaded, so the card can say the links are public.
+async function uploadShot(items, host, tab) {
+  const { upload: s } = await TT.getSettings();
+  if (!uploadHostsOn(s).includes(host)) throw new Error(`${host === "x02" ? "x02 needs a verified API key" : "catbox is switched off"} (upload images)`);
+  const up = UPLOADERS[host];
+  const links = [];
+  for (const it of items) {
+    const blob = await (await fetch(it.dataUrl)).blob();
+    links.push(await up.fromFile(blob, it.name.split("/").pop(), s));
+  }
+  let site = "page";
+  try { site = new URL(tab.url).hostname.replace(/^www\./, "") || site; } catch {}
+  const at = Date.now();
+  await recordUploads(links.map((link) => ({ host: up.label, link, source: `screenshot of ${site}`, at })));
+  const copied = await copyToClipboard(links.join("\n"), tab);
+  const { notes = {} } = await chrome.storage.local.get("notes");
+  if (!notes.shotUpload) await chrome.storage.local.set({ notes: { ...notes, shotUpload: at } });
+  return { links, copied, first: !notes.shotUpload };
+}
+
 async function uploadImage(host, srcUrl, tab) {
   const { upload: s } = await TT.getSettings();
   const up = UPLOADERS[host];
@@ -102,9 +133,7 @@ async function uploadImage(host, srcUrl, tab) {
       const { blob, name } = await fetchImage(srcUrl, tab);
       link = await up.fromFile(blob, name, s);
     }
-    const { uploadHistory = [] } = await chrome.storage.local.get("uploadHistory");
-    uploadHistory.unshift({ host: up.label, link, source: srcUrl.startsWith("data:") ? "(embedded image)" : srcUrl, at: Date.now() });
-    await chrome.storage.local.set({ uploadHistory: uploadHistory.slice(0, UPLOAD_HISTORY_LIMIT) });
+    await recordUploads([{ host: up.label, link, source: srcUrl.startsWith("data:") ? "(embedded image)" : srcUrl, at: Date.now() }]);
     const copied = await copyToClipboard(link, tab);
     setBadge(tab.id, "✓");
     chrome.notifications.create(`upload|${link}`, {

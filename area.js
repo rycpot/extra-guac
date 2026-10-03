@@ -1,6 +1,7 @@
 // Area screenshot overlay: drag a box over the visible page, resize it with the
-// handles or move it by dragging inside, then confirm with ✓ (or Enter) at its
-// bottom-right. ✕ or Esc cancels. Runs in a closed shadow root so page CSS can't touch it.
+// handles or move it by dragging inside, then save it with ✓ (or Enter) or upload it with
+// ☁ (to the default image host; the card shows the link) at its bottom-right. ✕ or Esc
+// cancels. Runs in a closed shadow root so page CSS can't touch it.
 // Injected by bg-capture.js (startAreaSelection), which takes the shot on "areaSelected".
 (() => {
   if (window.__ttArea) return;
@@ -37,6 +38,7 @@
         box-shadow: 0 2px 10px rgba(0,0,0,.35); }
       .bar button:hover { background: rgba(40,40,40,.95); }
       .bar .yes { color: #30d158; }
+      .bar .up[aria-disabled=true] { opacity: .45; cursor: default; }
       svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
       [hidden] { display: none !important; }
     </style>
@@ -47,8 +49,9 @@
         ${["nw", "n", "ne", "e", "se", "s", "sw", "w"].map((d) => `<i class="h" data-d="${d}"></i>`).join("")}
       </div>
       <div class="bar" hidden>
+        <button class="up" title="Upload"><svg viewBox="0 0 24 24"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.6 9.2 4.7 4.7 0 0 0 7 18.5Z"/><path d="M12 15.5v-5M9.8 12.6 12 10.4l2.2 2.2"/></svg></button>
         <button class="no" title="Cancel (Esc)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-        <button class="yes" title="Capture (Enter)"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
+        <button class="yes" title="Save (Enter)"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
       </div>
     </div>`;
   document.documentElement.append(host);
@@ -77,7 +80,7 @@
     size.style.left = inside ? "4px" : "0";
     // Buttons at the bottom-right, just below the box; inside it when there's no room below.
     const below = rect.y + rect.height + 8;
-    const barWidth = 70;
+    const barWidth = 108;
     bar.style.left = `${clamp(rect.x + rect.width - barWidth, 4, innerWidth - barWidth - 4)}px`;
     bar.style.top = `${below + 32 <= innerHeight ? below : rect.y + rect.height - 40}px`;
   }
@@ -125,8 +128,19 @@
     render();
   });
 
+  // ☁ goes to the default host (or the one that's on); none on: it says where to turn one on.
+  const up = root.querySelector(".up");
+  let canUpload = false;
+  chrome.storage.local.get("tt").then(({ tt }) => {
+    const u = tt?.upload || {}, def = tt?.shot?.host || "catbox";
+    const on = [u.catbox && "catbox", u.x02 && u.x02Verified && "x02"].filter(Boolean);
+    canUpload = on.length > 0;
+    up.title = canUpload ? `Upload to ${on.includes(def) ? def : on[0]}` : "Turn on catbox or x02 in upload images to upload";
+    up.setAttribute("aria-disabled", String(!canUpload));
+  });
+  up.addEventListener("click", () => canUpload && confirm("upload"));
   root.querySelector(".no").addEventListener("click", cancel);
-  root.querySelector(".yes").addEventListener("click", confirm);
+  root.querySelector(".yes").addEventListener("click", () => confirm());
   addEventListener("keydown", onKey, true);
 
   function onKey(e) {
@@ -144,12 +158,12 @@
     cleanup();
   }
 
-  function confirm() {
+  function confirm(action = "save") {
     const chosen = { ...rect };
     cleanup();
     // Wait until the overlay is gone from the screen before the tab is captured.
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      chrome.runtime.sendMessage({ type: "areaSelected", rect: chosen, viewportWidth: innerWidth });
+      chrome.runtime.sendMessage({ type: "areaSelected", rect: chosen, viewportWidth: innerWidth, action });
     }));
   }
 
