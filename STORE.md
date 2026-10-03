@@ -17,7 +17,7 @@ Ready-to-paste answers for the Developer Dashboard. This file isn't part of the 
 ```
 Eighteen tools for the page you're on, in one side panel. We may have gotten carried away.
 
-• Screenshot: a dragged area, the visible part of the tab, or the full page
+• Screenshot: a dragged area, the visible part of the tab, or the full page; save it or upload it
 • Privacy blur: hides emails, phone numbers and other personal data on screen
 • Dark mode: on every site, or only the ones you pick
 • Refresh: hard refresh, or nuke a site's cookies, storage and cache

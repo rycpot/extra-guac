@@ -149,6 +149,7 @@
   function buildControls() {
     host = document.createElement("div");
     host.style.cssText = "all:initial;position:fixed;z-index:2147483647;right:16px;bottom:16px;";
+    host.setAttribute("data-eg-zoom", ""); // the screenshot card (shot-card.js) sits above it
     root = host.attachShadow({ mode: "closed" });
     root.innerHTML = `
       <style>

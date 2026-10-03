@@ -1,6 +1,6 @@
 # Extra Guac privacy policy
 
-_Last updated: 2 October 2026_
+_Last updated: 3 October 2026_
 
 Extra Guac is a browser extension with tools for the page you're on: screenshots, privacy blur, dark mode, auto-refresh, word highlighting, clipboard history, image saving and similar tools. This policy covers what it handles and where that goes.
 
@@ -18,7 +18,7 @@ These are kept in Chrome's local extension storage, on your computer only:
 The following are worked out in your browser and never sent anywhere:
 
 - **Web page content.** It's read to blur sensitive data, highlight words, detect auto-refresh keywords, apply dark mode, remove elements, and find images, colours, fonts and elements you pick.
-- **Screenshots and saved images.** They're written to your Downloads folder.
+- **Screenshots and saved images.** They're written to your Downloads folder, unless you upload a screenshot (below).
 - **Site data deleted with "nuke".** The cookies, storage and cache for the current site are removed locally.
 - **Tab audio**, used to lower or raise a tab's volume.
 
@@ -28,6 +28,7 @@ The following are worked out in your browser and never sent anywhere:
 |---|---|---|
 | URL shorten | The shortener you pick: cutt.ly, tinyurl.com or dub.co | The page address you shorten, and your API key for that service |
 | Upload images | The host you pick: catbox.moe or x02.me | The image you right-click, and your user hash or API key |
+| Screenshot upload | Your default image host: catbox.moe or x02.me | The screenshot you choose to upload, and your user hash or API key |
 | Drive backup | Your own Google Drive, through an OAuth client you set up | Snapshots of the extension's settings and data, including API keys and clipboard history. Bookmarks are included if you choose. The `drive.file` permission only allows access to files the extension created. |
 | Alert sound (if you set a sound file link) | The site hosting that sound file | A normal request to play the file. The built-in chime needs no request. |
 | Save images on click | The site the image comes from | A normal request for the image, like your browser makes when showing it |
