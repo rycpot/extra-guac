@@ -837,7 +837,7 @@ async function initUploads() {
   const render = async (s) => {
     for (const b of hosts) {
       const id = b.dataset.host;
-      const usable = id === "catbox" || s.upload.x02Verified;
+      const usable = id === "imglink" || s.upload.x02Verified; // imglink works without a key
       b.disabled = !usable;
       b.title = usable ? `Right-click an image → upload to ${id}` : "Save a working x02 API key in settings first";
       b.setAttribute("aria-pressed", String(usable && !!s.upload[id]));

@@ -129,7 +129,7 @@
     <section>
       <h2>Upload screenshots to</h2>
       <div class="row">
-        <label><input type="radio" name="shotHost" value="catbox" data-path="shot.host"> catbox</label>
+        <label><input type="radio" name="shotHost" value="imglink" data-path="shot.host"> imglink</label>
         <label><input type="radio" name="shotHost" value="x02" data-path="shot.host"> x02</label>
       </div>
       <p class="hint" id="shotHostHint"></p>
@@ -398,14 +398,17 @@ Card 4111 1111 1111 1111</textarea>
   <div class="pane" id="upload">
     <header class="pane-head"><h1>image upload</h1></header>
     <section>
-      <h2>Catbox</h2>
-      <label class="row"><input type="checkbox" data-path="upload.catbox"> Offer "Upload image to catbox" when right-clicking images</label>
+      <h2>ImgLink <span class="hint" id="imglinkState"></span></h2>
+      <label class="row"><input type="checkbox" data-path="upload.imglink"> Offer "Upload image to imglink" when right-clicking images</label>
       <div class="row">
-        <input type="password" class="text" data-path="upload.catboxUserhash" placeholder="userhash (optional)" spellcheck="false" autocomplete="off">
+        <input type="password" class="text" id="imglinkKey" placeholder="ImgLink API key (optional)" spellcheck="false" autocomplete="off">
         <button type="button" class="btn ghost" data-reveal>show</button>
+        <button type="button" class="btn" id="imglinkSave">save &amp; verify</button>
       </div>
-      <p class="hint">Without a userhash uploads are anonymous. With it they're saved to your account
-        (find it at <a href="https://catbox.moe/user/manage.php" target="_blank" rel="noopener">catbox.moe → Manage account</a>).</p>
+      <p class="hint">Works without a key: uploads are anonymous, up to 25 MB each. With a key (ImgLink → Dashboard → API Keys)
+        they go to your account: up to 50 MB each, 10 GB of storage once your email is verified, and you can manage them there.
+        Either way every upload is sent as <b>private</b>, so it's never listed in ImgLink's gallery or search; anyone with the link can still open it.
+        <a href="https://imglink.cc" target="_blank" rel="noopener">imglink.cc</a></p>
     </section>
     <section>
       <h2>x02 <span class="hint" id="x02State"></span></h2>
@@ -426,7 +429,9 @@ Card 4111 1111 1111 1111</textarea>
       <h2>How it works</h2>
       <p class="hint">Right-click any image → <i>Upload image to …</i> (with both hosts on, the item branches into the two).
         The link is copied, a notification confirms it, and it's listed in the popup's upload history.
-        The host fetches the image itself; if it can't (private or embedded images), Extra Guac downloads it and uploads the file.</p>
+        Uploads are unlisted on both hosts: not shown in any gallery, but anyone with the link can open it.
+        x02 is first asked to fetch the image itself; otherwise (and always for ImgLink) Extra Guac downloads it, with your
+        cookies so images behind a sign-in work, and uploads the file.</p>
     </section>
   </div>
 

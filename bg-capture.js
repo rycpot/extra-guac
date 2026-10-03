@@ -31,7 +31,7 @@ async function finishShot(tab, action, cap) {
   const hosts = uploadHostsOn(upload);
   const msg = { type: "egShotCard", items: cap.items, label: cap.label, hosts, host: hosts.includes(shot.host) ? shot.host : hosts[0], ...extra };
   if (action === "cloud") {
-    if (!msg.host) throw new Error("Turn on catbox or x02 in upload images to upload screenshots");
+    if (!msg.host) throw new Error("Turn on imglink or x02 in upload images to upload screenshots");
     msg.auto = "upload";
   }
   const shown = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["shot-card.js"] })

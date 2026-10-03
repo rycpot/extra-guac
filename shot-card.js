@@ -189,7 +189,7 @@
       sub.textContent = shot.truncated ? `top ${shot.screens} screens only · not saved yet` : "not saved yet";
       button(svg("save"), "Save to Downloads", save);
       const def = shot.hosts.includes(shot.host) ? shot.host : shot.hosts[0];
-      button(svg("cloud"), def ? `Upload to ${def}` : "Turn on catbox or x02 in upload images to upload", def && (() => upload(def)));
+      button(svg("cloud"), def ? `Upload to ${def}` : "Turn on imglink or x02 in upload images to upload", def && (() => upload(def)));
       autoHide();
     } else if (p === "uploading") {
       main.textContent = `Uploading to ${shot.host}…`;

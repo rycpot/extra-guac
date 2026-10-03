@@ -27,8 +27,8 @@ The following are worked out in your browser and never sent anywhere:
 | Feature | Sent to | What is sent |
 |---|---|---|
 | URL shorten | The shortener you pick: cutt.ly, tinyurl.com or dub.co | The page address you shorten, and your API key for that service |
-| Upload images | The host you pick: catbox.moe or x02.me | The image you right-click, and your user hash or API key |
-| Screenshot upload | Your default image host: catbox.moe or x02.me | The screenshot you choose to upload, and your user hash or API key |
+| Upload images | The host you pick: imglink.cc or x02.me | The image you right-click, and your API key for that host if you set one (ImgLink also works without one). Uploads are unlisted: not shown in a gallery, but anyone with the link can open them. |
+| Screenshot upload | Your default image host: imglink.cc or x02.me | The screenshot you choose to upload, and your API key for that host if you set one |
 | Drive backup | Your own Google Drive, through an OAuth client you set up | Snapshots of the extension's settings and data, including API keys and clipboard history. Bookmarks are included if you choose. The `drive.file` permission only allows access to files the extension created. |
 | Alert sound (if you set a sound file link) | The site hosting that sound file | A normal request to play the file. The built-in chime needs no request. |
 | Save images on click | The site the image comes from | A normal request for the image, like your browser makes when showing it |

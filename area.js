@@ -132,10 +132,10 @@
   const up = root.querySelector(".up");
   let canUpload = false;
   chrome.storage.local.get("tt").then(({ tt }) => {
-    const u = tt?.upload || {}, def = tt?.shot?.host || "catbox";
-    const on = [u.catbox && "catbox", u.x02 && u.x02Verified && "x02"].filter(Boolean);
+    const u = tt?.upload || {}, def = tt?.shot?.host || "imglink";
+    const on = [u.imglink && "imglink", u.x02 && u.x02Verified && "x02"].filter(Boolean); // as TT.uploadHosts
     canUpload = on.length > 0;
-    up.title = canUpload ? `Upload to ${on.includes(def) ? def : on[0]}` : "Turn on catbox or x02 in upload images to upload";
+    up.title = canUpload ? `Upload to ${on.includes(def) ? def : on[0]}` : "Turn on imglink or x02 in upload images to upload";
     up.setAttribute("aria-disabled", String(!canUpload));
   });
   up.addEventListener("click", () => canUpload && confirm("upload"));

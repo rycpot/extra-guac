@@ -97,11 +97,11 @@
     $("qualityRow").hidden = settings.shot.format !== "jpeg";
     // Which image hosts can take uploads (switched on in the tools; x02 with a verified key).
     const u = settings.upload;
-    const on = [u.catbox && "catbox", u.x02 && u.x02Verified && "x02"].filter(Boolean);
+    const on = TT.uploadHosts(u);
     $("shotHostHint").textContent = !on.length
-      ? "Neither host is on: switch catbox or x02 on in the tools (upload images) to upload screenshots. Uploaded screenshots are public links."
-      : on.includes(settings.shot.host) ? `Uploaded screenshots are public links. If ${settings.shot.host} fails, the card offers ${on.length > 1 ? "the other host or " : ""}saving instead.`
-      : `${settings.shot.host} isn't on, so ${on[0]} is used. Uploaded screenshots are public links.`;
+      ? "Neither host is on: switch imglink or x02 on in the tools (upload images) to upload screenshots. Uploads are unlisted: anyone with the link can open them."
+      : on.includes(settings.shot.host) ? `Uploads are unlisted: anyone with the link can open them. If ${settings.shot.host} fails, the card offers ${on.length > 1 ? "the other host or " : ""}saving instead.`
+      : `${settings.shot.host} isn't on, so ${on[0]} is used. Uploads are unlisted: anyone with the link can open them.`;
   }
 
   // ---- Alert sound ----
@@ -226,6 +226,23 @@
         btn.textContent = input.type === "password" ? "show" : "hide";
       };
     }
+    $("imglinkKey").addEventListener("input", () => {
+      $("imglinkState").textContent = $("imglinkKey").value.trim() === settings.upload.imglinkKey ? imglinkStateText() : "not saved";
+      $("imglinkState").className = "hint";
+    });
+    $("imglinkSave").onclick = async () => {
+      const btn = $("imglinkSave");
+      btn.disabled = true;
+      $("imglinkState").textContent = $("imglinkKey").value.trim() ? "checking…" : "";
+      const res = await chrome.runtime.sendMessage({ type: "verifyImglink", key: $("imglinkKey").value });
+      btn.disabled = false;
+      settings = await TT.getSettings();
+      fill();
+      if (res?.ok && !res.verified && res.error) {
+        $("imglinkState").textContent = `${res.error} · uploads stay anonymous`;
+        $("imglinkState").className = "hint x02-bad";
+      }
+    };
     $("x02Key").addEventListener("input", () => {
       $("x02State").textContent = $("x02Key").value.trim() === settings.upload.x02Key ? x02StateText() : "not saved";
       $("x02State").className = "hint";
@@ -245,9 +262,14 @@
     };
   }
 
+  const imglinkStateText = () => (settings.upload.imglinkVerified ? "✓ key verified · uploads go to your account"
+    : settings.upload.imglinkKey ? "key not verified · uploads are anonymous" : "no key · uploads are anonymous");
   const x02StateText = () => (settings.upload.x02Verified ? "✓ key verified" : settings.upload.x02Key ? "key not verified" : "no key yet");
 
   function fillUpload() {
+    if (document.activeElement !== $("imglinkKey")) $("imglinkKey").value = settings.upload.imglinkKey || "";
+    $("imglinkState").textContent = imglinkStateText();
+    $("imglinkState").className = `hint ${settings.upload.imglinkVerified ? "x02-ok" : ""}`;
     if (document.activeElement !== $("x02Key")) $("x02Key").value = settings.upload.x02Key || "";
     $("x02State").textContent = x02StateText();
     $("x02State").className = `hint ${settings.upload.x02Verified ? "x02-ok" : ""}`;
