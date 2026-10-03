@@ -33,7 +33,7 @@
 
   const ICON = {
     save: '<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>',
-    cloud: '<path d="M7 18.5h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.6 9.2 4.7 4.7 0 0 0 7 18.5Z"/><path d="M12 15.5v-5M9.8 12.6 12 10.4l2.2 2.2"/>',
+    cloud: '<path d="M7 18.5h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.6 9.2 4.7 4.7 0 0 0 7 18.5Z"/>',
     copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.2"/><path d="M15.5 8.5V6.7a2.2 2.2 0 0 0-2.2-2.2H6.7a2.2 2.2 0 0 0-2.2 2.2v6.6a2.2 2.2 0 0 0 2.2 2.2h1.8"/>',
     open: '<path d="M14 5h5v5M19 5l-8 8M18 14v4a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18V7a1.5 1.5 0 0 1 1.5-1.5H10"/>',
     close: '<path d="M7 7l10 10M17 7 7 17"/>',
@@ -49,7 +49,8 @@
         <style>
           .card { display: flex; align-items: center; gap: 8px; max-width: min(420px, calc(100vw - 32px)); padding: 6px;
             border-radius: 12px; background: rgba(16,16,16,.85); color: #fff; font: 500 11.5px/1.35 system-ui, sans-serif;
-            opacity: .3; box-shadow: 0 4px 18px rgba(0,0,0,.3); }
+            opacity: .6; box-shadow: 0 4px 18px rgba(0,0,0,.35);
+            outline: 1px solid rgba(255,255,255,.28); outline-offset: -1px; } /* the edge keeps it visible on dark pages */
           canvas { flex: none; width: 56px; height: 36px; border-radius: 7px; background: rgba(255,255,255,.08); }
           .text { flex: 1; min-width: 0; display: grid; gap: 1px; }
           .main, .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

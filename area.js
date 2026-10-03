@@ -49,7 +49,7 @@
         ${["nw", "n", "ne", "e", "se", "s", "sw", "w"].map((d) => `<i class="h" data-d="${d}"></i>`).join("")}
       </div>
       <div class="bar" hidden>
-        <button class="up" title="Upload"><svg viewBox="0 0 24 24"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.6 9.2 4.7 4.7 0 0 0 7 18.5Z"/><path d="M12 15.5v-5M9.8 12.6 12 10.4l2.2 2.2"/></svg></button>
+        <button class="up" title="Upload"><svg viewBox="0 0 24 24"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.6 9.2 4.7 4.7 0 0 0 7 18.5Z"/></svg></button>
         <button class="no" title="Cancel (Esc)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
         <button class="yes" title="Save (Enter)"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
       </div>
