@@ -152,7 +152,9 @@ function initScreenshot() {
         if (res.card) {
           // The card on the page takes it from here (save / upload, then the link).
           const cut = res.truncated ? ` Only the top ${res.screens} screens were captured.` : "";
-          toast((res.card === "preview" ? "Preview at the bottom-right of the page" : res.card === "cloud" ? "Uploading; the link shows on the page" : "Uploaded, link copied") + cut, !!cut);
+          const said = { preview: "Preview at the bottom-right of the page", pick: "Pick a host on the card at the bottom-right of the page",
+            cloud: "Uploading; the link shows on the page", notified: "Uploaded, link copied" };
+          toast((said[res.card] || said.preview) + cut, !!cut);
           return;
         }
         const n = res.files.length;

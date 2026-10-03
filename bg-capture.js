@@ -41,7 +41,8 @@ async function finishShot(tab, action, cap, host) {
   const shown = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["shot-card.js"] })
     .then(() => chrome.tabs.sendMessage(tab.id, msg, { frameId: 0 }))
     .then((got) => got === true, () => false);
-  if (shown) return { card: action, ...extra };
+  // "pick": upload mode with both hosts offered, so nothing is uploading yet.
+  if (shown) return { card: msg.auto === "pick" ? "pick" : action, ...extra };
   // Pages the card can't be shown on: save it, or upload it with a notification.
   if (action === "preview") return { files: await saveItems(cap.items), ...extra };
   const to = msg.host || choices[0];
