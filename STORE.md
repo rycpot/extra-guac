@@ -34,7 +34,7 @@ Eighteen tools for the page you're on, in one side panel. We may have gotten car
 • Clipboard history: search and pin text you copy on web pages
 • Zoom & rotate images: hold a key and scroll over any image
 • Save images on click: hold a key and click; save as is, PNG, JPG or WebP
-• Upload images: right-click to upload to catbox or x02, link copied
+• Upload images: right-click to upload to ImgLink or x02 (unlisted), link copied
 
 Privacy: everything stays in your browser. There are no accounts, no analytics and no server of ours. Data leaves your browser only when you use a tool that needs an outside service you chose: a link shortener, an image host, or a backup to your own Google Drive. It goes only to that service. Tools that record anything are off until you turn them on, and password, one-time-code and card fields are never saved.
 ```

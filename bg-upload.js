@@ -1,11 +1,17 @@
-// Image upload to Catbox and/or x02 from the right-click menu on images.
-// Catbox works anonymously or with your userhash; x02 needs an API key and is only
-// offered once that key has been verified. The host is first asked to fetch the
-// image itself; if it can't (private, hot-link protected, data:/blob: images), the
-// image is downloaded here, with your cookies, and uploaded as a file.
+// Image upload to ImgLink and/or x02 from the right-click menu on images, and screenshot
+// uploads. Every upload is unlisted: it opens for anyone with the link but isn't listed
+// in a gallery, profile or search.
+// - ImgLink works without an account (anonymous) or with your API key (your account,
+//   bigger limits); uploads are always sent as private (= unlisted), whatever the
+//   account's default is.
+// - x02 needs an API key and is only offered once that key has been verified.
+// x02 is first asked to fetch the image itself; if it can't (private, hot-link protected,
+// data:/blob: images), or for ImgLink, which has no fetch-by-address, the image is
+// downloaded here, with your cookies, and uploaded as a file.
 
 const uploadHandlers = {
   verifyX02: ({ key }) => verifyX02(key),
+  verifyImglink: ({ key }) => verifyImglink(key),
   x02Usage: () => x02Usage(),
   clearUploadHistory: () => chrome.storage.local.set({ uploadHistory: [] }),
 };
@@ -13,26 +19,31 @@ const uploadHandlers = {
 const UPLOAD_HISTORY_LIMIT = 100;
 
 const UPLOADERS = {
-  catbox: {
-    label: "catbox",
-    async fromUrl(url, s) {
-      const form = new FormData();
-      form.append("reqtype", "urlupload");
-      if (s.catboxUserhash.trim()) form.append("userhash", s.catboxUserhash.trim());
-      form.append("url", url);
-      return this.parse(await fetch("https://catbox.moe/user/api.php", { method: "POST", body: form }));
-    },
+  imglink: {
+    label: "imglink",
     async fromFile(blob, name, s) {
+      const key = s.imglinkVerified && s.imglinkKey.trim();
       const form = new FormData();
-      form.append("reqtype", "fileupload");
-      if (s.catboxUserhash.trim()) form.append("userhash", s.catboxUserhash.trim());
-      form.append("fileToUpload", blob, name);
-      return this.parse(await fetch("https://catbox.moe/user/api.php", { method: "POST", body: form }));
+      form.append("visibility", "private");
+      form.append("file", blob, name);
+      const res = await fetch(key ? "https://imglink.cc/api/v1/upload" : "https://imglink.cc/api/upload", {
+        method: "POST",
+        headers: key ? { "x-api-key": key } : {},
+        body: form,
+      });
+      return this.parse(res, !!key);
     },
-    async parse(res) {
-      const text = (await res.text()).trim();
-      if (res.ok && /^https?:\/\//i.test(text)) return text;
-      throw new Error(`catbox: ${text.slice(0, 160) || `HTTP ${res.status}`}`);
+    async parse(res, withKey) {
+      const text = await res.text();
+      let body = null;
+      try { body = JSON.parse(text); } catch {}
+      const url = body?.url || body?.images?.[0]?.url;
+      if (res.ok && /^https:\/\//i.test(url || "")) return url;
+      const why = body?.error || body?.message || text.trim().slice(0, 160) || `HTTP ${res.status}`;
+      if (res.status === 401) throw new Error(`imglink refused the API key: ${why}`);
+      if (res.status === 413) throw new Error(`imglink: image too large or storage full (${withKey ? "50 MB per file" : "25 MB per file without a key"})`);
+      if (res.status === 429) throw new Error(`imglink: ${withKey ? "upload limit" : "limit for uploads without a key"} reached, try again later`);
+      throw new Error(`imglink: ${why}`);
     },
   },
   x02: {
@@ -90,6 +101,30 @@ async function x02Usage() {
   };
 }
 
+// A key is checked by asking to change an image that doesn't exist: a good key gets
+// "not found", a bad one "invalid API key". Nothing is uploaded.
+async function verifyImglink(key) {
+  key = (key || "").trim();
+  let ok = false, error = "";
+  if (key) {
+    try {
+      const res = await fetch("https://imglink.cc/api/v1/image/egKeyCheck0", {
+        method: "PATCH",
+        headers: { "x-api-key": key, "content-type": "application/json" },
+        body: JSON.stringify({ nsfw: false }),
+      });
+      const body = await res.json().catch(() => null);
+      ok = res.status === 404 || res.ok;
+      if (!ok) error = res.status === 401 ? "imglink says the key is invalid" : body?.error || `imglink answered HTTP ${res.status}`;
+    } catch (e) {
+      error = `Couldn't reach imglink: ${e.message}`;
+    }
+  }
+  // No key is fine: uploads then go up anonymously.
+  await TT.updateSettings({ upload: { imglinkKey: key, imglinkVerified: ok } });
+  return { verified: ok, error };
+}
+
 async function verifyX02(key) {
   key = (key || "").trim();
   let ok = false, error = "";
@@ -109,8 +144,7 @@ async function verifyX02(key) {
   return { verified: ok, error };
 }
 
-// Hosts that can take an upload right now: switched on (and, for x02, a verified key).
-const uploadHostsOn = (s) => [s.catbox && "catbox", s.x02 && s.x02Verified && s.x02Key.trim() && "x02"].filter(Boolean);
+const uploadHostsOn = TT.uploadHosts; // switched on (and, for x02, a verified key)
 
 async function recordUploads(entries) {
   const { uploadHistory = [] } = await chrome.storage.local.get("uploadHistory");
@@ -123,7 +157,7 @@ async function recordUploads(entries) {
 // screenshot ever uploaded, so the card can say the links are public.
 async function uploadShot(items, host, tab) {
   const { upload: s } = await TT.getSettings();
-  if (!uploadHostsOn(s).includes(host)) throw new Error(`${host === "x02" ? "x02 needs a verified API key" : "catbox is switched off"} (upload images)`);
+  if (!uploadHostsOn(s).includes(host)) throw new Error(`${host === "x02" ? "x02 needs a verified API key" : `${host} is switched off`} (upload images)`);
   const up = UPLOADERS[host];
   const links = [];
   for (const it of items) {
@@ -147,7 +181,7 @@ async function uploadImage(host, srcUrl, tab) {
   try {
     let link;
     let firstError = null;
-    if (/^https?:/i.test(srcUrl)) {
+    if (up.fromUrl && /^https?:/i.test(srcUrl)) {
       try { link = await up.fromUrl(srcUrl, s); } catch (e) { firstError = e; }
     }
     if (!link) {

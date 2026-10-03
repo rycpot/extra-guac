@@ -5,8 +5,8 @@
     theme: "dark", // "dark" | "light" | "auto" (follow the system)
     openIn: "panel", // what the toolbar icon opens: "popup" | "panel" (Chrome's side panel)
     // tab / full: after the shot, "preview" (card on the page) | "local" (save) | "cloud"
-    // (upload to host, the default image host: "catbox" | "x02").
-    shot: { format: "png", quality: 92, folder: "", tab: "preview", full: "preview", host: "catbox" },
+    // (upload to host, the default image host: "imglink" | "x02").
+    shot: { format: "png", quality: 92, folder: "", tab: "preview", full: "preview", host: "imglink" },
     refresh: {
       mode: "fixed", // "fixed" | "random"
       fixed: 30,
@@ -32,7 +32,9 @@
     // Dark mode: enabled = on/off everywhere; "sites" = only the sites listed, "all" =
     // everywhere except exclude; force = dark pages darkened (inverted) anyway.
     dark: { enabled: false, mode: "sites", sites: [], exclude: [], force: [] },
-    upload: { catbox: false, x02: false, catboxUserhash: "", x02Key: "", x02Verified: false },
+    // Image hosts. ImgLink works without a key (anonymous) or with a verified one (your
+    // account); x02 needs a verified key. Uploads to both are unlisted (see bg-upload.js).
+    upload: { imglink: false, x02: false, imglinkKey: "", imglinkVerified: false, x02Key: "", x02Verified: false },
     // Clipboard history: limit = unpinned entries kept; maxAgeDays 0 = no age limit;
     // menu = pinned entries in the right-click menu; exclude = sites never recorded.
     clip: { enabled: false, limit: 200, maxAgeDays: 0, menu: false, exclude: [] },
@@ -128,5 +130,8 @@
     });
   }
 
-  globalThis.TT = { DEFAULTS, MAX_KEYWORDS, HL_LIMITS, HL_COLORS, hlOf, SHORTENERS, PANELS, SECTIONS, layoutOf, merge, getSettings, updateSettings, monthKey, cleanFolder, applyTheme };
+  // Image hosts that can take an upload right now, in menu order.
+  const uploadHosts = (u) => [u.imglink && "imglink", u.x02 && u.x02Verified && u.x02Key?.trim() && "x02"].filter(Boolean);
+
+  globalThis.TT = { uploadHosts, DEFAULTS, MAX_KEYWORDS, HL_LIMITS, HL_COLORS, hlOf, SHORTENERS, PANELS, SECTIONS, layoutOf, merge, getSettings, updateSettings, monthKey, cleanFolder, applyTheme };
 })();

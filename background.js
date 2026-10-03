@@ -54,7 +54,7 @@ chrome.runtime.onStartup.addListener(async () => {
 
 // ---- Right-click menus --------------------------------------------------------
 // Pages get "Redirect with rules" while auto redirect is on and has manual rules.
-// Images get "Upload image to catbox/x02" for the hosts switched on in the popup;
+// Images get "Upload image to imglink/x02" for the hosts switched on in the popup;
 // with both on, the item branches into the two hosts.
 
 let menuSync = Promise.resolve();
@@ -63,7 +63,7 @@ function syncMenus(s) {
     await chrome.contextMenus.removeAll();
     const manual = s.redirect.enabled && s.redirect.rules.some((r) => !r.auto && r.on !== false && r.find);
     if (manual) chrome.contextMenus.create({ id: "redirect", title: "Redirect with rules", contexts: ["page"] });
-    const hosts = ["catbox", "x02"].filter((h) => s.upload[h] && (h !== "x02" || s.upload.x02Verified));
+    const hosts = TT.uploadHosts(s.upload);
     if (hosts.length === 1) {
       chrome.contextMenus.create({ id: `upload:${hosts[0]}`, title: `Upload image to ${hosts[0]}`, contexts: ["image"] });
     } else if (hosts.length === 2) {
