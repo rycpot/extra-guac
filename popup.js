@@ -85,13 +85,19 @@ async function send(type, payload = {}) {
 }
 
 let toastTimer = 0;
+// Stays long enough to read: about 2 s for a word or two, up to 6 s for a sentence (errors
+// at least 4 s), and while the pointer is on it.
 function toast(text, isError = false) {
   const t = $("toast");
   t.textContent = text;
   t.classList.toggle("error", isError);
   t.hidden = false;
+  const ms = Math.min(6000, Math.max(isError ? 4000 : 2000, 1000 + text.length * 55));
+  const hide = () => (t.hidden = true);
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (t.hidden = true), isError ? 4000 : 2200);
+  toastTimer = setTimeout(hide, ms);
+  t.onpointerenter = () => clearTimeout(toastTimer);
+  t.onpointerleave = () => { clearTimeout(toastTimer); toastTimer = setTimeout(hide, 1200); };
 }
 
 const fail = (err) => toast(err.message, true);
