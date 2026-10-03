@@ -39,6 +39,10 @@
       .bar button:hover { background: rgba(40,40,40,.95); }
       .bar .yes { color: #30d158; }
       .bar .up[aria-disabled=true] { opacity: .45; cursor: default; }
+      .pick { position: absolute; bottom: calc(100% + 8px); left: 0; display: flex; gap: 4px; padding: 4px; border-radius: 10px;
+        background: rgba(12,12,12,.94); box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+      .pick button { width: auto; height: 28px; padding: 0 12px; font: 500 12px system-ui, sans-serif; background: transparent; box-shadow: none; }
+      .pick button:hover { background: rgba(255,255,255,.12); }
       /* Why ☁ is off, shown at once on hover (the browser's own tooltip waits a second). */
       .tip { position: absolute; bottom: calc(100% + 8px); padding: 6px 10px; border-radius: 8px; white-space: nowrap;
         background: rgba(12,12,12,.94); color: rgba(255,255,255,.92); font: 500 12px system-ui, sans-serif;
@@ -75,6 +79,7 @@
     layer.classList.toggle("has-sel", !!rect);
     sel.hidden = !rect;
     bar.hidden = !has || !!drag;
+    if (drag) root.querySelector(".pick")?.remove();
     hint.hidden = !!rect;
     if (!rect) return;
     Object.assign(sel.style, { left: `${rect.x}px`, top: `${rect.y}px`, width: `${rect.width}px`, height: `${rect.height}px` });
@@ -132,9 +137,10 @@
     render();
   });
 
-  // ☁ goes to the default host (or the one that's on); none on: it says where to turn one on.
+  // ☁ goes to the host picked in settings → image upload; with "show both hosts" it opens a
+  // small picker of the two. None on: it says where to turn one on.
   const up = root.querySelector(".up");
-  let canUpload = false;
+  let canUpload = false, choices = [];
   const NO_HOST = "Turn on imglink or x02 in upload images to upload";
   const tip = document.createElement("div");
   tip.className = "tip";
@@ -150,16 +156,31 @@
   });
   up.addEventListener("pointerleave", () => { tip.hidden = true; });
   chrome.storage.local.get("tt").then(({ tt }) => {
-    const u = tt?.upload || {}, def = tt?.shot?.host || "imglink";
-    const on = [u.imglink && "imglink", u.x02 && u.x02Verified && "x02"].filter(Boolean); // as TT.uploadHosts
+    const u = tt?.upload || {};
+    const on = [u.imglink && "imglink", u.x02 && u.x02Verified && "x02"].filter(Boolean); // as TT.uploadChoices
+    choices = on.includes(u.menu) ? [u.menu] : on;
     canUpload = on.length > 0;
     // Usable: the normal tooltip. Off: no title (it would show late, on top), our own instead.
-    if (canUpload) up.title = `Upload to ${on.includes(def) ? def : on[0]}`;
+    if (canUpload) up.title = choices.length === 1 ? `Upload to ${choices[0]}` : "Upload to…";
     else up.removeAttribute("title");
     up.setAttribute("aria-label", canUpload ? up.title : NO_HOST);
     up.setAttribute("aria-disabled", String(!canUpload));
   });
-  up.addEventListener("click", () => canUpload && confirm("upload"));
+  up.addEventListener("click", () => {
+    if (!canUpload) return;
+    if (choices.length === 1) return confirm("upload", choices[0]);
+    if (root.querySelector(".pick")) return root.querySelector(".pick").remove();
+    const pick = document.createElement("div");
+    pick.className = "pick";
+    for (const h of choices) {
+      const b = document.createElement("button");
+      b.textContent = h;
+      b.title = `Upload to ${h}`;
+      b.onclick = () => confirm("upload", h);
+      pick.append(b);
+    }
+    bar.append(pick);
+  });
   root.querySelector(".no").addEventListener("click", cancel);
   root.querySelector(".yes").addEventListener("click", () => confirm());
   addEventListener("keydown", onKey, true);
@@ -179,12 +200,12 @@
     cleanup();
   }
 
-  function confirm(action = "save") {
+  function confirm(action = "save", host = null) {
     const chosen = { ...rect };
     cleanup();
     // Wait until the overlay is gone from the screen before the tab is captured.
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      chrome.runtime.sendMessage({ type: "areaSelected", rect: chosen, viewportWidth: innerWidth, action });
+      chrome.runtime.sendMessage({ type: "areaSelected", rect: chosen, viewportWidth: innerWidth, action, host });
     }));
   }
 

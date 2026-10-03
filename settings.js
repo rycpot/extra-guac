@@ -95,13 +95,6 @@
   function update() {
     for (const out of document.querySelectorAll("output[data-for]")) out.textContent = $(out.dataset.for).value;
     $("qualityRow").hidden = settings.shot.format !== "jpeg";
-    // Which image hosts can take uploads (switched on in the tools; x02 with a verified key).
-    const u = settings.upload;
-    const on = TT.uploadHosts(u);
-    $("shotHostHint").textContent = !on.length
-      ? "Neither host is on: switch imglink or x02 on in the tools (upload images) to upload screenshots. Uploads are unlisted: anyone with the link can open them."
-      : on.includes(settings.shot.host) ? `Uploads are unlisted: anyone with the link can open them. If ${settings.shot.host} fails, the card offers ${on.length > 1 ? "the other host or " : ""}saving instead.`
-      : `${settings.shot.host} isn't on, so ${on[0]} is used. Uploads are unlisted: anyone with the link can open them.`;
   }
 
   // ---- Alert sound ----

@@ -29,6 +29,7 @@
     show();
     if (msg.auto === "upload") upload(msg.host);
     else setPhase("preview");
+    if (msg.auto === "pick") { pinned = true; clearTimeout(hideTimer); openPicker(); } // upload mode, both hosts: ask
   });
 
   const ICON = {
@@ -48,7 +49,7 @@
       root = host.attachShadow({ mode: "closed" });
       root.innerHTML = `
         <style>
-          .card { display: flex; align-items: center; gap: 8px; max-width: min(420px, calc(100vw - 32px)); padding: 6px;
+          .card { position: relative; display: flex; align-items: center; gap: 8px; max-width: min(420px, calc(100vw - 32px)); padding: 6px;
             border-radius: 12px; background: rgba(16,16,16,.85); color: #fff; font: 500 11.5px/1.35 system-ui, sans-serif;
             opacity: .6; box-shadow: 0 4px 18px rgba(0,0,0,.35);
             outline: 1px solid rgba(255,255,255,.28); outline-offset: -1px; } /* the edge keeps it visible on dark pages */
@@ -63,6 +64,9 @@
           button.t { padding: 0 7px; font-size: 11px; }
           button:hover { background: rgba(255,255,255,.12); }
           button[disabled] { opacity: .4; cursor: default; background: none; }
+          .pick { position: absolute; bottom: calc(100% + 6px); display: flex; gap: 2px; padding: 4px; border-radius: 10px;
+            background: rgba(16,16,16,.92); outline: 1px solid rgba(255,255,255,.28); outline-offset: -1px; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+          .pick button { padding: 0 10px; font-size: 11.5px; }
           button.del.armed { color: #ff6b5e; background: rgba(255,69,58,.18); }
           svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
           .x svg { width: 11px; height: 11px; }
@@ -168,7 +172,30 @@
     setTimeout(() => (btn.innerHTML = svg("copy")), 1200);
   }
 
+  // Host picker: a row of host names just above the card's ☁ button.
+  function togglePicker() {
+    if (root.querySelector(".pick")) return closePicker();
+    openPicker();
+  }
+  function openPicker() {
+    closePicker();
+    const pick = document.createElement("div");
+    pick.className = "pick";
+    for (const h of shot.choices) {
+      const b = document.createElement("button");
+      b.textContent = h;
+      b.title = `Upload to ${h}`;
+      b.onclick = () => { closePicker(); upload(h); };
+      pick.append(b);
+    }
+    card.append(pick);
+    const anchor = root.querySelector("button.cloud");
+    if (anchor) pick.style.right = `${card.getBoundingClientRect().right - anchor.getBoundingClientRect().right}px`;
+  }
+  const closePicker = () => root.querySelector(".pick")?.remove();
+
   function setPhase(p) {
+    closePicker();
     if (!shot) return;
     phase = p;
     const main = root.querySelector(".main"), sub = root.querySelector(".sub"), btns = root.querySelector(".btns");
@@ -191,8 +218,11 @@
       main.textContent = shot.label;
       sub.textContent = shot.truncated ? `top ${shot.screens} screens only · not saved yet` : "not saved yet";
       button(svg("save"), "Save to Downloads", save);
-      const def = shot.hosts.includes(shot.host) ? shot.host : shot.hosts[0];
-      button(svg("cloud"), def ? `Upload to ${def}` : "Turn on imglink or x02 in upload images to upload", def && (() => upload(def)));
+      // ☁: one host offered → straight there; both → a small picker attached to it.
+      const choices = shot.choices || [];
+      const cloud = button(svg("cloud"), choices.length === 1 ? `Upload to ${choices[0]}` : choices.length ? "Upload to…" : "Turn on imglink or x02 in upload images to upload",
+        choices.length === 1 ? () => upload(choices[0]) : choices.length ? () => togglePicker() : null);
+      cloud.classList.add("cloud");
       autoHide();
     } else if (p === "uploading") {
       main.textContent = `Uploading to ${shot.host}…`;

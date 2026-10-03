@@ -123,16 +123,8 @@
       </div>
       <p class="hint"><b>Preview card:</b> a faint card at the bottom-right of the page shows the shot with ↓ save and ☁ upload;
         nothing is saved until you pick one, and it goes after a few seconds unless you point at it.
-        <b>Save only:</b> straight to the folder below. <b>Upload:</b> straight to the image host below; the card shows the link.
+        <b>Save only:</b> straight to the folder below. <b>Upload:</b> straight to the image host picked in image upload settings (with "show both hosts", the card asks which); the card shows the link.
         Area shots have both on the selection: ☁ uploads, ✓ saves.</p>
-    </section>
-    <section>
-      <h2>Upload screenshots to</h2>
-      <div class="row">
-        <label><input type="radio" name="shotHost" value="imglink" data-path="shot.host"> imglink</label>
-        <label><input type="radio" name="shotHost" value="x02" data-path="shot.host"> x02</label>
-      </div>
-      <p class="hint" id="shotHostHint"></p>
     </section>
     <section>
       <h2>Save to</h2>
@@ -398,14 +390,15 @@ Card 4111 1111 1111 1111</textarea>
   <div class="pane" id="upload">
     <header class="pane-head"><h1>image upload</h1></header>
     <section>
-      <h2>Right-click menu</h2>
+      <h2>Upload to</h2>
       <div class="row">
         <label><input type="radio" name="uploadMenu" value="both" data-path="upload.menu"> show both hosts</label>
         <label><input type="radio" name="uploadMenu" value="imglink" data-path="upload.menu"> always imglink</label>
         <label><input type="radio" name="uploadMenu" value="x02" data-path="upload.menu"> always x02</label>
       </div>
-      <p class="hint">With both hosts on, <i>Upload image to</i> either opens a choice of the two, or uploads to the one picked here
-        straight away. With only one host on, that one is used either way.</p>
+      <p class="hint">For right-click uploads and screenshots (☁). With both hosts on, <i>show both hosts</i> lets you pick each time:
+        the right-click item opens the two, and ☁ opens a small picker. <i>Always</i> uploads straight to that host.
+        With only one host on, that one is used either way. If an upload fails, the screenshot card offers the other host.</p>
     </section>
     <section>
       <h2>ImgLink <span class="hint" id="imglinkState"></span></h2>
