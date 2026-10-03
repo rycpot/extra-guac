@@ -4,7 +4,8 @@
 // What happens to a tab or full-page shot is set per kind in settings (shot.tab /
 // shot.full): "preview" shows it in a card on the page (shot-card.js) with save and
 // upload, "local" saves it straight away, "cloud" uploads it straight away to the
-// default host (shot.host) and the card shows the link. An area shot is saved with ✓
+// host (the one picked in settings → image upload; with "show both hosts" the card asks
+// which) and the card shows the link. An area shot is saved with ✓
 // or uploaded with ☁ on the selection.
 
 const captureHandlers = {
@@ -16,23 +17,26 @@ const captureHandlers = {
     return finishShot(tab, shot[mode === "full" ? "full" : "tab"], cap);
   },
   // Sent by area.js once the user confirms the selection (✓ save, ☁ upload).
-  areaSelected: async ({ rect, viewportWidth, action }, sender) =>
-    finishShot(sender.tab, action === "upload" ? "cloud" : "local", await captureArea(sender.tab, rect, viewportWidth)),
+  areaSelected: async ({ rect, viewportWidth, action, host }, sender) =>
+    finishShot(sender.tab, action === "upload" ? "cloud" : "local", await captureArea(sender.tab, rect, viewportWidth), host),
   // From the card.
   shotSave: async ({ items }) => ({ files: await saveItems(items) }),
   shotUpload: ({ items, host }, sender) => uploadShot(items, host, sender.tab),
 };
 
 // A capture is { items: [{ name, dataUrl }], label, truncated? }; name includes the folder.
-async function finishShot(tab, action, cap) {
+// host: the one already picked (area ☁); otherwise the one from settings, and with "show
+// both hosts" the card lets you pick.
+async function finishShot(tab, action, cap, host) {
   const extra = { truncated: !!cap.truncated, screens: MAX_SCREENS };
   if (action !== "preview" && action !== "cloud") return { files: await saveItems(cap.items), ...extra };
-  const { shot, upload } = await TT.getSettings();
-  const hosts = uploadHostsOn(upload);
-  const msg = { type: "egShotCard", items: cap.items, label: cap.label, hosts, host: hosts.includes(shot.host) ? shot.host : hosts[0], ...extra };
+  const { upload } = await TT.getSettings();
+  const hosts = uploadHostsOn(upload), choices = TT.uploadChoices(upload);
+  if (host && !hosts.includes(host)) host = null;
+  const msg = { type: "egShotCard", items: cap.items, label: cap.label, hosts, choices, host: host || (choices.length === 1 ? choices[0] : null), ...extra };
   if (action === "cloud") {
-    if (!msg.host) throw new Error("Turn on imglink or x02 in upload images to upload screenshots");
-    msg.auto = "upload";
+    if (!hosts.length) throw new Error("Turn on imglink or x02 in upload images to upload screenshots");
+    msg.auto = msg.host ? "upload" : "pick"; // both hosts offered: the card asks which
   }
   const shown = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["shot-card.js"] })
     .then(() => chrome.tabs.sendMessage(tab.id, msg, { frameId: 0 }))
@@ -40,10 +44,11 @@ async function finishShot(tab, action, cap) {
   if (shown) return { card: action, ...extra };
   // Pages the card can't be shown on: save it, or upload it with a notification.
   if (action === "preview") return { files: await saveItems(cap.items), ...extra };
-  const res = await uploadShot(cap.items, msg.host, tab);
+  const to = msg.host || choices[0];
+  const res = await uploadShot(cap.items, to, tab);
   chrome.notifications.create(`upload|${res.links[0]}`, {
     type: "basic", iconUrl: "icons/icon128.png",
-    title: `Screenshot uploaded to ${msg.host}${res.copied ? " · link copied" : ""}`,
+    title: `Screenshot uploaded to ${to}${res.copied ? " · link copied" : ""}`,
     message: res.links.join("\n"), contextMessage: "Click to open",
   });
   return { card: "notified", ...extra };

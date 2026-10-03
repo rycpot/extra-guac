@@ -5,8 +5,8 @@
     theme: "dark", // "dark" | "light" | "auto" (follow the system)
     openIn: "panel", // what the toolbar icon opens: "popup" | "panel" (Chrome's side panel)
     // tab / full: after the shot, "preview" (card on the page) | "local" (save) | "cloud"
-    // (upload to host, the default image host: "imglink" | "x02").
-    shot: { format: "png", quality: 92, folder: "", tab: "preview", full: "preview", host: "imglink" },
+    // (upload to the host from upload.menu, see TT.uploadChoices).
+    shot: { format: "png", quality: 92, folder: "", tab: "preview", full: "preview" },
     refresh: {
       mode: "fixed", // "fixed" | "random"
       fixed: 30,
@@ -34,8 +34,8 @@
     dark: { enabled: false, mode: "sites", sites: [], exclude: [], force: [] },
     // Image hosts. ImgLink works without a key (anonymous) or with a verified one (your
     // account); x02 needs a verified key. Uploads to both are unlisted (see bg-upload.js).
-    // menu: with both on, "both" offers both hosts in the right-click menu, or a host name
-    // uses that host straight away.
+    // menu: with both on, "both" lets you pick the host each time (right-click menu and
+    // screenshot ☁), or a host name always uses that host.
     upload: { imglink: false, x02: false, imglinkKey: "", imglinkVerified: false, x02Key: "", x02Verified: false, menu: "both" },
     // Clipboard history: limit = unpinned entries kept; maxAgeDays 0 = no age limit;
     // menu = pinned entries in the right-click menu; exclude = sites never recorded.
@@ -134,6 +134,8 @@
 
   // Image hosts that can take an upload right now, in menu order.
   const uploadHosts = (u) => [u.imglink && "imglink", u.x02 && u.x02Verified && u.x02Key?.trim() && "x02"].filter(Boolean);
+  // The hosts to offer for an upload: the one picked in settings, or every host that's on.
+  const uploadChoices = (u) => { const on = uploadHosts(u); return on.includes(u.menu) ? [u.menu] : on; };
 
-  globalThis.TT = { uploadHosts, DEFAULTS, MAX_KEYWORDS, HL_LIMITS, HL_COLORS, hlOf, SHORTENERS, PANELS, SECTIONS, layoutOf, merge, getSettings, updateSettings, monthKey, cleanFolder, applyTheme };
+  globalThis.TT = { uploadHosts, uploadChoices, DEFAULTS, MAX_KEYWORDS, HL_LIMITS, HL_COLORS, hlOf, SHORTENERS, PANELS, SECTIONS, layoutOf, merge, getSettings, updateSettings, monthKey, cleanFolder, applyTheme };
 })();
