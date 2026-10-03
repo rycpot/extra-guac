@@ -299,9 +299,9 @@
     meter("x02Daily", res.today, res.dailyLimit, `${res.today} / ${res.dailyLimit}`);
     const reset = res.resetsAt && new Date(res.resetsAt);
     const hrs = reset && (reset - Date.now()) / 36e5;
-    $("x02Daily").querySelector(".meter-note").textContent = [
+    $("x02UsageNote").textContent = [
       res.plan ? `${res.plan} plan` : "",
-      hrs > 0 ? `resets in ${hrs >= 1 ? `${Math.round(hrs)} h` : `${Math.max(1, Math.round(hrs * 60))} min`}` : "",
+      hrs > 0 ? `daily uploads reset in ${hrs >= 1 ? `${Math.round(hrs)} h` : `${Math.max(1, Math.round(hrs * 60))} min`}` : "",
     ].filter(Boolean).join(" · ");
     $("x02Usage").hidden = $("x02Storage").hidden && $("x02Daily").hidden;
   }

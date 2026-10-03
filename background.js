@@ -63,7 +63,8 @@ function syncMenus(s) {
     await chrome.contextMenus.removeAll();
     const manual = s.redirect.enabled && s.redirect.rules.some((r) => !r.auto && r.on !== false && r.find);
     if (manual) chrome.contextMenus.create({ id: "redirect", title: "Redirect with rules", contexts: ["page"] });
-    const hosts = TT.uploadHosts(s.upload);
+    let hosts = TT.uploadHosts(s.upload);
+    if (hosts.includes(s.upload.menu)) hosts = [s.upload.menu]; // "default to this host"
     if (hosts.length === 1) {
       chrome.contextMenus.create({ id: `upload:${hosts[0]}`, title: `Upload image to ${hosts[0]}`, contexts: ["image"] });
     } else if (hosts.length === 2) {

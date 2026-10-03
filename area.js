@@ -39,6 +39,10 @@
       .bar button:hover { background: rgba(40,40,40,.95); }
       .bar .yes { color: #30d158; }
       .bar .up[aria-disabled=true] { opacity: .45; cursor: default; }
+      /* Why ☁ is off, shown at once on hover (the browser's own tooltip waits a second). */
+      .tip { position: absolute; bottom: calc(100% + 8px); padding: 6px 10px; border-radius: 8px; white-space: nowrap;
+        background: rgba(12,12,12,.94); color: rgba(255,255,255,.92); font: 500 12px system-ui, sans-serif;
+        box-shadow: 0 4px 14px rgba(0,0,0,.35); pointer-events: none; }
       svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
       [hidden] { display: none !important; }
     </style>
@@ -131,11 +135,28 @@
   // ☁ goes to the default host (or the one that's on); none on: it says where to turn one on.
   const up = root.querySelector(".up");
   let canUpload = false;
+  const NO_HOST = "Turn on imglink or x02 in upload images to upload";
+  const tip = document.createElement("div");
+  tip.className = "tip";
+  tip.textContent = NO_HOST;
+  tip.hidden = true;
+  bar.append(tip);
+  up.addEventListener("pointerenter", () => {
+    tip.hidden = canUpload;
+    // Grow towards the side with room: leftwards from the bar's right edge, unless that's off-screen.
+    const room = bar.getBoundingClientRect().right;
+    tip.style.left = room > 360 ? "auto" : "0";
+    tip.style.right = room > 360 ? "0" : "auto";
+  });
+  up.addEventListener("pointerleave", () => { tip.hidden = true; });
   chrome.storage.local.get("tt").then(({ tt }) => {
     const u = tt?.upload || {}, def = tt?.shot?.host || "imglink";
     const on = [u.imglink && "imglink", u.x02 && u.x02Verified && "x02"].filter(Boolean); // as TT.uploadHosts
     canUpload = on.length > 0;
-    up.title = canUpload ? `Upload to ${on.includes(def) ? def : on[0]}` : "Turn on imglink or x02 in upload images to upload";
+    // Usable: the normal tooltip. Off: no title (it would show late, on top), our own instead.
+    if (canUpload) up.title = `Upload to ${on.includes(def) ? def : on[0]}`;
+    else up.removeAttribute("title");
+    up.setAttribute("aria-label", canUpload ? up.title : NO_HOST);
     up.setAttribute("aria-disabled", String(!canUpload));
   });
   up.addEventListener("click", () => canUpload && confirm("upload"));
