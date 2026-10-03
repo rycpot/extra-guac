@@ -6,6 +6,7 @@
 
 const uploadHandlers = {
   verifyX02: ({ key }) => verifyX02(key),
+  x02Usage: () => x02Usage(),
   clearUploadHistory: () => chrome.storage.local.set({ uploadHistory: [] }),
 };
 
@@ -67,6 +68,27 @@ const UPLOADERS = {
     },
   },
 };
+
+// Storage and daily uploads for settings → upload images, from the same account
+// summary x02's own dashboard reads (not in their published API docs, so any field may be
+// missing: settings then leaves that meter out). The daily limit follows the plan.
+async function x02Usage() {
+  const { upload: s } = await TT.getSettings();
+  if (!s.x02Verified || !s.x02Key.trim()) throw new Error("No verified x02 key");
+  const res = await fetch("https://up.x02.me/api/user/dashboard?page=1&limit=1", { headers: { "x-api-key": s.x02Key.trim() } });
+  const body = await res.json().catch(() => null);
+  if (!res.ok || body?.success === false) throw new Error(body?.error || `x02 answered HTTP ${res.status}`);
+  const user = body?.data?.user || {};
+  const num = (v) => (Number.isFinite(Number(v)) && v !== null && v !== "" ? Number(v) : null);
+  return {
+    storageUsed: num(user.usage?.monthlyStorageUsed),
+    storageLimit: num(user.limits?.monthlyStorageLimit),
+    today: num(user.usage?.todayCount),
+    dailyLimit: num(user.limits?.dailyLimit),
+    resetsAt: user.usage?.resetsAt || null,
+    plan: typeof user.plan === "string" ? user.plan : typeof user.tier === "string" ? user.tier : "",
+  };
+}
 
 async function verifyX02(key) {
   key = (key || "").trim();

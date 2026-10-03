@@ -252,6 +252,36 @@
     $("x02State").textContent = x02StateText();
     $("x02State").className = `hint ${settings.upload.x02Verified ? "x02-ok" : ""}`;
     $("x02UseRow").querySelector("input").disabled = !settings.upload.x02Verified;
+    if (settings.upload.x02Verified && settings.upload.x02Key !== usageFor) loadX02Usage();
+    if (!settings.upload.x02Verified) { usageFor = null; $("x02Usage").hidden = true; }
+  }
+
+  // x02 storage and daily uploads, fetched when settings open (and after a key is
+  // verified). Sizes are shown the way x02 shows them: MB, or GB from 1 GB up.
+  let usageFor = null;
+  const x02Size = (b) => (b >= 1024 ** 3 ? `${(b / 1024 ** 3).toFixed(2)} GB` : `${(b / 1024 ** 2).toFixed(2)} MB`);
+  async function loadX02Usage() {
+    usageFor = settings.upload.x02Key;
+    const res = await chrome.runtime.sendMessage({ type: "x02Usage" }).catch(() => null);
+    if (!res?.ok || usageFor !== settings.upload.x02Key) return void ($("x02Usage").hidden = true);
+    const meter = (id, used, limit, text) => {
+      const el = $(id);
+      el.hidden = used == null || !limit;
+      if (el.hidden) return;
+      el.querySelector("b").textContent = text;
+      el.querySelector(".bar i").style.width = `${Math.min(100, (used / limit) * 100)}%`;
+    };
+    const pct = (u, l) => { const p = (u / l) * 100; return p > 0 && p < 0.1 ? "<0.1" : p.toFixed(1); };
+    meter("x02Storage", res.storageUsed, res.storageLimit,
+      `${x02Size(res.storageUsed)} / ${x02Size(res.storageLimit)} (${pct(res.storageUsed, res.storageLimit)}%)`);
+    meter("x02Daily", res.today, res.dailyLimit, `${res.today} / ${res.dailyLimit}`);
+    const reset = res.resetsAt && new Date(res.resetsAt);
+    const hrs = reset && (reset - Date.now()) / 36e5;
+    $("x02Daily").querySelector(".meter-note").textContent = [
+      res.plan ? `${res.plan} plan` : "",
+      hrs > 0 ? `resets in ${hrs >= 1 ? `${Math.round(hrs)} h` : `${Math.max(1, Math.round(hrs * 60))} min`}` : "",
+    ].filter(Boolean).join(" · ");
+    $("x02Usage").hidden = $("x02Storage").hidden && $("x02Daily").hidden;
   }
 
   // ---- URL shortener services ----
