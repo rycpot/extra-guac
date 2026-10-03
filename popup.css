@@ -208,6 +208,7 @@ output { width: 38px; text-align: right; color: var(--text2); font-variant-numer
 .nuke-progress.done .status { color: var(--green); }
 
 /* Two-step clear */
+.history .del.armed { background: color-mix(in srgb, var(--red) 16%, transparent); color: var(--red); }
 #clearHistory.armed { background: color-mix(in srgb, var(--red) 16%, transparent); color: var(--red); }
 
 /* Page tools tab */

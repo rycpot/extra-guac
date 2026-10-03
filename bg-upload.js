@@ -14,6 +14,7 @@ const uploadHandlers = {
   verifyImglink: ({ key }) => verifyImglink(key),
   x02Usage: () => x02Usage(),
   clearUploadHistory: () => chrome.storage.local.set({ uploadHistory: [] }),
+  deleteUploads: ({ links }) => deleteUploads(links),
 };
 
 const UPLOAD_HISTORY_LIMIT = 100;
@@ -38,7 +39,9 @@ const UPLOADERS = {
       let body = null;
       try { body = JSON.parse(text); } catch {}
       const url = body?.url || body?.images?.[0]?.url;
-      if (res.ok && /^https:\/\//i.test(url || "")) return url;
+      const id = body?.id || body?.images?.[0]?.id;
+      // Only uploads to your account can be deleted (anonymous ones can't, by anyone).
+      if (res.ok && /^https:\/\//i.test(url || "")) return { url, del: withKey && id ? { host: "imglink", id } : null };
       const why = body?.error || body?.message || text.trim().slice(0, 160) || `HTTP ${res.status}`;
       if (res.status === 401) throw new Error(`imglink refused the API key: ${why}`);
       if (res.status === 413) throw new Error(`imglink: image too large or storage full (${withKey ? "50 MB per file" : "25 MB per file without a key"})`);
@@ -70,7 +73,11 @@ const UPLOADERS = {
       const text = await res.text();
       let body = null;
       try { body = JSON.parse(text); } catch {}
-      if (res.ok && body?.success && body.data?.url) return body.data.url;
+      // Deleting needs the file name the upload answered with (or the link's last part).
+      if (res.ok && body?.success && body.data?.url) {
+        const id = body.data.filename || body.data.fileName || decodeURIComponent(new URL(body.data.url).pathname.split("/").pop() || "");
+        return { url: body.data.url, del: id ? { host: "x02", id } : null };
+      }
       const why = body?.error || text.trim().slice(0, 160) || `HTTP ${res.status}`;
       if (res.status === 401 || res.status === 403) throw new Error(`x02 refused the API key: ${why}`);
       if (res.status === 413) throw new Error("x02: image is larger than your plan allows");
@@ -146,6 +153,40 @@ async function verifyX02(key) {
 
 const uploadHostsOn = TT.uploadHosts; // switched on (and, for x02, a verified key)
 
+// Deletes uploads from their host (x02, or ImgLink uploads made with your key) and drops
+// them from the history. Each link that can't be deleted keeps its entry and says why.
+const DELETERS = {
+  async x02(id, s) {
+    const res = await fetch(`https://up.x02.me/api/user/images/${encodeURIComponent(id)}/delete`, { method: "POST", headers: { "x-api-key": s.x02Key.trim() } });
+    const body = await res.json().catch(() => null);
+    if (!res.ok || body?.success === false) throw new Error(`x02: ${body?.error || body?.message || `HTTP ${res.status}`}`);
+  },
+  async imglink(id, s) {
+    if (!s.imglinkKey.trim()) throw new Error("imglink: needs the API key it was uploaded with");
+    const res = await fetch(`https://imglink.cc/api/v1/image/${encodeURIComponent(id)}`, { method: "DELETE", headers: { "x-api-key": s.imglinkKey.trim() } });
+    const body = await res.json().catch(() => null);
+    if (!res.ok && res.status !== 404) throw new Error(`imglink: ${body?.error || `HTTP ${res.status}`}`); // 404: already gone
+  },
+};
+
+async function deleteUploads(links) {
+  const { upload: s } = await TT.getSettings();
+  const { uploadHistory = [] } = await chrome.storage.local.get("uploadHistory");
+  const gone = new Set(), errors = [];
+  for (const link of links) {
+    const entry = uploadHistory.find((e) => e.link === link);
+    try {
+      if (!entry?.del || !DELETERS[entry.del.host]) throw new Error("this upload can't be deleted from here");
+      await DELETERS[entry.del.host](entry.del.id, s);
+      gone.add(link);
+    } catch (e) { errors.push(e.message); }
+  }
+  const { uploadHistory: now = [] } = await chrome.storage.local.get("uploadHistory");
+  await chrome.storage.local.set({ uploadHistory: now.filter((e) => !gone.has(e.link)) });
+  if (errors.length) throw new Error(errors[0]);
+  return { deleted: gone.size };
+}
+
 async function recordUploads(entries) {
   const { uploadHistory = [] } = await chrome.storage.local.get("uploadHistory");
   uploadHistory.unshift(...entries);
@@ -159,19 +200,20 @@ async function uploadShot(items, host, tab) {
   const { upload: s } = await TT.getSettings();
   if (!uploadHostsOn(s).includes(host)) throw new Error(`${host === "x02" ? "x02 needs a verified API key" : `${host} is switched off`} (upload images)`);
   const up = UPLOADERS[host];
-  const links = [];
+  const done = [];
   for (const it of items) {
     const blob = await (await fetch(it.dataUrl)).blob();
-    links.push(await up.fromFile(blob, it.name.split("/").pop(), s));
+    done.push(await up.fromFile(blob, it.name.split("/").pop(), s));
   }
+  const links = done.map((d) => d.url);
   let site = "page";
   try { site = new URL(tab.url).hostname.replace(/^www\./, "") || site; } catch {}
   const at = Date.now();
-  await recordUploads(links.map((link) => ({ host: up.label, link, source: `screenshot of ${site}`, at })));
+  await recordUploads(done.map((d) => ({ host: up.label, link: d.url, source: `screenshot of ${site}`, at, ...(d.del ? { del: d.del } : {}) })));
   const copied = await copyToClipboard(links.join("\n"), tab);
   const { notes = {} } = await chrome.storage.local.get("notes");
   if (!notes.shotUpload) await chrome.storage.local.set({ notes: { ...notes, shotUpload: at } });
-  return { links, copied, first: !notes.shotUpload };
+  return { links, copied, first: !notes.shotUpload, deletable: done.every((d) => d.del) };
 }
 
 async function uploadImage(host, srcUrl, tab) {
@@ -179,17 +221,18 @@ async function uploadImage(host, srcUrl, tab) {
   const up = UPLOADERS[host];
   setBadge(tab.id, "↑", "#0a84ff");
   try {
-    let link;
+    let done = null;
     let firstError = null;
     if (up.fromUrl && /^https?:/i.test(srcUrl)) {
-      try { link = await up.fromUrl(srcUrl, s); } catch (e) { firstError = e; }
+      try { done = await up.fromUrl(srcUrl, s); } catch (e) { firstError = e; }
     }
-    if (!link) {
+    if (!done) {
       if (firstError && /API key|rate limit|larger/.test(firstError.message)) throw firstError;
       const { blob, name } = await fetchImage(srcUrl, tab);
-      link = await up.fromFile(blob, name, s);
+      done = await up.fromFile(blob, name, s);
     }
-    await recordUploads([{ host: up.label, link, source: srcUrl.startsWith("data:") ? "(embedded image)" : srcUrl, at: Date.now() }]);
+    const link = done.url;
+    await recordUploads([{ host: up.label, link, source: srcUrl.startsWith("data:") ? "(embedded image)" : srcUrl, at: Date.now(), ...(done.del ? { del: done.del } : {}) }]);
     const copied = await copyToClipboard(link, tab);
     setBadge(tab.id, "✓");
     chrome.notifications.create(`upload|${link}`, {

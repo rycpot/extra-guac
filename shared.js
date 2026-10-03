@@ -34,7 +34,9 @@
     dark: { enabled: false, mode: "sites", sites: [], exclude: [], force: [] },
     // Image hosts. ImgLink works without a key (anonymous) or with a verified one (your
     // account); x02 needs a verified key. Uploads to both are unlisted (see bg-upload.js).
-    upload: { imglink: false, x02: false, imglinkKey: "", imglinkVerified: false, x02Key: "", x02Verified: false },
+    // menu: with both on, "both" offers both hosts in the right-click menu, or a host name
+    // uses that host straight away.
+    upload: { imglink: false, x02: false, imglinkKey: "", imglinkVerified: false, x02Key: "", x02Verified: false, menu: "both" },
     // Clipboard history: limit = unpinned entries kept; maxAgeDays 0 = no age limit;
     // menu = pinned entries in the right-click menu; exclude = sites never recorded.
     clip: { enabled: false, limit: 200, maxAgeDays: 0, menu: false, exclude: [] },

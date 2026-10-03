@@ -398,6 +398,16 @@ Card 4111 1111 1111 1111</textarea>
   <div class="pane" id="upload">
     <header class="pane-head"><h1>image upload</h1></header>
     <section>
+      <h2>Right-click menu</h2>
+      <div class="row">
+        <label><input type="radio" name="uploadMenu" value="both" data-path="upload.menu"> show both hosts</label>
+        <label><input type="radio" name="uploadMenu" value="imglink" data-path="upload.menu"> always imglink</label>
+        <label><input type="radio" name="uploadMenu" value="x02" data-path="upload.menu"> always x02</label>
+      </div>
+      <p class="hint">With both hosts on, <i>Upload image to</i> either opens a choice of the two, or uploads to the one picked here
+        straight away. With only one host on, that one is used either way.</p>
+    </section>
+    <section>
       <h2>ImgLink <span class="hint" id="imglinkState"></span></h2>
       <label class="row"><input type="checkbox" data-path="upload.imglink"> Offer "Upload image to imglink" when right-clicking images</label>
       <div class="row">
@@ -419,7 +429,8 @@ Card 4111 1111 1111 1111</textarea>
       </div>
       <div class="x02-usage" id="x02Usage" hidden>
         <div class="meter" id="x02Storage"><div class="meter-head"><span>storage</span><b></b></div><div class="bar"><i></i></div></div>
-        <div class="meter" id="x02Daily"><div class="meter-head"><span>daily uploads</span><b></b></div><div class="bar"><i></i></div><p class="meter-note"></p></div>
+        <div class="meter" id="x02Daily"><div class="meter-head"><span>daily uploads</span><b></b></div><div class="bar"><i></i></div></div>
+        <p class="meter-note" id="x02UsageNote"></p>
       </div>
       <label class="row" id="x02UseRow"><input type="checkbox" data-path="upload.x02"> Offer "Upload image to x02" when right-clicking images</label>
       <p class="hint">x02 has no anonymous uploads, so it's only available once your key checks out.
@@ -427,7 +438,7 @@ Card 4111 1111 1111 1111</textarea>
     </section>
     <section>
       <h2>How it works</h2>
-      <p class="hint">Right-click any image → <i>Upload image to …</i> (with both hosts on, the item branches into the two).
+      <p class="hint">Right-click any image → <i>Upload image to …</i> (with both hosts on, the item branches into the two, unless one is picked above).
         The link is copied, a notification confirms it, and it's listed in the popup's upload history.
         Uploads are unlisted on both hosts: not shown in any gallery, but anyone with the link can open it.
         x02 is first asked to fetch the image itself; otherwise (and always for ImgLink) Extra Guac downloads it, with your

@@ -601,6 +601,28 @@ async function renderSheet() {
     li.querySelector(".long").textContent = meta;
     li.querySelector(".long").title = title;
     li.querySelector("button").onclick = () => copy(cfg.copyText ? cfg.copyText(item) : main);
+    // Uploads that the host lets us delete (x02, ImgLink with your key): first click arms,
+    // the second deletes it from the host and from this list.
+    if (sheetKind === "upload" && item.del) {
+      const del = document.createElement("button");
+      del.className = "icon-btn small del";
+      del.title = `Delete from ${item.host}`;
+      del.innerHTML = '<svg><use href="#i-trash"/></svg>';
+      del.onclick = async () => {
+        if (!del.classList.contains("armed")) {
+          del.classList.add("armed");
+          del.title = "Click again to delete";
+          setTimeout(() => { del.classList.remove("armed"); del.title = `Delete from ${item.host}`; }, 3000);
+          return;
+        }
+        del.disabled = true;
+        try {
+          await send("deleteUploads", { links: [item.link] });
+          toast(`Deleted from ${item.host}`);
+        } catch (err) { del.disabled = false; fail(err); }
+      };
+      li.append(del);
+    }
     return li;
   }));
 }

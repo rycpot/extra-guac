@@ -37,6 +37,7 @@
     copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2.2"/><path d="M15.5 8.5V6.7a2.2 2.2 0 0 0-2.2-2.2H6.7a2.2 2.2 0 0 0-2.2 2.2v6.6a2.2 2.2 0 0 0 2.2 2.2h1.8"/>',
     open: '<path d="M14 5h5v5M19 5l-8 8M18 14v4a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18V7a1.5 1.5 0 0 1 1.5-1.5H10"/>',
     close: '<path d="M7 7l10 10M17 7 7 17"/>',
+    trash: '<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/>',
   };
   const svg = (name) => `<svg viewBox="0 0 24 24">${ICON[name]}</svg>`;
 
@@ -62,6 +63,7 @@
           button.t { padding: 0 7px; font-size: 11px; }
           button:hover { background: rgba(255,255,255,.12); }
           button[disabled] { opacity: .4; cursor: default; background: none; }
+          button.del.armed { color: #ff6b5e; background: rgba(255,69,58,.18); }
           svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
           .x svg { width: 11px; height: 11px; }
           .spin { width: 13px; height: 13px; margin: 0 6px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25);
@@ -133,6 +135,7 @@
       links = res.links;
       firstUpload = !!res.first;
       shot.copied = res.copied;
+      shot.deletable = !!res.deletable;
       setPhase("done");
     } catch (err) {
       error = err.message;
@@ -208,6 +211,28 @@
       sub.textContent = `${shot.copied ? "Link copied" : "Uploaded"} · ${shot.host}${firstUpload ? " · anyone with the link can see it" : ""}`;
       button(svg("copy"), links.length > 1 ? "Copy all links" : "Copy link", copyLinks);
       button(svg("open"), "Open", () => window.open(links[0], "_blank", "noopener"));
+      // Delete from the host: a first click arms it (turns red), a second one deletes.
+      if (shot.deletable) {
+        const hostName = shot.host; // the card may have closed by the time the timer runs
+        const del = button(svg("trash"), `Delete from ${hostName}`, async (b) => {
+          if (!b.classList.contains("armed")) {
+            b.classList.add("armed");
+            b.title = "Click again to delete";
+            setTimeout(() => { b.classList.remove("armed"); b.title = `Delete from ${hostName}`; }, 3000);
+            return;
+          }
+          b.disabled = true;
+          try {
+            await send({ type: "deleteUploads", links });
+            setPhase("deleted");
+          } catch (err) {
+            error = `Couldn't delete: ${err.message}`;
+            b.disabled = false;
+            root.querySelector(".sub").textContent = error;
+          }
+        });
+        del.classList.add("del");
+      }
       autoHide();
     } else if (p === "failed") {
       main.textContent = error;
@@ -217,6 +242,12 @@
       if (other) button(`use ${other}`, `Upload to ${other} instead`, () => upload(other), "t");
       button("save", "Save to Downloads instead", save, "t");
       clearTimeout(hideTimer); // the shot would be lost: stays until closed
+    } else if (p === "deleted") {
+      main.textContent = `Deleted from ${shot.host}`;
+      sub.textContent = "the link no longer works";
+      clearTimeout(hideTimer);
+      clearTimeout(savedTimer);
+      savedTimer = setTimeout(close, 2500);
     } else if (p === "saved") {
       main.textContent = `Saved ${savedAs}`;
       sub.textContent = "in Downloads";
