@@ -6,7 +6,8 @@
 // all with the edits drawn in. Bottom bar: zoom, then what save and upload make (PNG or JPG,
 // 1x-3x, an optional target file size) and the size of the file Save would make.
 // Opened as #annotate (Image annotate in the panel) it starts empty: drop, paste or choose
-// any image and it opens here the same way; another one later opens in a new tab.
+// any image and it opens here the same way; another one later opens in a new tab. × (top
+// right, in every editor tab) closes the image and leaves this empty page.
 (async () => {
   const $ = (id) => document.getElementById(id);
   const ICON_CHECK = '<svg class="i" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
@@ -21,6 +22,7 @@
   // JPEG and PNG come in as they are; any other image Chrome can show (WebP, GIF, AVIF, BMP,
   // SVG, ICO…) is turned into a PNG, so saving, blur and copy work as with a screenshot.
   let image = null; // the editor, once an image is in
+  let leavingOk = false; // closing the image: unsaved marks have been asked about already
   const isImage = (f) => /^image\//.test(f.type) || /\.(png|jpe?g|webp|gif|avif|bmp|svg|ico)$/i.test(f.name);
   const toDataUrl = (blob) => new Promise((resolve, reject) => {
     const fr = new FileReader();
@@ -147,6 +149,13 @@
   await editor.ready;
   image = editor;
   document.body.classList.add("has-image");
+  $("closeGrp").hidden = false;
+  $("closeImage").onclick = () => {
+    if (editor.edited() && !confirm("Close this image? Your marks on it haven't been saved.")) return;
+    leavingOk = true;
+    location.replace("#annotate");
+    location.reload();
+  };
   const first = $("shots").querySelector("img");
   $("info").textContent = `${res.label} · ${first?.naturalWidth} × ${first?.naturalHeight}${items.length > 1 ? ` · ${items.length} parts` : ""}`;
   say("not saved yet");
@@ -225,7 +234,7 @@
     return ` · ${fmtBytes(bytes)}${jpg && q != null ? ` (JPG ${Math.round(q * 100)}%)` : ""}`;
   };
   // Leaving with edits that haven't gone anywhere asks first.
-  addEventListener("beforeunload", (e) => { if (editor.edited()) e.preventDefault(); });
+  addEventListener("beforeunload", (e) => { if (editor.edited() && !leavingOk) e.preventDefault(); });
 
   // An edited shot that leaves the tab replaces its screenshot history entry, so what a blur
   // hid isn't kept there (or backed up). markSaved only after that. An image opened here
