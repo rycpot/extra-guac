@@ -1,4 +1,4 @@
-// Edit tools for a screenshot opened in a tab (shot-view.html): crop, rectangle, arrow, line,
+// Edit tools for a screenshot opened in a tab (shot-view.html): crop, rectangle, filled rectangle, arrow, line,
 // highlighter (straight), text, numbered dots, blur, remove background and clean up, with a color (nine, nine of your own,
 // or any color and opacity from the picker) and a line width, plus zoom.
 //
@@ -40,7 +40,7 @@
   const STROKE = [1, 2.5, 4.5, 7], MARKER = [10, 16, 24, 34], DOT = [6.5, 8, 10, 13];
   const TEXT_FS = 18; // a new text's size, times the unit; drag its corners to change it
   const LINE_H = 1.25; // text line height, as in the text box while typing
-  const TOOL_KEYS = { c: "crop", r: "rect", a: "arrow", l: "line", h: "marker", t: "text", n: "dot", b: "blur" };
+  const TOOL_KEYS = { c: "crop", r: "rect", f: "box", a: "arrow", l: "line", h: "marker", t: "text", n: "dot", b: "blur" };
 
   function start({ items, host, say, onChange, blur }) {
     const $ = (id) => document.getElementById(id);
@@ -190,8 +190,11 @@
       const hitW = 14 / s;
       if (o.type === "rect") {
         const r = norm(o), sw = strokeW(p, o);
-        S("rect", { x: r.x, y: r.y, width: r.w, height: r.h, rx: Math.max(sw, 2 * p.u), fill: "none", stroke: o.color, "stroke-width": sw }, g);
-        S("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "none", stroke: "transparent", "stroke-width": sw + hitW, "pointer-events": "stroke" }, g);
+        if (o.filled) S("rect", { x: r.x, y: r.y, width: r.w, height: r.h, rx: 2 * p.u, fill: o.color }, g);
+        else {
+          S("rect", { x: r.x, y: r.y, width: r.w, height: r.h, rx: Math.max(sw, 2 * p.u), fill: "none", stroke: o.color, "stroke-width": sw }, g);
+          S("rect", { x: r.x, y: r.y, width: r.w, height: r.h, fill: "none", stroke: "transparent", "stroke-width": sw + hitW, "pointer-events": "stroke" }, g);
+        }
       } else if (isLine(o)) {
         const marker = o.type === "marker", sw = marker ? markerW(p, o) : strokeW(p, o);
         if (o.type === "arrow") {
@@ -275,8 +278,9 @@
         const r = norm(o), sw = strokeW(p, o);
         ctx.lineWidth = sw;
         ctx.beginPath();
-        ctx.roundRect(r.x, r.y, r.w, r.h, Math.max(sw, 2 * p.u));
-        ctx.stroke();
+        ctx.roundRect(r.x, r.y, r.w, r.h, o.filled ? 2 * p.u : Math.max(sw, 2 * p.u));
+        if (o.filled) ctx.fill();
+        else ctx.stroke();
       } else if (o.type === "line" || o.type === "marker") {
         if (o.type === "marker") { ctx.globalAlpha = 0.4; ctx.lineCap = "butt"; }
         ctx.lineWidth = o.type === "marker" ? markerW(p, o) : strokeW(p, o);
@@ -590,7 +594,7 @@
       }
       const at = toPt(p, e, true);
       const o = { id: newId(), type: tool, color, size };
-      if (tool === "rect") Object.assign(o, { x: at.x, y: at.y, w: 0, h: 0 });
+      if (tool === "rect" || tool === "box") Object.assign(o, { type: "rect", x: at.x, y: at.y, w: 0, h: 0 }, tool === "box" && { filled: true });
       else Object.assign(o, { x1: at.x, y1: at.y, x2: at.x, y2: at.y });
       p.objects.push(o);
       sel = { p, id: o.id };
@@ -999,8 +1003,9 @@
       const marks = tool !== "crop" && tool !== "blur" && tool !== "clean";
       $("colorWrap").hidden = !marks;
       $("colorNow").style.setProperty("--c", o?.color ?? color);
-      // Widths for lines, shapes and dots; text is sized by dragging its corners.
-      $("sizeWrap").hidden = !marks || o?.type === "text" || (!o && tool === "text");
+      // Widths for lines, shapes and dots; text is sized by dragging its corners, and a
+      // filled rectangle has no line.
+      $("sizeWrap").hidden = !marks || o?.type === "text" || o?.filled || (!o && (tool === "text" || tool === "box"));
       $("sizeNow").querySelector("path").setAttribute("stroke-width", [1, 2, 3.2, 4.6][o?.size ?? size]);
       ctx.replaceChildren();
       const btn = (label, fn, cls = "tbtn") => {

@@ -235,6 +235,64 @@ async function captureArea(tab, rect, viewportWidth, format = "") {
   return { items: [{ name: shotName(tab, shot), dataUrl: await canvasToDataUrl(canvas, shot) }], label: `area · ${w} × ${h}` };
 }
 
+// The row of pixels that's stretched down below a scrolling panel, from row y of a screen.
+// Only plain columns (the same color from row `from` down to y: backgrounds, sidebars,
+// borders) carry on down as they are. Columns with a picture or text in them would smear
+// into stripes, so they take the plain color around them instead: the color on both sides
+// of them when that's the same, else the row's most common plain color (white if none).
+function fillRow(bmp, y, from) {
+  const w = bmp.width, h = y - from + 1;
+  const c = new OffscreenCanvas(w, h);
+  const cx = c.getContext("2d");
+  cx.drawImage(bmp, 0, from, w, h, 0, 0, w, h);
+  const img = cx.getImageData(0, 0, w, h);
+  const d = img.data, row = (h - 1) * w * 4;
+  const plain = new Uint8Array(w);
+  const counts = new Map();
+  for (let x = 0; x < w; x++) {
+    const i = row + x * 4;
+    let same = true;
+    for (let r = 0; r < h - 1 && same; r++) {
+      const j = (r * w + x) * 4;
+      same = Math.abs(d[j] - d[i]) <= 2 && Math.abs(d[j + 1] - d[i + 1]) <= 2 && Math.abs(d[j + 2] - d[i + 2]) <= 2;
+    }
+    plain[x] = same ? 1 : 0;
+  }
+  // A plain stretch only a few columns wide is a still bit of a picture, not a background.
+  for (let x = 0; x < w; ) {
+    let end = x;
+    while (end < w && plain[end] === plain[x]) end++;
+    if (plain[x] && end - x < 4) plain.fill(0, x, end);
+    x = end;
+  }
+  for (let x = 0; x < w; x++) {
+    if (!plain[x]) continue;
+    const i = row + x * 4, key = (d[i] << 16) | (d[i + 1] << 8) | d[i + 2];
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  let bg = 0xffffff, most = 0;
+  for (const [key, n] of counts) if (n > most) { most = n; bg = key; }
+  const out = new ImageData(w, 1);
+  const o = out.data;
+  const color = (x) => (d[row + x * 4] << 16) | (d[row + x * 4 + 1] << 8) | d[row + x * 4 + 2];
+  for (let x = 0; x < w; ) {
+    if (plain[x]) {
+      o.set(d.subarray(row + x * 4, row + x * 4 + 3), x * 4);
+      o[x * 4 + 3] = 255;
+      x++;
+      continue;
+    }
+    let end = x;
+    while (end < w && !plain[end]) end++;
+    const left = x > 0 ? color(x - 1) : null, right = end < w ? color(end) : null;
+    const pick = left !== null && (left === right || right === null) ? left : right !== null && left === null ? right : bg;
+    for (; x < end; x++) o.set([pick >> 16, (pick >> 8) & 255, pick & 255, 255], x * 4);
+  }
+  const strip = new OffscreenCanvas(w, 1);
+  strip.getContext("2d").putImageData(out, 0, 0);
+  return strip;
+}
+
 // Scrolls the page one screen at a time, capturing each, then stitches them.
 // Fixed/sticky elements (headers, chat bubbles) are hidden after the first screen, also ones
 // that only turn fixed once the page is scrolled,
@@ -303,6 +361,7 @@ async function captureFullPage(tab) {
   const width = slices[0].bmp.width;
   const items = [];
   const parts = Math.ceil(total / MAX_PART_HEIGHT);
+  let fill = null; // the row stretched down below the main panel (made once, if needed)
   for (let p = 0; p < parts; p++) {
     const top = p * MAX_PART_HEIGHT;
     const canvas = new OffscreenCanvas(width, Math.min(MAX_PART_HEIGHT, total - top));
@@ -318,8 +377,9 @@ async function captureFullPage(tab) {
       // panel's own end). A row a little above the edge, without smoothing, so nothing
       // below it bleeds in. The panels are drawn over it.
       if (contentEnd > edge) {
+        fill ||= fillRow(last.bmp, Math.max(box.y, edge - 3), Math.max(box.y, edge - 3 - Math.round(24 * scale)));
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(last.bmp, 0, Math.max(box.y, edge - 3), width, 1, 0, edge - top, width, contentEnd - edge);
+        ctx.drawImage(fill, 0, 0, width, 1, 0, edge - top, width, contentEnd - edge);
         ctx.imageSmoothingEnabled = true;
       }
       // Each panel, slice by slice, at the height it was scrolled to.
