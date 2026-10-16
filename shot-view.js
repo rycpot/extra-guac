@@ -6,7 +6,7 @@
 // all with the edits drawn in. Bottom bar: zoom, then what save and upload make (PNG or JPG,
 // 1x-3x, an optional target file size) and the size of the file Save would make.
 // Opened as #annotate (Image annotate in the panel) it starts empty: drop, paste or choose
-// any image and it opens here the same way; another one later replaces it.
+// any image and it opens here the same way; another one later opens in a new tab.
 (async () => {
   const $ = (id) => document.getElementById(id);
   const ICON_CHECK = '<svg class="i" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
@@ -21,7 +21,6 @@
   // JPEG and PNG come in as they are; any other image Chrome can show (WebP, GIF, AVIF, BMP,
   // SVG, ICO…) is turned into a PNG, so saving, blur and copy work as with a screenshot.
   let image = null; // the editor, once an image is in
-  let leavingOk = false; // replacing the image: the leave warning has been answered already
   const isImage = (f) => /^image\//.test(f.type) || /\.(png|jpe?g|webp|gif|avif|bmp|svg|ico)$/i.test(f.name);
   const toDataUrl = (blob) => new Promise((resolve, reject) => {
     const fr = new FileReader();
@@ -46,18 +45,22 @@
       throw new Error(`${file.name || "That image"} couldn't be opened`);
     } finally { URL.revokeObjectURL(url); }
   }
-  // The page reloads with the new image (the editor starts afresh).
+  // The empty page reloads with the image; with one in already, it opens in a new tab
+  // beside this one (this image and its marks stay as they are).
   async function openImage(files) {
     const file = [...files].find(isImage);
     if (!file) return files.length && tell(`${files[0].name || "That"} isn't an image`);
-    if (image?.edited() && !confirm("Replace this image? Your marks on it haven't been saved.")) return;
     try {
       tell("Opening…", false);
       const item = await readImage(file);
       const { id } = await send("shotViewPut", { items: [item], label: "Image" });
-      leavingOk = true;
-      location.replace(`#${id}`);
-      location.reload();
+      if (!image) {
+        location.replace(`#${id}`);
+        return location.reload();
+      }
+      const t = await chrome.tabs.getCurrent();
+      await chrome.tabs.create({ url: chrome.runtime.getURL(`shot-view.html#${id}`), ...(t ? { index: t.index + 1, openerTabId: t.id, windowId: t.windowId } : {}) });
+      tell(`${item.name} opened in a new tab`, false);
     } catch (err) { tell(err.message); }
   }
   // Messages show in the drop box while it's there, else in the bottom bar.
@@ -222,7 +225,7 @@
     return ` · ${fmtBytes(bytes)}${jpg && q != null ? ` (JPG ${Math.round(q * 100)}%)` : ""}`;
   };
   // Leaving with edits that haven't gone anywhere asks first.
-  addEventListener("beforeunload", (e) => { if (editor.edited() && !leavingOk) e.preventDefault(); });
+  addEventListener("beforeunload", (e) => { if (editor.edited()) e.preventDefault(); });
 
   // An edited shot that leaves the tab replaces its screenshot history entry, so what a blur
   // hid isn't kept there (or backed up). markSaved only after that. An image opened here

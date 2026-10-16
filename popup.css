@@ -287,13 +287,18 @@ main:not(.laid-out) .panel { visibility: hidden; }
 
 /* Scratch pads: 1–6 as one segmented strip; a pad with something in it gets a soft green
    fill and a green dot in its corner. */
-.pad-strip { display: flex; }
+.pad-wrap { display: flex; gap: 6px; }
+.pad-strip { flex: 1; min-width: 0; display: flex; }
 .pad-strip button { position: relative; flex: 1; height: 30px; border: 1px solid var(--stroke); border-left-width: 0; color: var(--text3); font-weight: 700; font-variant-numeric: tabular-nums; }
 .pad-strip button:first-child { border-left-width: 1px; border-radius: 9px 0 0 9px; }
 .pad-strip button:last-child { border-radius: 0 9px 9px 0; }
 .pad-strip button.filled { background: color-mix(in srgb, var(--green) 9%, transparent); color: var(--text); }
 .pad-strip button.filled::after { content: ""; position: absolute; top: 5px; right: 6px; width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
 .pad-strip button:hover { background: var(--hover); color: var(--text); }
+/* Image annotate, beside the pads: the screenshot editor for any image. */
+.pad-img { flex: none; display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; border: 1px solid var(--stroke); border-radius: 9px; color: var(--text); font-weight: 600; }
+.pad-img svg { width: 15px; height: 15px; color: var(--text2); }
+.pad-img:hover { background: var(--hover); }
 
 /* Screenshot history: each shot full width, its four actions under it. */
 .shot-list { gap: 10px; grid-auto-rows: max-content; }

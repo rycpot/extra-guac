@@ -86,7 +86,6 @@
         <button class="text-btn" data-shot="area" title="Drag a box on the page"><svg><use href="#i-area"/></svg>area</button>
         <button class="text-btn" data-shot="tab" title="The visible part of the page"><svg><use href="#i-tab"/></svg>tab</button>
         <button class="text-btn" data-shot="full" title="The whole page, scrolled and stitched"><svg><use href="#i-page"/></svg>full</button>
-        <button class="text-btn" id="shotImage" title="Image annotate: open any image (drop, paste or choose one) to mark up"><svg><use href="#i-annot"/></svg>image</button>
       </div>
     </section>
 
@@ -110,7 +109,10 @@
       <div class="row tight">
         <div class="label"><svg><use href="#i-note"/></svg><span class="titles">scratch pads<span class="sub">plain or rich text · saves as you type</span></span></div>
       </div>
-      <div class="pad-strip" id="padStrip" role="group" aria-label="Open a scratch pad"></div>
+      <div class="pad-wrap">
+        <div class="pad-strip" id="padStrip" role="group" aria-label="Open a scratch pad"></div>
+        <button class="pad-img" id="shotImage" title="Image annotate: open any image (drop, paste or choose one) to mark up"><svg><use href="#i-annot"/></svg>image</button>
+      </div>
     </section>
 
     <section data-section="dark" class="block" id="darkRow">

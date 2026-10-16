@@ -20,7 +20,7 @@ A Chrome extension. Click its icon to open the side panel (or a popup, in settin
 
 | Tool | What it does |
 |---|---|
-| **Screenshot** | Capture an area, the visible tab or the full page. Mark it up, blur parts or remove the background in the editor, then save, copy or upload it. **image** opens the same editor for any image you drop in or paste. The last 10 shots stay in a history. |
+| **Screenshot** | Capture an area, the visible tab or the full page. Mark it up, blur parts or remove the background in the editor, then save, copy or upload it. **image**, beside the scratch pads, opens the same editor for any image you drop in or paste. The last 10 shots stay in a history. |
 | **Text from image** | Drag a box over any text on screen; it's read and copied. Shown in a card where you can fix it and read it again with another engine. |
 | **Privacy blur** | Hides emails, phone numbers, card numbers, keys and your own rules on every page. Blur, bars or masked characters; hover to peek. |
 | **Scratch pads** | Six pads that save as you type, in rich or plain text. Drop in a text or code file to read it with colors; Markdown and HTML have a preview. |
