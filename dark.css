@@ -1,0 +1,86 @@
+/* Dark mode (invert engine): the whole rendered page is inverted with hues kept, so no
+   part of it can stay light — shadow DOM and web components included — then pictures
+   and video are flipped back. Injected before the page paints (bg-dark.js); dark.js
+   turns it off on pages that are already dark (data-tt-dark="off") or that it has
+   switched to their own dark theme (data-tt-dark="native"). Frames inside the page are
+   inverted with it; dark-frame.css flips their pictures back. */
+
+html:not([data-tt-dark]) {
+  filter: invert(0.93) hue-rotate(180deg) !important;
+}
+/* A transparent page is painted on white, so make that explicit to have it inverted too
+   (zero specificity: the page's own background wins when it has one). */
+:where(html:not([data-tt-dark])) {
+  background-color: #fff;
+}
+
+/* The page's background is drawn on a layer of its own (html::before, inverted with the
+   rest), and <html> itself is given that color as it looks once inverted. In fast
+   scrolling Chrome fills what it hasn't drawn yet, and the bounce past either end, with
+   <html>'s background color, without the filter: so that color must be dark already.
+   dark.js reads the page's own background (lifting this rule for a moment,
+   data-tt-dark-peek) into --tt-dark-page/-page-image and its inverted look into
+   --tt-dark-under. */
+html:not([data-tt-dark]):not([data-tt-dark-peek]) {
+  background-color: var(--tt-dark-under, #121212) !important;
+  background-image: none !important;
+}
+html:not([data-tt-dark])::before {
+  content: "" !important; display: block !important; position: fixed !important; inset: 0 !important;
+  z-index: -2147483647 !important; pointer-events: none !important;
+  background: var(--tt-dark-page-image, none) var(--tt-dark-page, #fff) !important; /* color last: the image can be several layers */
+}
+
+/* Pictures and video come back to (slightly dimmed) normal, and so do frames that show
+   video, maps or a captcha (kept in step with the list in dark-frame.js and
+   dark-frame.css). A canvas stays dark with the page (documents, sheets, charts drawn
+   on one), except on map sites (data-tt-dark-canvas, dark.js). Background pictures are
+   marked by dark-pictures.js, on the element or only on its ::before/::after. */
+html:not([data-tt-dark]) :is(img:not([data-tt-dark-keep]), video, embed, object, [data-tt-dark-media],
+  iframe:is([src*="youtube."], [src*="youtube-nocookie."], [src*="vimeo."], [src*="maps."], [src*="/maps"], [src*="twitch."],
+    [src*="dailymotion."], [src*="player."], [src*="spotify."], [src*="soundcloud."],
+    [src*="google.com/recaptcha"], [src*="recaptcha.net"], [src*="hcaptcha."])),
+html[data-tt-dark-canvas]:not([data-tt-dark]) canvas,
+html:not([data-tt-dark]) [data-tt-dark-before]::before,
+html:not([data-tt-dark]) [data-tt-dark-after]::after {
+  filter: invert(1) hue-rotate(180deg) !important;
+}
+
+/* The page's own background picture (on body or html): moved to a layer behind the page
+   and flipped back on its own, so a dark patterned backdrop stays dark while the content
+   on top is darkened. (Flipping body back as a whole would undo the whole page.) Its
+   color goes to the color layer above (dark.js). */
+html[data-tt-dark-bg]:not([data-tt-dark]) > body {
+  background-image: none !important;
+  background-color: transparent !important;
+}
+html[data-tt-dark-bg]:not([data-tt-dark])::after {
+  content: "" !important; display: block !important; position: fixed !important; inset: 0 !important;
+  z-index: -2147483647 !important; pointer-events: none !important;
+  background-image: var(--tt-dark-bg-image); background-position: var(--tt-dark-bg-position);
+  background-size: var(--tt-dark-bg-size); background-repeat: var(--tt-dark-bg-repeat);
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* …but not twice, when a picture sits inside something already flipped back */
+html:not([data-tt-dark]) [data-tt-dark-media] :is(img, video, canvas, embed, object, [data-tt-dark-media]),
+html:not([data-tt-dark]) :is([data-tt-dark-media], [data-tt-dark-media] *)[data-tt-dark-before]::before,
+html:not([data-tt-dark]) :is([data-tt-dark-media], [data-tt-dark-media] *)[data-tt-dark-after]::after {
+  filter: none !important;
+}
+
+/* The window's scrollbar is drawn outside the page's filter, so it's given dark colors
+   of its own. Scrollbars inside the page are inverted with it, so they don't inherit
+   these. */
+html:not([data-tt-dark]) {
+  scrollbar-color: #5a5a5a #1b1b1b !important;
+}
+:where(html:not([data-tt-dark])) > body {
+  scrollbar-color: auto;
+}
+
+/* Selected text: a deep blue behind light text, once inverted */
+html:not([data-tt-dark]) ::selection {
+  background: rgb(155 196 248) !important;
+  color: #000 !important;
+}

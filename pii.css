@@ -1,0 +1,2 @@
+/* Keeps the page blank until pii.js has scanned it (only with "Hide page until scanned"). */
+html[data-pii-pending] { opacity: 0 !important; }

@@ -75,3 +75,4 @@ Download the zip from [Releases](../../releases) and unzip it, then:
 
 - Privacy: everything stays in your browser unless a tool you use needs an outside service, and then it goes only there. See [PRIVACY.md](PRIVACY.md).
 - The interface font is [Inter](https://github.com/rsms/inter) (SIL Open Font License).
+- License: [0BSD](LICENSE), use it for anything. The bundled libraries keep their own licenses, next to them in `vendor/` and `beam/lib/`.

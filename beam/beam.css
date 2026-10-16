@@ -1,0 +1,169 @@
+/* Beam, in Extra Guac's look. Everything is scoped to .beam and uses the popup's color tokens
+   (--bg, --text, --text2, --text3, --divider, --chip, --field, --row, --hover, --stroke, --green,
+   --yellow, --red), which beam/page.css also defines for the page versions. */
+.beam { display: grid; gap: 12px; min-width: 0; position: relative; color: var(--text); }
+.beam [hidden] { display: none !important; }
+.beam p { margin: 0; }
+.beam svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.beam a { color: var(--text); text-decoration: underline; text-decoration-color: var(--stroke); text-underline-offset: 2px; }
+.beam a:hover { text-decoration-color: currentColor; }
+
+.beam-card { display: grid; gap: 14px; padding: 16px 14px; border-radius: 14px; background: var(--row); min-width: 0; }
+.beam-center { text-align: center; justify-items: center; }
+.beam-eyebrow { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--text3); }
+.beam-code { font: 600 40px/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace; letter-spacing: .14em; padding-left: .14em; font-variant-numeric: tabular-nums; }
+/* The dot sits in the line, before the first word, however the text wraps. */
+.beam-status { max-width: 320px; font-size: 11.5px; line-height: 1.45; color: var(--text3); text-align: center; }
+.beam-dot { display: inline-block; width: 7px; height: 7px; margin-right: 7px; vertical-align: 1px; border-radius: 50%; background: var(--green); animation: beam-pulse 1.6s ease-in-out infinite; }
+@keyframes beam-pulse { 50% { opacity: .3; } }
+.beam-hint { font-size: 11px; line-height: 1.4; color: var(--text3); }
+.beam-divider { width: 100%; margin: 0; border: 0; border-top: 1px solid var(--divider); }
+.beam-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.beam-center-row { justify-content: center; }
+.beam-between { justify-content: space-between; }
+
+.beam-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 7px 12px; border: 0; border-radius: 10px;
+  background: var(--chip); color: var(--text); font: 500 12.5px/1.2 inherit; cursor: pointer; text-decoration: none; }
+.beam-btn:hover { background: var(--stroke); }
+.beam-btn.primary { background: var(--text); color: var(--bg); }
+.beam-btn.primary:hover { opacity: .88; background: var(--text); }
+.beam-btn.small { padding: 4px 9px; font-size: 11.5px; border-radius: 8px; }
+.beam-btn.end { background: none; color: var(--red); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--red) 45%, transparent); }
+.beam-btn.end:hover { background: color-mix(in srgb, var(--red) 14%, transparent); }
+.beam-btn:focus-visible, .beam input:focus-visible, .beam select:focus-visible, .beam summary:focus-visible, .beam a:focus-visible { outline: 1.5px solid var(--stroke); outline-offset: 2px; }
+.beam input[type=text], .beam select { min-width: 0; padding: 7px 10px; border: 1px solid transparent; border-radius: 10px; background: var(--field); color: var(--text);
+  font: 500 13px ui-monospace, "SF Mono", Menlo, Consolas, monospace; outline: none; }
+.beam input[type=text]:focus { border-color: var(--stroke); }
+.beam select option { background: var(--bg); color: var(--text); }
+#beam-joinInput { width: 8.5em; text-align: center; letter-spacing: .18em; font-size: 15px; }
+.beam-join { display: grid; gap: 8px; justify-items: center; }
+
+/* Pairing: numbered steps, the QR code, and the accept prompt. */
+.beam-steps { list-style: none; counter-reset: step; display: grid; gap: 8px; max-width: 320px; margin: 0; padding: 0; text-align: left; justify-self: stretch; margin-inline: auto; }
+.beam-steps li { counter-increment: step; display: grid; grid-template-columns: 18px 1fr; gap: 6px; font-size: 12px; line-height: 1.4; color: var(--text2); }
+.beam-steps li::before { content: counter(step); color: var(--text3); font-variant-numeric: tabular-nums; }
+.beam-qr-toggle { font-size: 12px; }
+.beam-qr-box { display: grid; gap: 8px; justify-items: center; }
+.beam-more { display: grid; gap: 10px; justify-items: center; margin-top: 10px; }
+.beam-scan { display: grid; gap: 8px; width: min(300px, 100%); }
+.beam-scan-view { position: relative; aspect-ratio: 1; border-radius: 14px; overflow: hidden; background: #000; }
+.beam-scan-view video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.beam-scan-frame { position: absolute; inset: 17%; border-radius: 12px; box-shadow: 0 0 0 100vmax rgba(0, 0, 0, .38); outline: 2px solid rgba(255, 255, 255, .9); }
+.beam-scan .beam-hint { flex: 1; min-width: 0; text-align: left; }
+#beam-qr, #beam-qr2 { line-height: 0; }
+#beam-qr svg, #beam-qr2 svg { width: 172px; height: 172px; display: block; } /* Extra Guac's look: its own cream plate and margin */
+#beam-qr.plain, #beam-qr2.plain { padding: 8px; border-radius: 10px; background: #fff; } /* the plain fallback */
+#beam-qr img, #beam-qr canvas, #beam-qr2 img, #beam-qr2 canvas { width: 148px; height: 148px; }
+.beam-ask { display: grid; gap: 10px; justify-items: center; width: 100%; text-align: center; padding: 12px; border-radius: 12px; background: color-mix(in srgb, var(--yellow) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--yellow) 40%, transparent); font-size: 12.5px; }
+
+/* Connected: who, how, the vortex to drop files into, and what's happened. */
+/* Who's connected: one device by name, or (on the hub, with several) a row each with a tick for
+   "send to" and a button to disconnect just that one. */
+.beam-conn { display: grid; gap: 8px; min-width: 0; }
+.beam-devices { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; min-width: 0; }
+.beam-device { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.beam-device .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 600; }
+.beam-devices.many .beam-device { padding: 5px 6px 5px 10px; border-radius: 10px; background: var(--field); }
+.beam-devices.many .name { font-size: 13px; font-weight: 500; }
+.beam-device.skip .name { color: var(--text3); }
+.beam .beam-pick { accent-color: var(--green); width: 15px; height: 15px; margin: 0; flex: none; cursor: pointer; }
+.beam-btn.beam-remove { padding: 4px; background: none; color: var(--text3); }
+.beam-btn.beam-remove:hover { color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); }
+.beam .beam-remove svg { width: 14px; height: 14px; }
+/* Broadcast: the hub's switch, like Extra Guac's own green / gray switches. */
+.beam-bcast { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; max-width: 320px; margin-inline: auto;
+  padding: 8px 10px 8px 12px; border-radius: 12px; background: var(--field); text-align: left; }
+.beam-conn .beam-bcast { max-width: none; }
+.beam-bcast-text { display: grid; gap: 1px; min-width: 0; font-size: 12.5px; font-weight: 500; }
+.beam-bcast-text small { font-size: 11px; font-weight: 400; color: var(--text3); }
+.beam-switch { width: 38px; height: 22px; padding: 0; border: 0; border-radius: 11px; background: var(--chip); position: relative; flex: none; cursor: pointer; transition: background .15s; }
+.beam-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s; }
+.beam-switch[aria-checked="true"] { background: var(--green); }
+.beam-switch[aria-checked="true"]::after { transform: translateX(16px); }
+.beam-switch:focus-visible { outline: 1.5px solid var(--stroke); outline-offset: 2px; }
+.beam-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; white-space: nowrap; box-shadow: inset 0 0 0 1px currentColor; }
+.beam-pill.good { color: var(--green); } .beam-pill.warn { color: var(--yellow); } .beam-pill.bad { color: var(--red); } .beam-pill.muted { color: var(--text3); }
+/* --k scales every ring's speed: idle 1, sending .5, a file hovering .25. */
+.beam-drop { --k: 1; display: grid; justify-items: center; gap: 6px; padding: 6px 6px 12px; border-radius: 14px; cursor: pointer; text-align: center; color: var(--green); }
+.beam-drop svg { width: min(190px, 60vw); height: auto; overflow: visible; }
+.beam-drop .ring { fill: none; stroke: currentColor; transform-origin: 110px 110px; animation: beam-vortex calc(var(--d) * var(--k)) linear infinite; }
+.beam-drop .core { fill: currentColor; stroke: none; transform-origin: 110px 110px; transition: transform .35s ease; }
+.beam-drop .vortex { transform-origin: 110px 110px; }
+.beam-drop-text { display: grid; gap: 2px; color: var(--text); font-weight: 500; font-size: 13px; }
+.beam-drop-text small { color: var(--text3); font-weight: 400; font-size: 11.5px; }
+.beam-drop.busy { --k: .5; }
+.beam-drop.over { --k: .25; background: color-mix(in srgb, var(--green) 8%, transparent); }
+.beam-drop.over .core { transform: scale(1.35); }
+.beam-drop.swallow .vortex { animation: beam-swallow .7s ease-in-out; }
+.beam-drop:hover .core { transform: scale(1.2); }
+@keyframes beam-vortex { to { transform: rotate(360deg); } }
+@keyframes beam-swallow { 40% { transform: scale(.15) rotate(90deg); } 100% { transform: scale(1) rotate(0); } }
+.beam-notice { padding: 9px 11px; border-radius: 10px; font-size: 11.5px; line-height: 1.4; color: var(--text);
+  background: color-mix(in srgb, var(--yellow) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--yellow) 40%, transparent); }
+.beam-idle-warn { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.beam-idle-warn b { font-variant-numeric: tabular-nums; }
+.beam-activity { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--divider); min-width: 0; }
+#beam-log { margin: 0; max-height: calc(11px * 1.45 * 6); overflow-y: auto; font: 11px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--text3); white-space: pre-wrap; word-break: break-word; }
+#beam-log .err { color: var(--red); }
+
+/* Transfers */
+.beam-transfers { display: grid; gap: 8px; }
+.beam-xfer { display: grid; gap: 6px; padding: 10px 12px; border-radius: 12px; background: var(--row); min-width: 0; }
+.beam-xfer .top { display: flex; justify-content: space-between; gap: 10px; min-width: 0; }
+.beam-xfer .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-weight: 500; }
+.beam-xfer .dir { color: var(--text3); font-size: 11px; white-space: nowrap; }
+.beam-bar { height: 5px; border-radius: 3px; background: var(--field); overflow: hidden; }
+.beam-bar > i { display: block; width: 0; height: 100%; background: var(--text2); transition: width .15s linear; }
+.beam-xfer.done .beam-bar > i { background: var(--green); } .beam-xfer.warn .beam-bar > i { background: var(--yellow); } .beam-xfer.failed .beam-bar > i { background: var(--red); }
+.beam-xfer .stats { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font: 11px ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--text3); font-variant-numeric: tabular-nums; }
+.beam-xfer .stats b { color: var(--text); font-weight: 500; }
+.beam-xfer.failed .pct { color: var(--red); } .beam-xfer.warn .pct { color: var(--yellow); }
+.beam-xfer > .actions { gap: 6px; }
+.beam-xfer-sec { display: grid; gap: 8px; }
+.beam-xfer-sec > .beam-row { padding: 0 2px; }
+#beam-clearDone.armed { color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); }
+
+/* Relay usage on this device this month: one quiet line under the transfers. */
+
+/* Testing details (?dev) and credits */
+.beam-details { padding: 10px 14px; border-radius: 14px; background: var(--row); }
+.beam-details summary { cursor: pointer; color: var(--text3); font-size: 12px; }
+.beam-details[open] summary { margin-bottom: 10px; }
+.beam-dgrid { display: grid; gap: 10px; }
+.beam-kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; margin: 0; font-size: 12px; }
+.beam-kv dt { color: var(--text3); } .beam-kv dd { margin: 0; min-width: 0; }
+.beam-credits { display: flex; align-items: center; justify-content: space-between; gap: 6px 14px; flex-wrap: wrap; font-size: 10.5px; color: var(--text3); }
+.beam-credits p { margin: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+/* The version, at the right end: which release this is, so a cached copy is easy to spot. */
+.beam-version { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; color: var(--text2); white-space: nowrap; }
+.beam .beam-credits svg.beam-droid { width: 17px; height: 11px; stroke: none; color: var(--text2); }
+/* The right end of the footer: the version. The usage mark (two arrows) sits after the credits. */
+.beam-meta { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+.beam-usage { position: relative; margin-left: 4px; display: grid; place-items: center; width: 22px; height: 18px; border-radius: 5px; cursor: pointer; }
+.beam-usage:focus-visible { outline: 1.5px solid var(--stroke); outline-offset: 2px; }
+.beam .beam-credits svg.beam-gauge { width: 11px; height: 11px; stroke: none; }
+/* Its figures: below it, on hover or kept open by a tap. */
+.beam-usepop { position: absolute; top: calc(100% + 8px); left: -6px; z-index: 5; display: none; min-width: 210px; padding: 9px 11px;
+  border-radius: 10px; background: linear-gradient(var(--row), var(--row)), var(--bg, #141414); border: 1px solid var(--stroke); box-shadow: 0 8px 24px rgba(0,0,0,.45);
+  font-size: 11.5px; line-height: 1.35; color: var(--text2); text-align: left; cursor: default; max-width: calc(100vw - 16px); box-sizing: border-box; }
+.beam-usage:hover .beam-usepop, .beam-usage.open .beam-usepop, .beam-usage:focus-visible .beam-usepop { display: grid; gap: 4px; }
+.beam-usepop .beam-uhead { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--text3); margin-bottom: 2px; }
+.beam-usepop .beam-urow { display: flex; justify-content: space-between; gap: 16px; }
+.beam-usepop .beam-urow b { color: var(--text); font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.beam-usepop .beam-urow.sub { font-size: 10.5px; color: var(--text3); }
+.beam-usepop .beam-urow.sub b { color: var(--text2); font-weight: 400; }
+.beam .beam-credits svg.beam-gh { width: 13px; height: 13px; fill: currentColor; stroke: none; }
+.beam-elsewhere { padding: 22px 16px; }
+.beam-elsewhere p { max-width: 280px; font-size: 12.5px; line-height: 1.45; color: var(--text2); }
+.beam-credits a { color: var(--text2); }
+
+/* The popup's preview: Beam shown, dimmed, with the way to its own tab on top. */
+.beam-preview > :not(.beam-preview-cover) { opacity: .45; filter: saturate(.6); pointer-events: none; user-select: none; }
+.beam-preview .beam-dot, .beam-preview .ring { animation: none; }
+.beam-preview-cover { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px; padding: 20px; text-align: center;
+  background: color-mix(in srgb, var(--bg) 72%, transparent); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); border-radius: 14px; }
+.beam-preview-cover p { max-width: 260px; font-size: 12px; line-height: 1.45; color: var(--text); }
+
+@media (prefers-reduced-motion: reduce) { .beam-bar > i, .beam-switch, .beam-switch::after { transition: none; } .beam-dot, .beam-drop .ring, .beam-drop.swallow .vortex { animation: none; } }

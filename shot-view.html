@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Screenshot · Extra Guac</title>
+  <link rel="icon" href="icons/icon32.png">
+  <link rel="stylesheet" href="color-menu.css">
+  <style>
+    @font-face { font-family: "Inter"; src: url("fonts/InterVariable.woff2") format("woff2"); font-weight: 100 900; font-display: block; } /* Inter, SIL Open Font License (fonts/Inter.LICENSE) */
+    html, body { margin: 0; height: 100%; background: #1b1b1b; color: rgba(255,255,255,.85); font: 13px/1.4 "Inter", system-ui, sans-serif; }
+    body { display: flex; flex-direction: column; overflow: hidden; }
+    [hidden] { display: none !important; }
+    button { font: inherit; color: inherit; }
+    svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+    .sep { width: 1px; height: 22px; margin: 0 6px; background: rgba(255,255,255,.14); flex: none; }
+
+    /* Header: the edit tools, then undo/redo and save, copy, upload. */
+    header { flex: none; position: relative; z-index: 5; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; padding: 7px 10px;
+      background: #232323; border-bottom: 1px solid rgba(255,255,255,.08); }
+    .grp { display: flex; align-items: center; gap: 1px; padding: 2px; border-radius: 10px; background: rgba(255,255,255,.05); }
+    .b { all: unset; position: relative; width: 34px; height: 32px; display: grid; place-items: center; border-radius: 8px; cursor: pointer; color: rgba(255,255,255,.88); }
+    .b:hover { background: rgba(255,255,255,.1); }
+    .b[aria-pressed=true] { background: #0a84ff; color: #fff; }
+    .b[aria-disabled=true] { opacity: .35; cursor: default; background: none !important; }
+    .spacer { flex: 1; }
+    .dd { all: unset; display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border-radius: 9px; background: rgba(255,255,255,.07); cursor: pointer; }
+    .dd:hover { background: rgba(255,255,255,.12); }
+    .dd .chev { width: 12px; height: 12px; opacity: .6; }
+    .dot-now { width: 18px; height: 18px; border-radius: 50%; background: linear-gradient(var(--c), var(--c)), repeating-conic-gradient(#8a8a8a 0 25%, #c8c8c8 0 50%) 0 0 / 6px 6px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
+    .wrap { position: relative; }
+    .pop { position: absolute; top: calc(100% + 8px); left: 0; z-index: 10; padding: 8px; border-radius: 14px; background: #2a2a2a; outline: 1px solid rgba(255,255,255,.14);
+      box-shadow: 0 12px 32px rgba(0,0,0,.5); }
+    /* Color menu: color-menu.css; here just its box. */
+    .colors-pop { padding: 10px; }
+    .sizes-pop { display: flex; flex-direction: column; gap: 2px; width: 56px; padding: 6px; }
+    .sz { all: unset; height: 34px; display: grid; place-items: center; border-radius: 8px; cursor: pointer; }
+    .sz:hover { background: rgba(255,255,255,.08); }
+    .sz[aria-pressed=true] { background: rgba(255,255,255,.14); }
+    .sz svg, .dd svg.line { width: 22px; height: 22px; stroke: currentColor; stroke-linecap: round; fill: none; }
+    .tbtn { all: unset; height: 30px; padding: 0 10px; border-radius: 8px; background: rgba(255,255,255,.08); cursor: pointer; white-space: nowrap; }
+    .tbtn:hover { background: rgba(255,255,255,.14); }
+    .tbtn.primary { background: #0a84ff; color: #fff; font-weight: 600; }
+    .tbtn.primary:hover { background: #2a94ff; }
+    .muted { color: rgba(255,255,255,.5); padding: 0 4px; white-space: nowrap; }
+    .ctx { display: flex; align-items: center; gap: 4px; }
+    .menu { position: absolute; top: calc(100% + 8px); left: 0; z-index: 10; width: 270px; max-height: 60vh; overflow: auto; padding: 6px; border-radius: 12px;
+      background: #2a2a2a; outline: 1px solid rgba(255,255,255,.14); box-shadow: 0 12px 32px rgba(0,0,0,.5); }
+    .menu .ttl { padding: 6px 10px 2px; color: rgba(255,255,255,.45); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+    .menu .fi { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 7px; font-size: 15px; cursor: pointer; }
+    .menu .fi:hover { background: rgba(255,255,255,.08); }
+    .menu .fi[aria-selected=true] { background: rgba(138,180,255,.22); color: #8ab4ff; }
+    .menu .fi span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .menu .fi .x { all: unset; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; color: rgba(255,255,255,.5); font: 15px system-ui; }
+    .menu .fi .x:hover { background: rgba(255,255,255,.12); color: #ff8a80; }
+    .menu .add { margin-top: 4px; padding: 8px 10px; border-top: 1px solid rgba(255,255,255,.1); color: #8ab4ff; cursor: pointer; border-radius: 0 0 7px 7px; }
+    .menu .add:hover { background: rgba(255,255,255,.06); }
+    .menu .add small { display: block; color: rgba(255,255,255,.45); font-size: 11px; }
+    .pick { position: absolute; top: calc(100% + 6px); right: 0; z-index: 10; display: flex; gap: 2px; padding: 4px; border-radius: 10px;
+      background: #2a2a2a; outline: 1px solid rgba(255,255,255,.2); box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+    .pick button { all: unset; height: 28px; padding: 0 12px; border-radius: 8px; cursor: pointer; font: 500 12.5px "Inter", system-ui, sans-serif; color: #fff; }
+    .pick button:hover { background: rgba(255,255,255,.12); }
+    .spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); border-top-color: #fff; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* The screenshot, between the bars, centered when it fits. Each part is a frame (the
+       visible, cropped area) around the full image and its layer of marks. */
+    main { flex: 1; min-height: 0; overflow: auto; }
+    .stage { box-sizing: border-box; min-width: 100%; min-height: 100%; width: max-content; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; }
+    /* A checkerboard under the picture: where its background has been removed shows. */
+    .part { position: relative; overflow: hidden; flex: none; box-shadow: 0 6px 24px rgba(0,0,0,.5); touch-action: none;
+      background: #fff repeating-conic-gradient(#e2e2e2 0 25%, #fff 0 50%) 0 0 / 16px 16px; }
+    .inner { position: absolute; left: 0; top: 0; }
+    .inner > img { position: relative; z-index: 1; display: block; width: 100%; height: 100%; user-select: none; -webkit-user-drag: none; }
+    .inner > svg { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; overflow: visible; }
+    /* Clean up with Alt held: what was taken away shows faintly, to click it back. */
+    .inner > img.under { position: absolute; inset: 0; z-index: 0; opacity: .32; display: none; pointer-events: none; }
+    body[data-tool=clean][data-alt] .inner > img.under { display: block; }
+    .part { cursor: crosshair; }
+    body[data-tool=none] .part { cursor: default; }
+    body[data-tool=text] .part { cursor: text; }
+    body[data-tool=marker] .part { cursor: var(--marker-cursor, crosshair); }
+    .layer [data-id] { cursor: move; }
+    body[data-tool=crop] .layer [data-id], body[data-tool=blur] .layer [data-id], body[data-tool=clean] .layer [data-id] { pointer-events: none; }
+    body.cutting .part { cursor: progress; }
+    .layer [data-handle] { cursor: grab; }
+    .layer [data-handle=nw], .layer [data-handle=se], .layer [data-crop=nw], .layer [data-crop=se] { cursor: nwse-resize; }
+    .layer [data-handle=ne], .layer [data-handle=sw], .layer [data-crop=ne], .layer [data-crop=sw] { cursor: nesw-resize; }
+    .text-edit { position: absolute; z-index: 3; min-width: 6px; margin: 0; padding: 0; white-space: pre; outline: 1.5px dashed #8ab4ff; outline-offset: 3px; line-height: 1.25; font-weight: 600; caret-color: currentColor; }
+    .err { margin: 20vh auto 0; color: #ff8a80; text-align: center; }
+
+    /* Bottom bar: zoom, then the shot's name, size and what's happened to it. */
+    footer { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 12px; background: #232323; border-top: 1px solid rgba(255,255,255,.08); }
+    .zoom { display: flex; align-items: center; gap: 1px; padding: 2px; border-radius: 10px; background: rgba(255,255,255,.05); }
+    .zoom .b { width: 30px; height: 28px; }
+    .zoom .pct { min-width: 50px; text-align: center; font-variant-numeric: tabular-nums; }
+    .zoom .t { all: unset; padding: 4px 10px; border-radius: 7px; cursor: pointer; font-weight: 500; }
+    .zoom .t:hover { background: rgba(255,255,255,.08); }
+    .zoom .t[aria-pressed=true] { color: #8ab4ff; }
+    /* Bottom bar: what Save and upload make (format, size, a target file size) and how big it is. */
+    .out { flex: none; display: flex; align-items: center; gap: 8px; }
+    .seg { display: inline-flex; padding: 2px; gap: 1px; border-radius: 9px; background: rgba(255,255,255,.05); }
+    .seg button { all: unset; padding: 3px 9px; border-radius: 7px; cursor: pointer; font-weight: 500; font-size: 12px; color: rgba(255,255,255,.7); }
+    .seg button:hover { background: rgba(255,255,255,.08); }
+    .seg button[aria-checked=true] { color: #fff; background: rgba(255,255,255,.14); }
+    .seg button[aria-disabled=true] { opacity: .35; cursor: default; background: none; }
+    .seg button:focus-visible, .tgt input:focus-visible { outline: 1.5px solid #8ab4ff; outline-offset: 1px; }
+    .tgt { display: inline-flex; align-items: center; gap: 6px; color: rgba(255,255,255,.55); font-size: 12px; }
+    .tgt input { width: 64px; padding: 4px 7px; border: 0; border-radius: 7px; background: rgba(255,255,255,.07); color: #fff; font: inherit; font-variant-numeric: tabular-nums; }
+    .tgt input::-webkit-inner-spin-button { display: none; }
+    .tgt input::placeholder { color: rgba(255,255,255,.35); }
+    .est { min-width: 64px; color: rgba(255,255,255,.75); font-variant-numeric: tabular-nums; white-space: nowrap; transition: opacity .15s; }
+    .est.stale { opacity: .45; }
+    .info { flex: 1 1 380px; min-width: min(380px, 100%); display: flex; gap: 12px; align-items: baseline; justify-content: flex-end; overflow: hidden; white-space: nowrap; }
+    .info b { flex-shrink: 4; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+    .info span { color: rgba(255,255,255,.5); }
+    .status { flex-shrink: 0; max-width: 75%; color: rgba(255,255,255,.75) !important; overflow: hidden; text-overflow: ellipsis; }
+    .status.bad { color: #ff8a80 !important; }
+    .status a { color: #8ab4ff; }
+  </style>
+</head>
+<body data-tool="none">
+  <header>
+    <div class="grp" id="tools" role="toolbar" aria-label="Edit tools" hidden>
+      <button class="b" data-tool="crop" title="Crop (C)"><svg class="i" viewBox="0 0 24 24"><path d="M6 2.5V18h15.5"/><path d="M2.5 6H18v15.5"/></svg></button>
+      <span class="sep"></span>
+      <button class="b" data-tool="rect" title="Rectangle (R)"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="13" rx="1.5"/></svg></button>
+      <button class="b" data-tool="arrow" title="Arrow (A)"><svg class="i" viewBox="0 0 24 24"><path d="M5 19 19 5"/><path d="M9.5 5H19v9.5"/></svg></button>
+      <button class="b" data-tool="line" title="Line (L)"><svg class="i" viewBox="0 0 24 24"><path d="M5 19 19 5"/></svg></button>
+      <button class="b" data-tool="marker" title="Highlighter (H)"><svg class="i" viewBox="0 0 24 24"><path d="m9 11-5.5 5.5V20h3.5l5.5-5.5"/><path d="m9 11 6.5-6.5a2.1 2.1 0 0 1 3 0l1 1a2.1 2.1 0 0 1 0 3L13 15z"/></svg></button>
+      <button class="b" data-tool="text" title="Text (T)"><svg class="i" viewBox="0 0 24 24"><path d="M5 6.5V5h14v1.5M12 5v14M9 19h6"/></svg></button>
+      <button class="b" data-tool="dot" title="Numbered dots: each click adds the next number (N)"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M11 9.5 12.5 8.5V16"/></svg></button>
+      <button class="b" data-tool="blur" title="Blur: drag over what to hide, in your privacy blur style (B)"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3.5"/><g fill="currentColor" stroke="none"><rect x="7" y="7" width="3.3" height="3.3"/><rect x="13.7" y="7" width="3.3" height="3.3"/><rect x="10.3" y="10.3" width="3.3" height="3.3"/><rect x="7" y="13.7" width="3.3" height="3.3"/><rect x="13.7" y="13.7" width="3.3" height="3.3"/></g></svg></button>
+      <span class="sep"></span>
+      <button class="b" id="cutBtn" title="Remove background"><svg class="i" viewBox="0 0 24 24"><path d="M12 4H4.5A2.5 2.5 0 0 0 2 6.5v11A2.5 2.5 0 0 0 4.5 20H12V4"/><path d="M12 4h7.5A2.5 2.5 0 0 1 22 6.5v11a2.5 2.5 0 0 1-2.5 2.5H12" stroke-dasharray="2 2" stroke-linecap="butt" stroke-width="1.7"/><circle cx="6" cy="8.3" r="1.3" fill="currentColor" stroke="none"/><path d="M2.5 16.5 6.5 12.5 8.8 14.8M7.3 19.7 12 15"/><path d="m12 15 3.8-3.8 5.7 5.7" stroke-dasharray="2.2 1.8" stroke-linecap="butt" stroke-width="1.7"/></svg></button>
+      <button class="b" data-tool="clean" id="cleanBtn" title="Clean up: click leftover background to remove it (Alt-click to bring back)" hidden><svg class="i" viewBox="0 0 24 24"><path d="M3 21 12.3 11.7"/><path d="M19.08 4.92 17.77 8.22 20.03 10.96 16.49 10.74 14.59 13.74 13.7 10.3 10.26 9.41 13.26 7.51 13.04 3.97 15.78 6.23Z" stroke-width="1.8"/><path d="m4.5 3.5 2 2m0-2-2 2M20 16.5l2 2m0-2-2 2M6.2 11.7l1.6 1.6m0-1.6-1.6 1.6" stroke-width="1.6"/></svg></button>
+    </div>
+    <span class="wrap" id="colorWrap" hidden>
+      <button class="dd" id="colorBtn" title="Color"><span class="dot-now" id="colorNow"></span><svg class="i chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+    </span>
+    <span class="wrap" id="sizeWrap" hidden>
+      <button class="dd" id="sizeBtn" title="Line width"><svg class="line" viewBox="0 0 24 24" id="sizeNow"><path d="M5 19 19 5"/></svg><svg class="i chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>
+    </span>
+    <span class="ctx" id="ctx"></span>
+    <span class="spacer"></span>
+    <div class="grp" id="edits" hidden>
+      <button class="b" id="undo" title="Undo (Ctrl/⌘+Z)" aria-disabled="true"><svg class="i" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+      <button class="b" id="redo" title="Redo (Ctrl/⌘+Shift+Z)" aria-disabled="true"><svg class="i" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
+    </div>
+    <div class="grp btns">
+      <button class="b" id="save" title="Save to Downloads"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/></svg></button>
+      <button class="b" id="copy" title="Copy image"><svg class="i" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2.2"/><path d="M15.5 8.5V6.7a2.2 2.2 0 0 0-2.2-2.2H6.7a2.2 2.2 0 0 0-2.2 2.2v6.6a2.2 2.2 0 0 0 2.2 2.2h1.8"/></svg></button>
+      <button class="b" id="cloud" title="Upload"><svg class="i" viewBox="0 0 24 24"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.6 9.2 4.7 4.7 0 0 0 7 18.5Z"/></svg></button>
+    </div>
+  </header>
+
+  <main id="main"><div class="stage" id="shots"></div></main>
+
+  <footer>
+    <div class="zoom" id="zoom" hidden>
+      <button class="b" id="zoomOut" title="Zoom out (Ctrl/⌘+−)"><svg class="i" viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
+      <span class="pct" id="zoomPct">100%</span>
+      <button class="b" id="zoomIn" title="Zoom in (Ctrl/⌘+=)"><svg class="i" viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></svg></button>
+      <span class="sep"></span>
+      <button class="t" id="zoomFit" title="Fit between the bars (Ctrl/⌘+0)">Fit</button>
+      <button class="t" id="zoom1" title="Actual size (Ctrl/⌘+1)">1:1</button>
+    </div>
+    <div class="out" id="out" hidden>
+      <div class="seg" id="fmt" role="radiogroup" aria-label="File format">
+        <button data-v="png" role="radio" title="PNG: lossless">PNG</button><button data-v="jpg" role="radio" title="JPG: smaller, at the quality from settings → screenshot">JPG</button>
+      </div>
+      <div class="seg" id="scale" role="radiogroup" aria-label="Size" title="Make the image 2 or 3 times bigger (your marks are drawn at that size, so they stay sharp)">
+        <button data-v="1" role="radio">1x</button><button data-v="2" role="radio">2x</button><button data-v="3" role="radio">3x</button>
+      </div>
+      <label class="tgt" title="Optional. Type a size and pick KB or MB: each file (each part of a long page) is saved as a JPG with its quality lowered just enough to fit (and made smaller only if that isn't enough). Empty: as picked on the left.">
+        <span>Target</span><input id="target" type="number" min="0" step="any" inputmode="decimal" placeholder="none" autocomplete="off" aria-label="Target file size">
+        <span class="seg" id="unit" role="radiogroup" aria-label="Target size unit"><button data-v="kb" role="radio">KB</button><button data-v="mb" role="radio">MB</button></span>
+      </label>
+      <span class="est" id="est" title="The size of the file Save would make now, with these settings">≈ …</span>
+    </div>
+    <div class="info"><b id="name">Screenshot</b><span id="info"></span><span class="status" id="status">not saved yet</span></div>
+  </footer>
+  <input type="file" id="fontFile" accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2" hidden>
+
+  <script src="shared.js"></script>
+  <script src="pii-rules.js"></script>
+  <script src="picker-color.js"></script>
+  <script src="color-menu.js"></script>
+  <script src="shot-edit.js"></script>
+  <script src="shot-view.js"></script>
+</body>
+</html>

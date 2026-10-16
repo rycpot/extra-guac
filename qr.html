@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>QR code · Extra Guac</title>
+  <link rel="icon" href="icons/icon32.png">
+  <link rel="stylesheet" href="settings.css">
+  <link rel="stylesheet" href="qr.css">
+</head>
+<body>
+  <main class="qr-page">
+    <header class="qr-top">
+      <h1>QR code</h1>
+      <span class="grow"></span>
+      <label class="toggle" title="QR code for this page, a link, or the selected text, in the right-click menu"><input type="checkbox" role="switch" id="menuToggle"><span>in right-click menu</span></label>
+    </header>
+
+    <div class="qr-make">
+      <div class="qr-form">
+        <div class="hl-field"><span class="hl-k">Content</span>
+          <div class="hl-v"><span class="hl-seg" id="kindSeg" role="radiogroup" aria-label="What the code holds">
+            <button type="button" role="radio" data-v="url">Link</button><button type="button" role="radio" data-v="text">Text</button><button type="button" role="radio" data-v="phone">Phone</button><button type="button" role="radio" data-v="email">Email</button>
+          </span></div>
+        </div>
+        <div class="hl-field" data-for="url"><span class="hl-k">Link</span>
+          <div class="hl-v"><input type="text" class="text wide" id="url" placeholder="https://example.com" spellcheck="false" autocomplete="off"><span class="hint qr-count" id="urlCount"></span></div>
+        </div>
+        <div class="hl-field" data-for="text"><span class="hl-k">Text</span>
+          <div class="hl-v"><textarea class="text wide" id="text" rows="4" placeholder="Any text" spellcheck="false"></textarea><span class="hint qr-count" id="textCount"></span></div>
+        </div>
+        <div class="hl-field" data-for="phone"><span class="hl-k">Phone</span>
+          <div class="hl-v"><input type="tel" class="text wide" id="phone" placeholder="+1 941 555 0123" autocomplete="off"><span class="hint">scanning it offers to call this number</span></div>
+        </div>
+        <div class="hl-field" data-for="email"><span class="hl-k">Email</span>
+          <div class="hl-v qr-email">
+            <input type="email" class="text wide" id="to" placeholder="name@example.com" autocomplete="off">
+            <input type="text" class="text wide" id="subject" placeholder="subject (optional)" autocomplete="off">
+            <textarea class="text wide" id="body" rows="3" placeholder="message (optional)"></textarea>
+            <span class="hint qr-count" id="bodyCount"></span>
+            <span class="hint">scanning it starts an email with these filled in</span>
+          </div>
+        </div>
+        <div class="hl-field"><span class="hl-k">Type</span>
+          <div class="hl-v">
+            <span class="hl-seg" id="modeSeg" role="radiogroup" aria-label="Static or dynamic">
+              <button type="button" role="radio" data-v="static">Static</button><button type="button" role="radio" data-v="dynamic">Dynamic</button>
+            </span>
+            <span class="hint" id="modeHint"></span>
+            <div class="qr-dub" id="dubBox" hidden></div>
+          </div>
+        </div>
+        <div class="hl-field"><span class="hl-k">Middle</span>
+          <div class="hl-v">
+            <span class="qr-icons" id="iconSeg" role="radiogroup" aria-label="Icon in the middle"></span>
+            <div class="qr-toggles">
+              <label class="toggle qr-fit" id="fitRow" title="Trims the icon's empty (transparent) edges so it fills its space, whole: nothing of it is cut off"><input type="checkbox" role="switch" id="fitToggle"><span>fit to space</span></label>
+              <label class="toggle qr-fit" id="cleanRow" title="Removes the background around your icon (a photo or logo on a plain background), so only the icon itself is drawn"><input type="checkbox" role="switch" id="cleanToggle"><span>remove background</span></label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="qr-preview">
+        <div class="qr-code" id="code"></div>
+        <div class="qr-check" id="check"></div>
+        <div class="qr-holds" id="holds"></div>
+        <div class="qr-dest" id="dest" hidden></div>
+        <div class="qr-actions" id="actions"></div>
+        <div class="qr-note" id="note" aria-live="polite"></div>
+      </div>
+    </div>
+
+    <section class="qr-history">
+      <div class="qr-col" id="histStatic"></div>
+      <div class="qr-col" id="histDynamic"></div>
+    </section>
+  </main>
+  <input type="file" id="iconFile" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" hidden>
+  <script src="shared.js"></script>
+  <script src="beam/lib/qrcode.min.js"></script>
+  <script src="beam/lib/jsQR.min.js"></script>
+  <script src="cutout.js"></script>
+  <script src="beam/lib/qr-render.js"></script>
+  <script src="qr.js"></script>
+</body>
+</html>

@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Extra Guac</title>
+  <link rel="stylesheet" href="popup.css">
+  <link rel="stylesheet" href="beam/beam.css">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h5v-5h4v5h5V9.5"/></symbol>
+      <symbol id="i-inspect" viewBox="0 0 24 24"><path d="M20 11V6.5A1.5 1.5 0 0 0 18.5 5h-13A1.5 1.5 0 0 0 4 6.5v11A1.5 1.5 0 0 0 5.5 19H11"/><path d="M4 9h16"/><path d="m14 13 7 2.5-3 1.2-1.2 3z"/></symbol>
+      <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13.5 3 5 13.5h6L10.5 21 19 10.5h-6z"/></symbol>
+      <symbol id="i-tray" viewBox="0 0 24 24"><path d="M4 13 6.5 6h11L20 13v5H4z"/><path d="M4 13h4.5l1 2h5l1-2H20"/></symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-font" viewBox="0 0 24 24"><path d="M3 19 8.5 5h1L15 19M5.2 14.5h7.6"/><path d="M15.5 12.2a3 3 0 0 1 5.5 1.6V19M21 15.6c-3.8-.2-5.7.6-5.7 2 0 1 .8 1.6 1.9 1.6 1.8 0 3.8-1.3 3.8-3.6"/></symbol>
+      <symbol id="i-dropper" viewBox="0 0 24 24"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4z"/></symbol>
+      <symbol id="i-pointer" viewBox="0 0 24 24"><path d="M4 4l6.5 16 2.3-6.7L19.5 11z"/><path d="M13 13l6 6"/></symbol>
+      <symbol id="i-redirect" viewBox="0 0 24 24"><path d="M4 7h11a4 4 0 0 1 0 8H8"/><path d="M11 12l-3 3 3 3"/></symbol>
+      <symbol id="i-beam" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 16.2a6 6 0 0 0 0-8.4"/><path d="M5 5a10 10 0 0 0 0 14M19 19a10 10 0 0 0 0-14"/></symbol>
+      <symbol id="i-open" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="3.5"/><path d="M10 14l5-5M10.5 9H15v4.5"/></symbol>
+      <symbol id="i-upload" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="2.5"/><circle cx="9" cy="9" r="1.6"/><path d="M20.5 15l-5-5L5 20.5"/></symbol>
+      <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.6 6.9a8 8 0 1 0 10.8 0"/></symbol>
+      <symbol id="i-camera" viewBox="0 0 24 24"><rect x="3" y="6.5" width="18" height="13" rx="2"/><path d="M8.5 6.5 10 4h4l1.5 2.5"/><circle cx="12" cy="13" r="3.2"/></symbol>
+      <symbol id="i-area" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="1.5" stroke-dasharray="2.6 2.4"/></symbol>
+      <symbol id="i-tab" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="1.5"/><path d="M3.5 9h17"/></symbol>
+      <symbol id="i-page" viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="1.5"/><path d="M9 7h6M9 10.5h6M9 14h6M9 17.5h4"/></symbol>
+      <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 5.1A9.5 9.5 0 0 1 21 12a14 14 0 0 1-2.6 3.4M6.6 6.6A14 14 0 0 0 3 12a9.5 9.5 0 0 0 12.4 5.4"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></symbol>
+      <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></symbol>
+      <symbol id="i-nuke" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.8"/><path d="M12 10.2 9 5a8 8 0 0 1 6 0zM13.6 13l5.9.1a8 8 0 0 1-3 5.2zM10.4 13l-3 5.3a8 8 0 0 1-3-5.2z"/></symbol>
+      <symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 1.5M9.5 2.5h5"/></symbol>
+      <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></symbol>
+      <symbol id="i-expand" viewBox="0 0 24 24"><path d="M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/></symbol>
+      <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+      <symbol id="i-qr" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><path d="M14 14h2.5v2.5M20 14v.01M14 20h.01M17.5 17.5V20H20v-2.5"/></symbol>
+      <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+      <symbol id="i-eraser" viewBox="0 0 24 24"><path d="M8.5 20H20"/><path d="m4.6 15.4 9.8-9.8a2 2 0 0 1 2.8 0l2.2 2.2a2 2 0 0 1 0 2.8L11 19.1a3 3 0 0 1-4.2 0l-2.2-2.1a1.1 1.1 0 0 1 0-1.6z"/><path d="m9.5 10.5 5 5"/></symbol>
+      <symbol id="i-contrast" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5v17a8.5 8.5 0 0 0 0-17z" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+      <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18.5a4.5 4.5 0 0 1-.6-9 6 6 0 0 1 11.5 1.6A3.8 3.8 0 0 1 17.5 18.5z"/><path d="M12 15.5v-5M9.8 12.6 12 10.4l2.2 2.2"/></symbol>
+      <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9.5 12.5h5M9.5 16h5"/></symbol>
+      <symbol id="i-marker" viewBox="0 0 24 24"><path d="m9 11-5.5 5.5V20h3.5l5.5-5.5"/><path d="m9 11 6.5-6.5a2.1 2.1 0 0 1 3 0l1 1a2.1 2.1 0 0 1 0 3L13 15z"/><path d="M14 21h6"/></symbol>
+      <symbol id="i-clipboard" viewBox="0 0 24 24"><rect x="5" y="4.5" width="14" height="16.5" rx="2"/><path d="M9 4.5V3.5h6v1"/><path d="M9 10h6M9 13.5h6M9 17h4"/></symbol>
+      <symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 3.5h6l-1 5.5 3.5 3v1.5h-11V12L10 9z"/><path d="M12 13.5V21"/></symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/></symbol>
+      <symbol id="i-zoom" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8M10.5 8v5M8 10.5h5"/></symbol>
+      <symbol id="i-imgdl" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="17" height="17" rx="2.5"/><circle cx="9" cy="9" r="1.6"/><path d="M20.5 14.5 16 10l-5.5 5.5"/><path d="M12 13v7M9.5 17.5 12 20l2.5-2.5"/></symbol>
+      <symbol id="i-unlock" viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 7.7-1.5"/><path d="M12 14.5v2"/></symbol>
+      <symbol id="i-newtab" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-8 8"/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/></symbol>
+      <symbol id="i-focus" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/><circle cx="12" cy="12" r="2.2"/></symbol>
+      <symbol id="i-ocr" viewBox="0 0 24 24"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8.5 8.5h7M12 8.5v7"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></symbol>
+      <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol>
+      <symbol id="i-note" viewBox="0 0 24 24"><path d="M5 4.5h14v15H5z"/><path d="M8.5 9h7M8.5 12.5h7M8.5 16h4"/></symbol>
+    </defs>
+  </svg>
+
+  <main id="main">
+    <header class="top">
+      <nav class="tabs" aria-label="Sections">
+        <button class="tab active" data-panel="tools" aria-current="page" title="Tools"><svg><use href="#i-home"/></svg></button>
+        <button class="tab" data-panel="page" title="Page tools"><svg><use href="#i-inspect"/></svg></button>
+        <button class="tab" data-panel="extra" title="Your tools: drag sections here in settings → general" disabled><svg><use href="#i-bolt"/></svg></button>
+        <button class="tab" data-panel="backup" title="Backup"><svg><use href="#i-cloud"/></svg></button>
+      </nav>
+      <div class="top-actions">
+        <button class="icon-btn" id="settingsBtn" title="Settings"><svg><use href="#i-gear"/></svg></button>
+        <button class="icon-btn" id="stopAllBtn" title="Stop everything: auto-refresh, keep awake, tab volume, blur"><svg><use href="#i-power"/></svg></button>
+      </div>
+    </header>
+
+    <div class="panel" id="panel-tools">
+    <section data-section="screenshot" class="row">
+      <div class="label"><svg><use href="#i-camera"/></svg>screenshot
+        <button class="icon-btn small" id="shotHistoryBtn" title="Last 10 screenshots" hidden><svg><use href="#i-expand"/></svg></button>
+      </div>
+      <div class="actions">
+        <button class="icon-btn small" id="shotSettings" title="Screenshot format, folder and what happens after a shot"><svg><use href="#i-sliders"/></svg></button>
+        <button class="text-btn" data-shot="area" title="Drag a box on the page"><svg><use href="#i-area"/></svg>area</button>
+        <button class="text-btn" data-shot="tab" title="The visible part of the page"><svg><use href="#i-tab"/></svg>tab</button>
+        <button class="text-btn" data-shot="full" title="The whole page, scrolled and stitched"><svg><use href="#i-page"/></svg>full</button>
+      </div>
+    </section>
+
+    <section data-section="ocr" class="row">
+      <div class="label"><svg><use href="#i-ocr"/></svg>text from image</div>
+      <div class="actions">
+        <button class="icon-btn small" id="ocrSettings" title="OCR key &amp; engine"><svg><use href="#i-sliders"/></svg></button>
+        <button class="text-btn" id="ocrArea" title="Drag over text on the page to read and copy it"><svg><use href="#i-area"/></svg>area</button>
+      </div>
+    </section>
+
+    <section data-section="blur" class="row">
+      <div class="label"><svg><use href="#i-eye-off"/></svg>privacy blur</div>
+      <div class="actions">
+        <button class="icon-btn small" id="blurSettings" title="Blur rules & style"><svg><use href="#i-sliders"/></svg></button>
+        <button class="switch" id="blurToggle" role="switch" aria-checked="false" aria-label="Blur sensitive data"></button>
+      </div>
+    </section>
+
+    <section data-section="scratch" class="block" id="scratchRow">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-note"/></svg><span class="titles">scratch pads<span class="sub">plain or rich text · saves as you type</span></span></div>
+      </div>
+      <div class="pad-strip" id="padStrip" role="group" aria-label="Open a scratch pad"></div>
+    </section>
+
+    <section data-section="dark" class="block" id="darkRow">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-contrast"/></svg>dark mode</div>
+        <div class="actions">
+          <div class="seg" id="darkMode" role="radiogroup" aria-label="Dark mode for">
+            <button data-mode="sites" role="radio" title="Only on the sites you pick">sites</button>
+            <button data-mode="all" role="radio" title="Everywhere, except the sites you exclude">all</button>
+          </div>
+          <button class="icon-btn small" id="darkSettings" title="Dark mode sites"><svg><use href="#i-sliders"/></svg></button>
+          <button class="switch" id="darkToggle" role="switch" aria-checked="false" aria-label="Dark mode, on or off everywhere"></button>
+        </div>
+      </div>
+      <div class="row tight sub-row" id="darkSiteRow" hidden>
+        <span class="status" id="darkSiteLabel"></span>
+        <div class="actions">
+          <span class="status" id="darkStatus" title="This page is dark on its own, so it's left as it is"></span>
+          <button class="switch" id="darkSiteToggle" role="switch" aria-checked="false"></button>
+        </div>
+      </div>
+    </section>
+
+    <section data-section="refresh" class="row" id="refreshRow">
+      <div class="label"><svg><use href="#i-refresh"/></svg>refresh</div>
+      <div class="actions" id="refreshActions">
+        <button class="text-btn" id="hardRefresh" title="Reload bypassing the cache (Cmd/Ctrl+Shift+R)"><svg><use href="#i-refresh"/></svg>hard</button>
+        <button class="text-btn danger" id="nukeBtn" title="Clear all of this site's data (keeps passwords) and reload"><svg><use href="#i-nuke"/></svg><span>nuke</span></button>
+      </div>
+      <div class="nuke-progress" id="nukeProgress" hidden>
+        <span class="status" id="nukeLabel"></span>
+        <div class="bar"><i id="nukeBar"></i></div>
+      </div>
+    </section>
+
+    <section data-section="autoRefresh" class="block" id="autoRefresh">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-timer"/></svg>auto-refresh</div>
+        <div class="actions">
+          <span class="status" id="arStatus"></span>
+          <button class="icon-btn small" id="arSettings" title="Auto-refresh settings: alert sound and keyword alerts"><svg><use href="#i-sliders"/></svg></button>
+          <button class="switch" id="arToggle" role="switch" aria-checked="false" aria-label="Auto-refresh this tab"></button>
+        </div>
+      </div>
+      <div class="ar-config">
+        <div class="seg" role="radiogroup" aria-label="Interval">
+          <button data-mode="fixed" role="radio">fixed</button>
+          <button data-mode="random" role="radio">random</button>
+        </div>
+        <span class="ar-fixed"><input type="number" id="arFixed" min="1" class="num"> s</span>
+        <span class="ar-random"><input type="number" id="arMin" min="1" class="num"> – <input type="number" id="arMax" min="1" class="num"> s</span>
+      </div>
+      <div class="kw-row">
+        <div class="chips" id="arChips"></div>
+        <span class="kw-count" id="arKwCount"></span>
+        <button class="icon-btn small" id="arKwAdd" title="Add keywords" aria-label="Add keywords"><svg><use href="#i-plus"/></svg></button>
+      </div>
+      <p class="kw-note">Keyword detection only works in the foreground tab.</p>
+    </section>
+
+    <section data-section="shortener" class="block" id="shortener">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-link"/></svg>URL shorten
+          <button class="icon-btn small" id="historyBtn" title="All shortened links"><svg><use href="#i-expand"/></svg></button>
+        </div>
+        <div class="actions">
+          <span class="status" id="shortCount"></span>
+          <button class="icon-btn small" id="shortSettings" title="URL shortener services and API keys"><svg><use href="#i-sliders"/></svg></button>
+        </div>
+      </div>
+      <div class="short-go">
+        <div class="seg" role="radiogroup" aria-label="Service" id="shortServices"></div>
+        <button class="go" id="shortenBtn" title="Shorten this tab's URL"><svg><use href="#i-arrow"/></svg></button>
+      </div>
+      <div class="link-row" id="latestLink" hidden>
+        <span class="link-text"></span>
+        <button class="icon-btn small" data-copy title="Copy"><svg><use href="#i-copy"/></svg></button>
+        <button class="icon-btn small" data-dismiss title="Dismiss (still in the list)"><svg><use href="#i-close"/></svg></button>
+      </div>
+    </section>
+
+    <section data-section="qr" class="block" id="qrRow">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-qr"/></svg>QR code</div>
+        <div class="actions">
+          <span class="status" id="qrStatus"></span>
+          <button class="text-btn" id="qrCustomize" title="Link, text, phone or email; static or dynamic; your icon; history">customize</button>
+        </div>
+      </div>
+      <div class="short-go">
+        <div class="seg" role="radiogroup" aria-label="Static or dynamic" id="qrMode"><button data-v="static" role="radio">static</button><button data-v="dynamic" role="radio">dynamic</button></div>
+        <button class="go" id="qrGo" title="QR code for this page"><svg><use href="#i-arrow"/></svg></button>
+      </div>
+      <div class="row tight sub-row">
+        <span class="status">in right-click menu</span>
+        <button class="switch" id="qrMenu" role="switch" aria-checked="false" aria-label="QR code in the right-click menu"></button>
+      </div>
+    </section>
+
+    <section data-section="volume" class="row">
+      <div class="label"><svg><use href="#i-volume"/></svg>tab volume</div>
+      <div class="actions volume">
+        <input type="range" id="volume" min="0" max="100" step="1" value="100" aria-label="Tab volume">
+        <output id="volumeOut">100%</output>
+      </div>
+    </section>
+
+    <section data-section="proxy" class="block" id="proxyRow">
+      <div class="row tight">
+        <div class="label"><img class="px-ic" src="icons/proxy.svg" alt="">proxy</div>
+        <div class="actions">
+          <span class="status" id="pxStatus"></span>
+          <div class="seg" role="radiogroup" aria-label="Proxy mode" id="pxMode" hidden>
+            <button role="radio" data-mode="sites" title="Only the listed sites use the proxy">sites</button>
+            <button role="radio" data-mode="full" title="Every site uses the proxy, except the skipped ones">full</button>
+          </div>
+          <button class="icon-btn small" id="pxSettings" title="Proxy: Webshare key, countries and sites"><svg><use href="#i-sliders"/></svg></button>
+          <button class="switch" id="pxToggle" role="switch" aria-checked="false" aria-label="Proxy, on or off" hidden></button>
+        </div>
+      </div>
+      <div id="pxMore"></div>
+    </section>
+
+    <section data-section="awake" class="block" id="awake">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-moon"/></svg>awake</div>
+        <div class="actions presets" id="awakePresets">
+          <button data-min="15">15</button>
+          <button data-min="30">30</button>
+          <button data-min="60">1h</button>
+          <button data-min="120">2h</button>
+          <button data-min="0" title="Until turned off">∞</button>
+        </div>
+      </div>
+      <div class="awake-custom">
+        <span class="status" id="awakeStatus"></span>
+        <span class="custom">
+          <input type="number" id="awakeAmount" min="1" class="num" aria-label="Custom duration">
+          <button class="unit" id="awakeUnit" title="Scroll or click to switch minutes / hours">min</button>
+          <button class="go small" id="awakeGo" title="Keep awake for this long"><svg><use id="awakeGoIcon" href="#i-play"/></svg></button>
+        </span>
+      </div>
+    </section>
+    <section data-section="clipboard" class="block" id="clipRow">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-clipboard"/></svg><span class="titles">clipboard history<span class="sub" id="clipStatus"></span></span>
+          <button class="icon-btn small" id="clipListBtn" title="All copied text"><svg><use href="#i-expand"/></svg></button>
+        </div>
+        <div class="actions">
+          <button class="icon-btn small" id="clipSettings" title="Clipboard settings"><svg><use href="#i-sliders"/></svg></button>
+          <button class="switch" id="clipToggle" role="switch" aria-checked="false" aria-label="Clipboard history"></button>
+        </div>
+      </div>
+      <div class="link-row" id="clipLatest" hidden>
+        <span class="link-text"></span>
+        <button class="icon-btn small" data-copy title="Copy"><svg><use href="#i-copy"/></svg></button>
+        <button class="icon-btn small" data-dismiss title="Dismiss (still in the list)"><svg><use href="#i-close"/></svg></button>
+      </div>
+    </section>
+    </div>
+
+    <div class="panel" id="panel-page" hidden>
+    <section data-section="color" class="block">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-dropper"/></svg>what color?
+          <button class="icon-btn small" id="colorHistoryBtn" title="Picked colors"><svg><use href="#i-expand"/></svg></button>
+        </div>
+        <div class="actions"><button class="text-btn" id="pickColor">pick</button></div>
+      </div>
+      <div class="link-row" id="lastColor" hidden>
+        <i class="swatch"></i><span class="link-text"></span>
+        <button class="icon-btn small" data-copy title="Copy"><svg><use href="#i-copy"/></svg></button>
+        <button class="icon-btn small" data-dismiss title="Dismiss (still in the list)"><svg><use href="#i-close"/></svg></button>
+      </div>
+    </section>
+
+    <section data-section="element" class="block">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-pointer"/></svg>what element?
+          <button class="icon-btn small" id="selectorHistoryBtn" title="Picked selectors"><svg><use href="#i-expand"/></svg></button>
+        </div>
+        <div class="actions">
+          <div class="seg" role="radiogroup" aria-label="Copy as" id="selectorFormat">
+            <button data-format="css" role="radio">css</button>
+            <button data-format="xpath" role="radio">xpath</button>
+          </div>
+          <button class="text-btn" id="pickElement">pick</button>
+        </div>
+      </div>
+      <div class="link-row" id="lastSelector" hidden>
+        <span class="link-text"></span>
+        <button class="icon-btn small" data-copy title="Copy"><svg><use href="#i-copy"/></svg></button>
+        <button class="icon-btn small" data-dismiss title="Dismiss (still in the list)"><svg><use href="#i-close"/></svg></button>
+      </div>
+    </section>
+
+    <section data-section="font" class="block">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-font"/></svg>what font?
+          <button class="icon-btn small" id="fontHistoryBtn" title="Picked fonts"><svg><use href="#i-expand"/></svg></button>
+        </div>
+        <div class="actions"><button class="text-btn" id="pickFont">pick</button></div>
+      </div>
+      <div class="link-row" id="lastFont" hidden>
+        <span class="link-text"></span>
+        <button class="icon-btn small" data-copy title="Copy"><svg><use href="#i-copy"/></svg></button>
+        <button class="icon-btn small" data-dismiss title="Dismiss (still in the list)"><svg><use href="#i-close"/></svg></button>
+      </div>
+    </section>
+
+    <section data-section="remove" class="block" id="removeRow">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-eraser"/></svg>remove elements</div>
+        <div class="actions"><span class="status" id="removeStatus"></span>
+          <button class="icon-btn small" id="removeSettings" title="All removed elements, by site"><svg><use href="#i-sliders"/></svg></button>
+          <button class="text-btn" id="pickRemove">pick</button>
+        </div>
+      </div>
+      <div class="row tight sub-row">
+        <span class="status">show removed on this site</span>
+        <button class="switch" id="removeShow" role="switch" aria-checked="false" aria-label="Show removed elements on this site"></button>
+      </div>
+    </section>
+
+    <section data-section="highlight" class="block" id="hlRow">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-marker"/></svg>highlight words</div>
+        <div class="actions"><span class="status" id="hlStatus"></span>
+          <button class="icon-btn small" id="hlSettings" title="Word lists"><svg><use href="#i-sliders"/></svg></button>
+          <button class="switch" id="hlToggle" role="switch" aria-checked="false" aria-label="Highlight words, on or off everywhere"></button>
+        </div>
+      </div>
+      <div class="row tight sub-row" id="hlExcludeRow" hidden>
+        <span class="status" id="hlExcludeLabel"></span>
+        <button class="switch" id="hlExclude" role="switch" aria-checked="false"></button>
+      </div>
+      <div class="row tight sub-row" id="hlSiteRow" hidden>
+        <span class="status" id="hlSiteLabel"></span>
+        <button class="switch" id="hlSite" role="switch" aria-checked="false"></button>
+      </div>
+    </section>
+
+    <section data-section="unlock" class="block" id="unlockRow">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-unlock"/></svg><span class="titles">enable copy &amp; right-click<span class="sub" id="unlockHint"></span></span></div>
+        <div class="actions">
+          <button class="icon-btn small" id="unlockSettings" title="Unlocked sites"><svg><use href="#i-sliders"/></svg></button>
+          <button class="switch" id="unlockToggle" role="switch" aria-checked="false"></button>
+        </div>
+      </div>
+      <div class="row tight sub-row" id="unlockRememberRow" hidden>
+        <span class="status">remember this site for future visits</span>
+        <button class="switch" id="unlockRemember" role="switch" aria-checked="false" aria-label="Remember this site for future visits"></button>
+      </div>
+    </section>
+    <section data-section="newTab" class="block" id="newTabRow">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-newtab"/></svg><span class="titles">Open other site urls in new tab<span class="sub" id="newTabHint"></span></span></div>
+        <div class="actions">
+          <button class="icon-btn small" id="newTabSettings" title="Sites where links to other sites open in a new tab"><svg><use href="#i-sliders"/></svg></button>
+          <button class="switch" id="newTabToggle" role="switch" aria-checked="false"></button>
+        </div>
+      </div>
+      <div class="row tight sub-row" id="newTabLastRow" hidden>
+        <span class="status" id="newTabLastText"></span>
+        <button class="text-btn" id="newTabSame"></button>
+      </div>
+    </section>
+    <section data-section="focus" class="block" id="focusRow">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-focus"/></svg><span class="titles">refresh on focus<span class="sub" id="focusHint"></span></span></div>
+        <div class="actions">
+          <button class="icon-btn small" id="focusSettings" title="Refresh on focus: sites, refresh type, expiry and threshold"><svg><use href="#i-sliders"/></svg></button>
+          <button class="switch" id="focusToggle" role="switch" aria-checked="false"></button>
+        </div>
+      </div>
+    </section>
+    <section data-section="imgzoom" class="block" id="imgRow">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-zoom"/></svg><span class="titles">zoom &amp; rotate images<span class="sub" id="imgHint"></span></span></div>
+        <div class="actions">
+          <button class="switch" id="imgToggle" role="switch" aria-checked="false" aria-label="Zoom and rotate images"></button>
+        </div>
+      </div>
+      <div class="row tight sub-row" id="imgModRow" hidden>
+        <span class="status">hold when scrolling</span>
+        <div class="seg" id="imgMod" role="radiogroup" aria-label="Key to hold while scrolling">
+          <button data-mod="alt" role="radio"></button>
+          <button data-mod="ctrl" role="radio">ctrl</button>
+          <button data-mod="shift" role="radio">shift</button>
+        </div>
+      </div>
+    </section>
+    <section data-section="imgdl" class="block" id="imgDlRow">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-imgdl"/></svg><span class="titles">save images on click<span class="sub" id="imgDlHint"></span></span></div>
+        <div class="actions">
+          <button class="icon-btn small" id="imgDlSettings" title="Folder for saved images"><svg><use href="#i-sliders"/></svg></button>
+          <button class="switch" id="imgDlToggle" role="switch" aria-checked="false" aria-label="Save images on click"></button>
+        </div>
+      </div>
+      <div class="row tight sub-row" id="imgDlKeyRow" hidden>
+        <span class="status">hold and click an image</span>
+        <div class="seg" id="imgDlMod" role="radiogroup" aria-label="Key to hold while clicking">
+          <button data-mod="alt" role="radio"></button>
+          <button data-mod="ctrl" role="radio"></button>
+          <button data-mod="shift" role="radio">shift</button>
+        </div>
+      </div>
+      <div class="row tight sub-row" id="imgDlFmtRow" hidden>
+        <span class="status">save as</span>
+        <div class="seg" id="imgDlFmt" role="radiogroup" aria-label="Save as">
+          <button data-fmt="original" role="radio" title="As the site serves it">original</button>
+          <button data-fmt="png" role="radio">png</button>
+          <button data-fmt="jpg" role="radio">jpg</button>
+          <button data-fmt="webp" role="radio">webp</button>
+        </div>
+      </div>
+    </section>
+    <section data-section="redirect" class="row">
+      <div class="label"><svg><use href="#i-redirect"/></svg><span class="titles">URL auto redirect<span class="sub" id="redirectStatus"></span></span></div>
+      <div class="actions">
+        <button class="text-btn" id="redirectNow" title="Run the redirect rules on this page now (for pages without a right-click menu)">go</button>
+        <button class="icon-btn small" id="redirectSettings" title="Redirect rules"><svg><use href="#i-sliders"/></svg></button>
+        <button class="switch" id="redirectToggle" role="switch" aria-checked="false" aria-label="URL auto redirect"></button>
+      </div>
+    </section>
+
+    <section data-section="upload" class="block" id="uploader">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-upload"/></svg>upload images
+          <button class="icon-btn small" id="uploadHistoryBtn" title="All uploads"><svg><use href="#i-expand"/></svg></button>
+        </div>
+        <div class="actions">
+          <button class="icon-btn small" id="uploadSettings" title="Upload settings"><svg><use href="#i-sliders"/></svg></button>
+        </div>
+      </div>
+      <div class="short-go">
+        <div class="hosts" id="uploadHosts">
+          <button class="host" data-host="imglink" aria-pressed="false"><i></i>imglink</button>
+          <button class="host" data-host="x02" aria-pressed="false"><i></i>X02</button>
+        </div>
+        <span class="status" id="uploadStatus">right-click an image</span>
+      </div>
+      <div class="link-row" id="latestUpload" hidden>
+        <span class="link-text"></span>
+        <button class="icon-btn small" data-copy title="Copy"><svg><use href="#i-copy"/></svg></button>
+        <button class="icon-btn small" data-dismiss title="Dismiss (still in the list)"><svg><use href="#i-close"/></svg></button>
+      </div>
+    </section>
+    </div>
+
+    <div class="panel" id="panel-extra" hidden></div>
+
+    <div class="panel" id="panel-backup" hidden>
+    <section data-section="drive" class="block" id="driveRow">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-cloud"/></svg>drive backup</div>
+        <div class="actions"><span class="status" id="driveStatus"></span>
+          <button class="icon-btn small" id="driveSettings" title="Drive setup, snapshots and restore"><svg><use href="#i-sliders"/></svg></button>
+          <button class="text-btn" id="driveNow">sync now</button>
+        </div>
+      </div>
+      <div class="row tight sub-row">
+        <span class="status">auto-sync</span>
+        <div class="seg" id="driveInterval" role="radiogroup" aria-label="Auto-sync every">
+          <button data-h="0" role="radio" title="Only when you click sync now">off</button>
+          <button data-h="1" role="radio">1h</button><button data-h="2" role="radio">2h</button><button data-h="4" role="radio">4h</button>
+          <button data-h="6" role="radio">6h</button><button data-h="12" role="radio">12h</button><button data-h="24" role="radio">24h</button>
+        </div>
+      </div>
+      <p class="note" id="driveNote">Bookmarks and Extra Guac's settings &amp; data, kept as a time machine: latest, ~1 week, ~2 weeks, ~1 month, ~2 months, ~6 months, ~1 year and the oldest.</p>
+    </section>
+
+    <section data-section="settingsFile" class="row">
+      <div class="label"><svg><use href="#i-file"/></svg>settings file</div>
+      <div class="actions">
+        <button class="text-btn" id="exportLocal" title="Save Extra Guac's settings and data (API keys included) as a .json file">export</button>
+        <button class="text-btn" id="importLocal" title="Load settings and data from an exported file or a Drive snapshot">import</button>
+      </div>
+    </section>
+
+    <section data-section="beam" class="block beam-section">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-beam"/></svg>beam</div>
+        <div class="actions"><span class="status">send files between devices</span>
+          <button class="icon-btn small" id="beamOpenTab" title="Open Beam in a tab"><svg><use href="#i-open"/></svg></button>
+        </div>
+      </div>
+      <div id="beam"></div>
+    </section>
+    </div>
+
+    <!-- Tab 1, at the bottom: Drive backup was signed out without you disconnecting it. -->
+    <div class="drive-notice" id="driveNotice" role="alert" hidden>
+      <svg><use href="#i-cloud"/></svg>
+      <span class="msg">Google Drive got signed out, so backups are paused.</span>
+      <button class="text-btn" id="driveNoticeSignIn">sign in</button>
+      <button class="icon-btn small" id="driveNoticeClose" title="Hide this until it happens again" aria-label="Hide"><svg><use href="#i-close"/></svg></button>
+    </div>
+  </main>
+
+  <aside class="sheet" id="historySheet" hidden>
+    <header class="sheet-head">
+      <div class="label"><svg><use id="sheetIcon" href="#i-link"/></svg><span id="sheetTitle">shortened links</span></div>
+      <div class="actions">
+        <button class="text-btn" id="clearHistory">clear</button>
+        <button class="icon-btn" id="closeSheet" title="Close"><svg><use href="#i-close"/></svg></button>
+      </div>
+    </header>
+    <nav class="range-bar" id="rangeBar" aria-label="Jump to" hidden></nav>
+    <ul class="history" id="historyList"></ul>
+  </aside>
+
+  <aside class="sheet" id="kwSheet" hidden>
+    <header class="sheet-head">
+      <div class="label"><svg><use href="#i-timer"/></svg>keywords</div>
+      <div class="actions">
+        <button class="icon-btn" id="kwClose" title="Close"><svg><use href="#i-close"/></svg></button>
+      </div>
+    </header>
+    <p class="kw-hint">One keyword per line · up to 20 · must be unique</p>
+    <textarea id="kwText" class="field kw-text" spellcheck="false" placeholder="in stock&#10;available now&#10;add to cart"></textarea>
+    <footer class="kw-foot">
+      <span class="kw-count" id="kwCounter"></span>
+      <div class="actions">
+        <button class="text-btn" id="kwCancel">cancel</button>
+        <button class="text-btn primary" id="kwSave">save</button>
+      </div>
+    </footer>
+  </aside>
+
+  <aside class="sheet" id="clipSheet" hidden>
+    <header class="sheet-head">
+      <div class="label"><svg><use href="#i-clipboard"/></svg>clipboard history</div>
+      <div class="actions">
+        <button class="text-btn" id="clipClear" title="Remove everything except pinned">clear</button>
+        <button class="icon-btn" id="clipClose" title="Close"><svg><use href="#i-close"/></svg></button>
+      </div>
+    </header>
+    <input type="search" class="field clip-search" id="clipSearch" placeholder="search copied text" spellcheck="false">
+    <ul class="history clip-list" id="clipList"></ul>
+  </aside>
+
+  <aside class="sheet" id="shotSheet" hidden>
+    <header class="sheet-head">
+      <div class="label"><svg><use href="#i-camera"/></svg>screenshot history</div>
+      <div class="actions">
+        <button class="text-btn" id="shotClear" title="Delete every screenshot in the history">clear</button>
+        <button class="icon-btn" id="shotClose" title="Close"><svg><use href="#i-close"/></svg></button>
+      </div>
+    </header>
+    <ul class="history shot-list" id="shotList"></ul>
+  </aside>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <script src="shared.js"></script>
+  <script src="pad-store.js"></script>
+  <script src="shot-store.js"></script>
+  <script src="upload-thumbs.js"></script>
+  <script src="beam/beam.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

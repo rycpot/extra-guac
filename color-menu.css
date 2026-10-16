@@ -1,0 +1,41 @@
+/* The color menu (color-menu.js): presets and My colors, then the picker beside them.
+   Dark by default; a page can set the --cm-* colors for a light look. */
+.cm { --cm-bg: #2a2a2a; --cm-fg: #fff; --cm-line: rgba(255,255,255,.1); --cm-field: rgba(255,255,255,.08); --cm-muted: rgba(255,255,255,.45);
+  --cm-ring: rgba(255,255,255,.22); --cm-hover: rgba(255,255,255,.1);
+  display: flex; gap: 10px; color: var(--cm-fg); font: 13px/1.35 "Inter", system-ui, sans-serif; }
+.cm .i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.cm-palette { display: flex; gap: 10px; }
+.cm-col { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.cm-sw { all: unset; width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
+  background: linear-gradient(var(--c), var(--c)), repeating-conic-gradient(#8a8a8a 0 25%, #c8c8c8 0 50%) 0 0 / 8px 8px; box-shadow: inset 0 0 0 1px var(--cm-ring); }
+.cm-sw[aria-pressed=true] { box-shadow: 0 0 0 2px var(--cm-bg), 0 0 0 4px var(--cm-fg); }
+.cm-sw:focus-visible { outline: 2px solid #0a84ff; outline-offset: 2px; }
+.cm-sw.empty { width: 24px; height: 24px; background: none; border: 1px dashed var(--cm-muted); box-shadow: none; cursor: default; }
+.cm-picker { display: flex; flex-direction: column; gap: 10px; width: 206px; padding-left: 12px; border-left: 1px solid var(--cm-line); }
+.cm-sv { position: relative; height: 150px; border-radius: 10px; cursor: crosshair; touch-action: none;
+  background: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, var(--hue)); }
+.cm-knob { position: absolute; width: 14px; height: 14px; margin: -9px 0 0 -9px; border: 2.5px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,.35), 0 1px 4px rgba(0,0,0,.4); pointer-events: none; }
+.cm-row { display: flex; align-items: center; gap: 10px; }
+.cm-sliders { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+.cm input[type=range] { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 12px; margin: 0; border-radius: 6px; outline: none; cursor: pointer; }
+.cm input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--thumb, #fff);
+  border: 2.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.4); }
+.cm input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 2px #0a84ff; }
+.cm-hue { background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00); }
+.cm-alpha { background: linear-gradient(to right, transparent, var(--to)), repeating-conic-gradient(#8a8a8a 0 25%, #c8c8c8 0 50%) 0 0 / 8px 8px; }
+.cm-preview { width: 34px; height: 34px; flex: none; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--cm-ring);
+  background: linear-gradient(var(--c), var(--c)), repeating-conic-gradient(#8a8a8a 0 25%, #c8c8c8 0 50%) 0 0 / 8px 8px; }
+.cm-hex { flex: 1; min-width: 0; height: 30px; padding: 0 8px; border: 1px solid transparent; border-radius: 8px; background: var(--cm-field); color: inherit;
+  font: 500 13px ui-monospace, Menlo, monospace; text-align: center; text-transform: uppercase; letter-spacing: .04em; outline: none; box-sizing: border-box; }
+.cm-hex:focus { border-color: #0a84ff; }
+.cm-hex.bad { border-color: #ff453a; }
+.cm-eyedrop { all: unset; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; cursor: pointer; }
+.cm-eyedrop:hover { background: var(--cm-hover); }
+.cm-eyedrop svg { stroke-width: 1.6; }
+.cm-cap { margin-top: -6px; color: var(--cm-muted); font-size: 11.5px; text-align: center; }
+.cm-add { all: unset; display: flex; align-items: center; justify-content: center; gap: 5px; height: 36px; border-radius: 999px; background: #0a84ff; color: #fff;
+  font: 400 14.5px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif; letter-spacing: -.01em; cursor: pointer; }
+.cm-add:hover { background: #2a94ff; }
+.cm-add:active { background: #0070e0; }
+.cm-add:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
+.cm-add svg { width: 15px; height: 15px; stroke-width: 1.5; }

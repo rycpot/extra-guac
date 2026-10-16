@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Settings · Extra Guac</title>
+  <link rel="stylesheet" href="settings.css">
+  <link rel="stylesheet" href="color-menu.css">
+</head>
+<body>
+  <div class="frame">
+  <nav class="side" aria-label="Settings sections">
+    <div class="brand">extra guac</div>
+    <a href="#general">general</a>
+    <a href="#screenshot">screenshot</a>
+    <a href="#ocr">text from image</a>
+    <a href="#proxy">proxy</a>
+    <a href="#blur">privacy blur</a>
+    <a href="#dark">dark mode</a>
+    <a href="#refresh">auto-refresh</a>
+    <a href="#shortener">url shortener</a>
+    <a href="#redirect">url auto redirect</a>
+    <a href="#upload">image upload</a>
+    <a href="#remove">remove elements</a>
+    <a href="#highlight">highlight words</a>
+    <a href="#clipboard">clipboard history</a>
+    <a href="#unlock">enable copy &amp; right-click</a>
+    <a href="#newtab">other sites in new tab</a>
+    <a href="#focus">refresh on focus</a>
+    <a href="#backup">backup</a>
+  </nav>
+
+  <main>
+  <div class="pane" id="general">
+    <header class="pane-head"><h1>general</h1></header>
+    <section>
+      <h2>Theme</h2>
+      <div class="row">
+        <label><input type="radio" name="theme" value="dark" data-path="theme"> dark</label>
+        <label><input type="radio" name="theme" value="light" data-path="theme"> light</label>
+        <label><input type="radio" name="theme" value="auto" data-path="theme"> follow system</label>
+      </div>
+    </section>
+    <section>
+      <h2>Open the tools in</h2>
+      <div class="row">
+        <label><input type="radio" name="openIn" value="popup" data-path="openIn"> popup</label>
+        <label><input type="radio" name="openIn" value="panel" data-path="openIn"> side panel</label>
+      </div>
+      <p class="hint">The popup closes as soon as you click anywhere else, like a settings window or another tab.
+        The side panel stays open beside the page and follows the tab you're on.</p>
+    </section>
+    <section>
+      <h2>Tools layout <button type="button" class="btn ghost" id="layoutReset">reset</button></h2>
+      <p class="hint">The popup's first three tabs. Drag a section to another tab, or up and down within one; the popup and side panel follow right away.
+        Tab 3 shows up in the popup once it has something in it. The backup tab stays as it is.</p>
+      <div class="board" id="layoutBoard"></div>
+    </section>
+    <section>
+      <h2>About</h2>
+      <p class="hint">Click the toolbar icon for the tools. ⏻ in the tools stops everything that is running:
+        auto-refresh, keep awake, tab volume and blur.</p>
+    </section>
+  </div>
+
+  <div class="pane" id="dark">
+    <header class="pane-head">
+      <h1>dark mode</h1>
+      <label class="toggle"><input type="checkbox" role="switch" data-path="dark.enabled"><span>on</span></label>
+    </header>
+    <section class="dark-sec">
+      <div class="dark-card" id="darkCard"></div>
+      <p class="hint">A site covers its subdomains. In the tools, the switch next to <b>dark mode</b> turns it on or off everywhere,
+        and the row under it adds or removes the site you're on.</p>
+    </section>
+    <section>
+      <h2>How it works</h2>
+      <p class="hint">The page is darkened from its very first paint (no white flash) by inverting it as a whole while keeping
+        its colors' hues, so nothing can stay light — not even parts built from web components. Photos, videos, background
+        pictures and video or map embeds are turned back to normal (slightly dimmed). Pages that are dark on their own are
+        noticed and left as they are, page by page (the tools say "already dark").</p>
+    </section>
+  </div>
+
+  <div class="pane" id="proxy">
+    <header class="pane-head"><h1>proxy</h1>
+      <a class="px-by" href="https://www.webshare.io/" target="_blank" rel="noopener" title="Webshare">powered by <svg class="ws-logo" role="img" aria-label="Webshare" viewBox="0 0 241 34" fill="none"> <g> <path d="M15.7929 30.1176C15.7885 30.1221 15.7818 30.1287 15.7773 30.1332C15.7662 30.1443 15.7573 30.1532 15.7484 30.1643C15.6506 30.2666 15.555 30.3622 15.4549 30.4578C15.4505 30.4623 15.4416 30.4689 15.4372 30.4734C15.3571 30.549 15.2771 30.6246 15.1948 30.6935C15.1792 30.7091 15.1637 30.7224 15.1481 30.7335C15.117 30.7624 15.0836 30.7891 15.0503 30.818C14.9791 30.8803 14.9057 30.9381 14.8301 30.9959C14.8235 31.0004 14.8146 31.007 14.8101 31.0137C14.7679 31.0448 14.7256 31.0782 14.6834 31.1115C14.5678 31.196 14.4499 31.2805 14.3298 31.365C14.2387 31.4273 14.1431 31.4873 14.0475 31.5451C13.8496 31.6696 13.6472 31.7853 13.4382 31.8898C13.376 31.9231 13.3159 31.9542 13.2514 31.9832C13.1892 32.0143 13.1269 32.041 13.0624 32.0699C13.0513 32.0743 13.0424 32.081 13.0313 32.0854C12.9779 32.1077 12.9246 32.1343 12.8712 32.1544C12.8067 32.1833 12.7423 32.2077 12.6778 32.2344C12.242 32.4056 11.7928 32.5435 11.3259 32.6413C11.2636 32.6547 11.2014 32.6658 11.1413 32.6769C10.9012 32.7236 10.661 32.7592 10.4165 32.7836C10.3475 32.7903 10.2786 32.797 10.2097 32.8014C10.1963 32.8036 10.1808 32.8036 10.1674 32.8036C10.0451 32.8148 9.92283 32.8214 9.79832 32.8236C9.70938 32.8259 9.61821 32.8281 9.52482 32.8281C9.40031 32.8281 9.27579 32.8259 9.1535 32.8214C9.05566 32.817 8.96005 32.8103 8.86444 32.8036C8.75549 32.797 8.64431 32.7858 8.53758 32.7725C8.44419 32.7614 8.34858 32.7503 8.2552 32.7347C8.09955 32.7125 7.94613 32.6858 7.7927 32.6547C7.69265 32.6346 7.59481 32.6102 7.49698 32.5857C7.45695 32.5791 7.41471 32.5679 7.37691 32.5568C7.27463 32.5324 7.17457 32.5035 7.07673 32.4723C6.97223 32.4412 6.86995 32.4078 6.76766 32.3745C6.7521 32.37 6.73876 32.3634 6.72542 32.3589C6.61646 32.3211 6.50974 32.2833 6.40301 32.2411C6.38522 32.2344 6.36743 32.2255 6.34964 32.2188C6.24514 32.1788 6.14286 32.1343 6.04057 32.0899C5.9294 32.041 5.81822 31.9898 5.70927 31.9342C5.59365 31.8786 5.48247 31.8186 5.36907 31.7586C5.26679 31.703 5.16673 31.643 5.07112 31.5851C4.77539 31.4073 4.49078 31.2071 4.21729 30.9937C4.18616 30.9715 4.15726 30.9448 4.1239 30.9203C4.07276 30.8803 4.02384 30.838 3.97715 30.798C3.92823 30.7558 3.87709 30.7135 3.83262 30.6713C3.76592 30.6157 3.70366 30.5557 3.63918 30.4956C3.32566 30.1999 3.03216 29.8819 2.76756 29.5417C2.71419 29.475 2.66083 29.4061 2.60969 29.3349C2.45627 29.1282 2.31396 28.9125 2.17833 28.6923C1.67581 27.863 1.30893 26.9447 1.10659 25.9663C1.09325 25.8974 1.07769 25.8262 1.06657 25.7573C0.975405 25.2637 0.928711 24.7545 0.928711 24.2342L0.935382 6.55052V6.43934C0.935382 6.28147 0.939829 6.12583 0.95317 5.97018C0.957617 5.89681 0.966511 5.82565 0.973181 5.75005C0.973181 5.73004 0.975405 5.71225 0.977628 5.69447C0.984299 5.63221 0.993193 5.57439 1.00209 5.51436C1.01765 5.40763 1.03766 5.30313 1.05767 5.20084C1.07991 5.09856 1.10437 4.99628 1.13105 4.894C1.15551 4.79172 1.18664 4.69166 1.21777 4.59382C1.2489 4.49599 1.28225 4.4026 1.31783 4.31143C1.32227 4.29365 1.32894 4.27808 1.33561 4.26252C1.35785 4.19804 1.38453 4.13578 1.41121 4.0713C1.44234 4.00014 1.47347 3.93121 1.5046 3.86228C1.52684 3.80892 1.55352 3.75778 1.5802 3.70664C1.60911 3.64438 1.63801 3.58657 1.67137 3.52876C1.71361 3.44871 1.76031 3.37089 1.807 3.29084C2.87873 1.52759 4.81542 0.349121 7.02559 0.349121C10.3898 0.349121 13.118 3.07738 13.118 6.43934L13.1136 16.4141V16.4252L13.1114 22.7622C13.1114 23.6405 13.0424 24.5566 13.0891 25.4327C13.0869 25.4504 13.0869 25.4705 13.0869 25.4882C13.0869 25.5861 13.0891 25.6839 13.098 25.7795C13.1025 25.8685 13.1091 25.9574 13.118 26.0464C13.1358 26.2242 13.1625 26.3977 13.1981 26.5711C13.2114 26.6334 13.2225 26.6934 13.2403 26.7557C13.2692 26.8735 13.2981 26.9869 13.3382 27.1025C13.3426 27.1248 13.3515 27.1492 13.3604 27.1737C13.4271 27.3716 13.5049 27.5672 13.5939 27.754C13.6161 27.8052 13.6428 27.8563 13.6672 27.9052C13.6739 27.923 13.6828 27.9386 13.6961 27.9564C13.725 28.0119 13.7517 28.0653 13.7851 28.1187C13.8029 28.1542 13.8229 28.1898 13.8473 28.2254C13.8807 28.2788 13.914 28.3321 13.9474 28.3833C13.9541 28.3944 13.963 28.4055 13.9696 28.4188C14.0052 28.4722 14.0386 28.5211 14.0764 28.5723C14.1008 28.6101 14.1275 28.6456 14.1564 28.6812C14.3054 28.8769 14.4655 29.0614 14.6389 29.2349C14.6767 29.2727 14.7145 29.3105 14.7568 29.3461C14.7923 29.3816 14.8279 29.415 14.8635 29.4461C14.8791 29.4639 14.8968 29.4795 14.9146 29.4928C14.9546 29.5284 14.9947 29.5617 15.0369 29.5973C15.0858 29.6373 15.137 29.6774 15.1881 29.7152C15.2504 29.7641 15.3126 29.8085 15.3771 29.853C15.5083 29.9486 15.6484 30.0353 15.7929 30.1176Z" fill="#1BB394"/> <path d="M32.0312 30.1176C32.0267 30.122 32.0201 30.1287 32.0156 30.1332C32.0045 30.1443 31.9956 30.1532 31.9867 30.1643C31.8889 30.2666 31.7933 30.3622 31.6932 30.4578C31.6888 30.4622 31.6799 30.4689 31.6754 30.4734C31.5954 30.549 31.5153 30.6246 31.4331 30.6935C31.4175 30.7091 31.4019 30.7224 31.3864 30.7335C31.3552 30.7624 31.3219 30.7891 31.2885 30.818C31.2174 30.8803 31.144 30.9381 31.0684 30.9959C31.0617 31.0003 31.0528 31.007 31.0484 31.0137C31.0061 31.0448 30.9639 31.0782 30.9217 31.1115C30.806 31.196 30.6882 31.2805 30.5681 31.365C30.477 31.4273 30.3813 31.4873 30.2857 31.5451C30.0878 31.6696 29.8855 31.7852 29.6765 31.8897C29.6142 31.9231 29.5542 31.9542 29.4897 31.9831C29.4275 32.0143 29.3652 32.0409 29.3007 32.0699C29.2896 32.0743 29.2807 32.081 29.2696 32.0854C29.2162 32.1077 29.1629 32.1343 29.1095 32.1543C29.045 32.1833 28.9805 32.2077 28.916 32.2344C28.4802 32.4056 28.0311 32.5435 27.5641 32.6413C27.5019 32.6546 27.4396 32.6658 27.3796 32.6769C27.1395 32.7236 26.8993 32.7591 26.6547 32.7836C26.5858 32.7903 26.5169 32.7969 26.4479 32.8014C26.4346 32.8036 26.419 32.8036 26.4057 32.8036C26.2834 32.8147 26.1611 32.8214 26.0366 32.8236C25.9477 32.8259 25.8565 32.8281 25.7631 32.8281C25.6386 32.8281 25.5141 32.8259 25.3918 32.8214C25.2939 32.817 25.1983 32.8103 25.1027 32.8036C24.9938 32.7969 24.8826 32.7858 24.7759 32.7725C24.6825 32.7614 24.5869 32.7503 24.4935 32.7347C24.3378 32.7125 24.1844 32.6858 24.031 32.6546C23.9309 32.6346 23.8331 32.6102 23.7353 32.5857C23.6952 32.579 23.653 32.5679 23.6152 32.5568C23.5129 32.5323 23.4128 32.5034 23.315 32.4723C23.2105 32.4412 23.1082 32.4078 23.0059 32.3745C22.9904 32.37 22.977 32.3634 22.9637 32.3589C22.8547 32.3211 22.748 32.2833 22.6413 32.2411C22.6235 32.2344 22.6057 32.2255 22.5879 32.2188C22.4834 32.1788 22.3811 32.1343 22.2789 32.0899C22.1677 32.0409 22.0565 31.9898 21.9475 31.9342C21.8319 31.8786 21.7208 31.8186 21.6074 31.7586C21.5051 31.703 21.405 31.6429 21.3094 31.5851C21.0137 31.4072 20.7291 31.2071 20.4556 30.9937C20.4244 30.9714 20.3955 30.9448 20.3622 30.9203C20.311 30.8803 20.2621 30.838 20.2154 30.798C20.1665 30.7558 20.1154 30.7135 20.0709 30.6713C20.0042 30.6157 19.9419 30.5556 19.8775 30.4956C19.5639 30.1999 19.2704 29.8819 19.0058 29.5417C18.9525 29.475 18.8991 29.4061 18.848 29.3349C18.6945 29.1281 18.5522 28.9125 18.4166 28.6923C17.9141 27.863 17.5472 26.9446 17.3449 25.9663C17.3315 25.8974 17.316 25.8262 17.3049 25.7573C17.2137 25.2637 17.167 24.7545 17.167 24.2342L17.1737 6.5505V6.43932C17.1737 6.28145 17.1781 6.1258 17.1915 5.97016C17.1959 5.89678 17.2048 5.82563 17.2115 5.75003C17.2115 5.73002 17.2137 5.71223 17.2159 5.69444C17.2226 5.63218 17.2315 5.57437 17.2404 5.51434C17.2559 5.40761 17.2759 5.3031 17.296 5.20082C17.3182 5.09854 17.3427 4.99626 17.3693 4.89397C17.3938 4.79169 17.4249 4.69163 17.456 4.5938C17.4872 4.49596 17.5205 4.40257 17.5561 4.31141C17.5606 4.29362 17.5672 4.27806 17.5739 4.26249C17.5961 4.19801 17.6228 4.13575 17.6495 4.07127C17.6806 4.00012 17.7118 3.93119 17.7429 3.86226C17.7651 3.80889 17.7918 3.75775 17.8185 3.70661C17.8474 3.64435 17.8763 3.58654 17.9096 3.52873C17.9519 3.44868 17.9986 3.37086 18.0453 3.29081C19.1103 1.52978 21.047 0.351318 23.2572 0.351318C26.6214 0.351318 29.3496 3.07958 29.3496 6.44154L29.3452 16.4163V16.4274L29.343 22.7644C29.343 23.6427 29.274 24.5588 29.3207 25.4349C29.3185 25.4527 29.3185 25.4727 29.3185 25.4905C29.3185 25.5883 29.3207 25.6861 29.3296 25.7817C29.3341 25.8707 29.3407 25.9596 29.3496 26.0486C29.3674 26.2264 29.3941 26.3999 29.4297 26.5733C29.443 26.6356 29.4541 26.6956 29.4719 26.7579C29.5008 26.8757 29.5297 26.9891 29.5698 27.1047C29.5742 27.127 29.5831 27.1514 29.592 27.1759C29.6587 27.3738 29.7365 27.5694 29.8255 27.7562C29.8477 27.8074 29.8744 27.8585 29.8988 27.9074C29.9055 27.9252 29.9144 27.9408 29.9277 27.9586C29.9566 28.0142 29.9833 28.0675 30.0167 28.1209C30.0345 28.1565 30.0545 28.192 30.0789 28.2276C30.1123 28.281 30.1456 28.3343 30.179 28.3855C30.1857 28.3966 30.1946 28.4077 30.2012 28.4211C30.2368 28.4744 30.2702 28.5233 30.308 28.5745C30.3324 28.6123 30.3591 28.6479 30.388 28.6834C30.537 28.8791 30.6971 29.0637 30.8705 29.2371C30.9083 29.2749 30.9461 29.3127 30.9884 29.3483C31.0239 29.3838 31.0595 29.4172 31.0951 29.4483C31.1107 29.4661 31.1284 29.4817 31.1462 29.495C31.1863 29.5306 31.2263 29.5639 31.2685 29.5995C31.3174 29.6395 31.3686 29.6796 31.4197 29.7174C31.482 29.7663 31.5442 29.8108 31.6087 29.8552C31.7466 29.9486 31.8867 30.0353 32.0312 30.1176Z" fill="#1BB394"/> <path d="M39.4913 28.7457C36.1294 28.7457 33.4033 26.0197 33.4033 22.6577V6.43712C33.4033 3.07516 36.1294 0.349121 39.4913 0.349121C42.8533 0.349121 45.5793 3.07516 45.5793 6.43712V22.6555C45.5793 26.0197 42.8533 28.7457 39.4913 28.7457Z" fill="#1BB394"/> <path d="M142.536 27.2113C137.489 27.2113 133.864 24.1718 133.864 19.9893H138.076C138.076 22.1373 139.999 23.6693 142.676 23.6693C144.962 23.6693 146.385 22.5264 146.385 20.9366C146.385 19.0688 144.237 18.7886 141.785 18.4818C137.853 17.9793 134.06 17.1432 134.06 12.5139C134.06 8.63829 137.377 5.96118 142.174 5.96118C146.997 5.96118 150.483 8.86064 150.483 12.8474H146.412C146.441 10.8952 144.684 9.50102 142.285 9.50102C140.081 9.50102 138.632 10.5327 138.632 11.9825C138.632 13.8502 140.611 14.1304 143.121 14.4639C146.968 14.9108 150.957 15.7469 150.957 20.3184C150.957 24.3963 147.584 27.2113 142.536 27.2113Z" class="ws-word"/> <path d="M79.3706 23.0645L83.8399 5.96564H88.934L83.155 27.1758H75.9442L72.3398 12.1915L68.7355 27.1758H61.4957L55.7168 5.96564H60.8109L65.338 23.0645L69.5982 5.96564H75.1392L79.3706 23.0645Z" class="ws-word"/> <path d="M97.1541 23.1557H107.522V27.178H92.3291V5.96564H107.224V9.98798H97.1541V14.5151H106.033V18.0905H97.1541V23.1557Z" class="ws-word"/> <path d="M111.336 27.1758V5.96564H121.613C126.022 5.96564 129.12 8.40929 129.12 11.7157C129.12 13.8903 127.868 15.6491 126.051 16.1538C128.226 16.6897 129.716 18.7464 129.716 21.2768C129.716 24.8211 126.527 27.1758 121.971 27.1758H111.336ZM116.341 9.75007V14.4862H120.721C122.627 14.4862 123.999 13.5323 123.999 12.1337C123.999 10.7351 122.629 9.75007 120.721 9.75007H116.341ZM120.957 17.8815H116.339V23.3936H120.957C123.072 23.3936 124.593 22.2618 124.593 20.6831C124.593 19.0444 123.072 17.8815 120.957 17.8815Z" class="ws-word"/> <path d="M155.157 27.1758V5.96564H160.162V14.1571H168.921V5.96564H173.926V27.1758H168.921V18.2106H160.162V27.178H155.157V27.1758Z" class="ws-word"/> <path d="M182.117 27.1758H176.845L183.964 5.96564H191.233L198.324 27.1758H193.081L191.918 23.6604H183.28L182.117 27.1758ZM184.262 20.0872H190.935L187.598 10.257L184.262 20.0872Z" class="ws-word"/> <path d="M206.278 27.1758H201.272V5.96564H211.55C216.466 5.96564 219.89 8.88512 219.89 13.1165C219.89 15.9759 218.013 18.3595 215.243 19.2534L220.366 27.178H214.765L210.593 19.9093H206.273V27.1758H206.278ZM206.278 9.75007V16.3939H210.747C213.099 16.3939 214.887 15.0821 214.887 13.1165C214.887 10.9708 213.099 9.75007 210.747 9.75007H206.278Z" class="ws-word"/> <path d="M229.038 23.1557H239.406V27.178H224.213V5.96564H239.108V9.98798H229.038V14.5151H237.916V18.0905H229.038V23.1557Z" class="ws-word"/> </g></svg></a></header>
+    <div id="pxBody" class="px-stack"></div>
+  </div>
+
+  <div class="pane" id="ocr">
+    <header class="pane-head"><h1>text from image</h1></header>
+    <section>
+      <h2>OCR.space key <span class="hint" id="ocrState"></span></h2>
+      <div class="row">
+        <input type="password" class="text" id="ocrKey" data-path="ocr.key" placeholder="optional: your OCR.space API key" spellcheck="false" autocomplete="off">
+        <button type="button" class="btn ghost" data-reveal>show</button>
+        <button type="button" class="btn" id="ocrCheck">check key</button>
+      </div>
+      <p class="hint">Optional on the free plan: without a key of your own, Extra Guac's shared free keys are used. They're
+        shared by everyone, so they can run out for the day or the month; then you're asked for your own. Free, no credit
+        card: <a href="https://ocr.space/ocrapi/freekey" target="_blank" rel="noopener">get a key</a> with your email and paste
+        it here. Your key is used instead of the shared ones and stored only in this browser.</p>
+    </section>
+    <section>
+      <h2>Plan</h2>
+      <div class="row">
+        <label><input type="radio" name="ocrPlan" value="free" data-path="ocr.plan"> free</label>
+        <label><input type="radio" name="ocrPlan" value="pro" data-path="ocr.plan"> PRO / PRO PDF / Enterprise</label>
+      </div>
+      <div class="row" id="ocrEndpointRow">
+        <input type="text" class="text wide" data-path="ocr.endpoint" placeholder="optional: another PRO server from the welcome email" spellcheck="false" autocomplete="off">
+      </div>
+      <p class="hint">A key doesn't say which plan it's on, and OCR.space has no way to ask, so pick it here. <b>Free</b>: 25,000
+        images a month, 500 a day, up to 1 MB each. <b>PRO</b> plans use OCR.space's PRO servers (apipro1, and apipro2 if
+        the first one doesn't answer; type another address only if the welcome email names one): 300,000 a month, no daily
+        limit, up to 5 MB each. Selections are made smaller only when they're over the limit,
+        so on PRO big areas stay sharper.</p>
+    </section>
+    <section>
+      <h2>Engine</h2>
+      <div class="row">
+        <label><input type="radio" name="ocrEngine" value="2" data-path="ocr.engine"> engine 2 (default)</label>
+        <label><input type="radio" name="ocrEngine" value="3" data-path="ocr.engine"> engine 3</label>
+      </div>
+      <p class="hint"><b>Engine 2</b> is fast and detects the language. <b>Engine 3</b> is slower but better on handwriting,
+        tables and 200+ languages; it has its own smaller quota (1,000 a month on the free plan). Whichever you start with,
+        the card under the text switches to the other one and reads the same selection again.</p>
+    </section>
+    <section>
+      <h2>How it works</h2>
+      <p class="hint"><b>text from image → area</b> in the tools: drag a box over the text (resize or move it with the handles),
+        then ✓ or Enter. Only that box is sent to OCR.space, and nothing else from the page. The text is copied and shown in a
+        card at the bottom-right, where you can correct it and copy it again. The card stays until ✕ or Esc.</p>
+    </section>
+  </div>
+
+  <div class="pane" id="newtab">
+    <header class="pane-head"><h1>open other site urls in new tab</h1></header>
+    <section class="newtab-sites">
+      <h2>Sites <span class="hint">links that leave these sites open in a new tab</span></h2>
+      <p class="hint">Pick the websites where you want this. On those sites, a link that takes you to a <b>different
+        website</b> opens in a new tab, so the page you were on stays open. Links that stay on the same website open normally.</p>
+      <p class="hint">To add a site, open the popup while you're on it and switch this on, or type its address below.</p>
+      <p class="hint">Ctrl/⌘ + click and middle-click keep working the way they always do.</p>
+      <div id="newTabRows"></div>
+      <div class="add-row"><input type="text" class="text" id="newTabAdd" placeholder="example.com" spellcheck="false"><button type="button" class="btn" id="newTabAddBtn">Add</button></div>
+      <p class="hint"><b>Sometimes one website uses more than one address.</b> For example, signing in on youtube.com sends
+        you to google.com, so it opens in a new tab. To stop that, add <code>google.com</code> to the youtube.com row.</p>
+      <p class="hint"><b>Quicker way:</b> if a link opens in a new tab when it shouldn't, open the popup and click
+        <b>treat as same site</b>.</p>
+    </section>
+    <section class="newtab-split">
+      <h2>Each subdomain is its own site</h2>
+      <p class="hint"><b>Sometimes one address is shared by many people.</b> For example, <code>alice.github.io</code> and
+        <code>bob.github.io</code> are two different people's pages, so a link from one to the other should open in a new
+        tab. Common ones like github.io, vercel.app and blogspot.com already work this way.</p>
+      <p class="hint"><b>If you find one that doesn't</b>, add the shared part here. For example, add <code>pages.acme.dev</code>
+        and then <code>design.pages.acme.dev</code> and <code>sales.pages.acme.dev</code> are treated as separate sites.</p>
+      <div class="rm-pills"></div>
+      <div class="add-row"><input type="text" class="text" placeholder="pages.example.com" spellcheck="false"><button type="button" class="btn">Add</button></div>
+    </section>
+  </div>
+
+  <div class="pane" id="focus">
+    <header class="pane-head"><h1>refresh on focus</h1></header>
+    <section>
+      <p class="hint">Refreshes a tab when you come back to it (switching to its tab, or to its window from another window
+        or app) if its address matches one of these. Switch it on for the page you're on with <b>refresh on focus</b> in the
+        tools, or add one here. An address matches only exactly (<code>github.com/notifications</code>), unless it has a
+        <code>*</code>, which stands for anything: <code>github.com/*/pulls</code>, or a whole site with
+        <code>*.google.com/*</code>. The <code>https://</code>, a leading <code>www.</code>, a <code>#part</code> and a
+        trailing <code>/</code> don't count; a <code>?query</code> does.</p>
+      <div class="add-row"><input type="text" class="text" id="focusNew" placeholder="address, or a pattern with *: github.com/*/pulls" spellcheck="false"><button type="button" class="btn" id="focusAdd">Add</button></div>
+      <p class="hint bad" id="focusAddError" hidden></p>
+    </section>
+    <section>
+      <div id="focusRows"></div>
+    </section>
+    <section>
+      <h2>How it works</h2>
+      <p class="hint"><b>normal</b> reloads the page; <b>hard</b> reloads it skipping the browser's cache. <b>Expires after</b>
+        counts from when the entry was switched on (empty = never); an expired entry is switched off and stays here, and
+        switching it on again starts its time over. <b>If away at least</b> refreshes only when you were away from the tab
+        (on another tab, window or app) that long or longer, so going back and forth between tabs doesn't keep reloading
+        it; 0 refreshes every time. A tab that's still loading isn't refreshed.</p>
+    </section>
+  </div>
+
+  <div class="pane" id="unlock">
+    <header class="pane-head"><h1>enable copy &amp; right-click</h1></header>
+    <section>
+      <p class="hint">For sites that stop you selecting, copying or right-clicking. It's never on everywhere: switch it on
+        for the site you're on with <b>enable copy &amp; right-click</b> in the tools. <b>Remember this site</b> (ticked when you
+        switch it on) keeps it unlocked on every visit; untick it to unlock only until Chrome closes. Switching it off forgets
+        the site. A site covers its subdomains.</p>
+    </section>
+    <section class="unlock-list" data-list="saved">
+      <h2>Remembered sites <span class="hint">unlocked on every visit</span></h2>
+      <div class="rm-pills"></div>
+      <div class="add-row"><input type="text" class="text" placeholder="example.com" spellcheck="false"><button type="button" class="btn">Add</button></div>
+    </section>
+    <section class="unlock-list" data-list="session">
+      <h2>Until Chrome closes <span class="hint">unlocked without "remember"</span></h2>
+      <div class="rm-pills"></div>
+    </section>
+    <section>
+      <h2>How it works</h2>
+      <p class="hint">The page's own code isn't switched off (that would break menus, editors and drag &amp; drop): it keeps
+        running but can't cancel a copy, a right-click or selecting text:
+        the site's own right-click menu still opens, and Chrome's opens too. Text fields and editors are left alone, since
+        web apps handle copy and right-click there themselves, and so are buttons, links and other controls. Text that can't
+        be selected is made selectable, and a selection hidden with an invisible color is shown again. It's in place before
+        the page's own scripts run, and switching it off takes effect without a reload.</p>
+    </section>
+  </div>
+
+  <div class="pane" id="screenshot">
+    <header class="pane-head"><h1>screenshot</h1></header>
+    <section>
+      <h2>Format</h2>
+      <div class="row">
+        <label><input type="radio" name="format" value="png" data-path="shot.format"> PNG <span class="hint">lossless</span></label>
+        <label><input type="radio" name="format" value="jpeg" data-path="shot.format"> JPEG <span class="hint">smaller</span></label>
+      </div>
+      <div class="row" id="qualityRow">
+        <label for="quality">JPEG quality</label>
+        <input type="range" id="quality" min="40" max="100" step="1" data-path="shot.quality">
+        <output data-for="quality"></output>
+      </div>
+    </section>
+    <section>
+      <h2>After a tab or full-page shot</h2>
+      <div class="row">
+        <span class="row-label">tab</span>
+        <label><input type="radio" name="shotTab" value="preview" data-path="shot.tab"> preview card</label>
+        <label><input type="radio" name="shotTab" value="local" data-path="shot.tab"> save only</label>
+        <label><input type="radio" name="shotTab" value="cloud" data-path="shot.tab"> upload</label>
+      </div>
+      <div class="row">
+        <span class="row-label">full page</span>
+        <label><input type="radio" name="shotFull" value="preview" data-path="shot.full"> preview card</label>
+        <label><input type="radio" name="shotFull" value="local" data-path="shot.full"> save only</label>
+        <label><input type="radio" name="shotFull" value="cloud" data-path="shot.full"> upload</label>
+      </div>
+      <p class="hint"><b>Preview card:</b> a faint card at the bottom-right of the page shows the shot with ↓ save and ☁ upload;
+        nothing is saved until you pick one, and it goes after a few seconds unless you point at it.
+        <b>Save only:</b> straight to the folder below. <b>Upload:</b> straight to the image host picked in image upload settings (with "show both hosts", the card asks which); the card shows the link.
+        Area shots have both on the selection: ☁ uploads, ✓ saves.</p>
+    </section>
+    <section>
+      <h2>History</h2>
+      <label class="row"><input type="checkbox" data-path="shot.history"> Keep the last 10 screenshots</label>
+      <p class="hint">Every screenshot (area, tab or full page) goes in, whether you save it, upload it or just preview it, and the eleventh pushes out the oldest.
+        Open them from ⤢ next to screenshot in the tools: edit, copy, upload or delete each one. They stay in this browser and are included in Drive backups,
+        where each screenshot is uploaded once. Turning this off deletes the ones kept.</p>
+    </section>
+    <section>
+      <h2>Save to</h2>
+      <div class="row folder">
+        <span class="prefix">Downloads/</span>
+        <input type="text" class="text" data-path="shot.folder" placeholder="(Downloads itself)" spellcheck="false" autocomplete="off">
+      </div>
+      <p class="hint">A folder inside Downloads, e.g. <code>Screenshots</code> or <code>Work/Shots</code>. It's created if missing.
+        Chrome only lets extensions save inside Downloads.</p>
+    </section>
+    <section>
+      <h2>How it works</h2>
+      <p class="hint"><b>Area:</b> drag a box on the page, adjust it with the handles, then ✓ (or Enter) at its bottom-right to save it, or ☁ to upload it.
+        <b>Tab:</b> what's visible in the tab. <b>Full:</b> scrolls to the end of the page and stitches it together;
+        very long pages are saved in numbered parts.</p>
+    </section>
+    <section id="imgdl">
+      <h2>Saved images <span class="hint">(save images on click, in the tools)</span></h2>
+      <div class="row folder">
+        <span class="prefix">Downloads/</span>
+        <input type="text" class="text" data-path="imgDl.folder" placeholder="(Downloads itself)" spellcheck="false" autocomplete="off">
+      </div>
+      <p class="hint">Hold the chosen key and click an image to save it here, as it is or turned into PNG, JPG or WebP
+        (chosen in the tools). Works on pictures, background images and drawings (SVG, kept as SVG). The click doesn't
+        open links or reach the page.</p>
+    </section>
+  </div>
+
+  <div class="pane" id="blur">
+    <header class="pane-head">
+      <h1>privacy blur</h1>
+      <label class="toggle"><input type="checkbox" id="enabled" role="switch"><span>on</span></label>
+    </header>
+    <p class="saved" id="saved" aria-live="polite">Changes apply to open tabs instantly.</p>
+
+    <section>
+      <h2>Style</h2>
+      <div class="row">
+        <label><input type="radio" name="style" value="blur"> Blur</label>
+        <input type="range" id="blurPx" min="2" max="20" step="1">
+        <output id="blurPxOut"></output>
+      </div>
+      <div class="row">
+        <label><input type="radio" name="style" value="bars"> Solid bars</label>
+        <input type="color" id="barColor">
+      </div>
+      <div class="row">
+        <label><input type="radio" name="style" value="mask"> Mask characters</label>
+        <select id="maskChar">
+          <option value="×">× cross</option><option value="✕">✕ heavy cross</option>
+          <option value="•">• dot</option><option value="*">* asterisk</option>
+          <option value="█">█ block</option><option value="▒">▒ shade</option>
+        </select>
+        <span class="hint">uses the page's own font</span>
+      </div>
+      <label class="row"><input type="checkbox" id="hideUntilScanned"> Hide page until it has been scanned (safest for screen sharing)</label>
+      <p class="hint">Hover over blurred text to reveal it.</p>
+    </section>
+
+    <section>
+      <h2>Built-in detectors</h2>
+      <div class="grid" id="detectors"></div>
+    </section>
+
+    <section>
+      <h2>Custom rules <span class="hint">click a rule to edit · ● turns it on/off</span></h2>
+      <div class="chips" id="ruleChips"></div>
+      <div class="adder">
+        <input id="ruleInput" class="code" data-chips="rules" spellcheck="false" autocomplete="off"
+          placeholder="Add a rule, e.g. Phone number: {number}">
+        <button type="button" data-add="rules">Add</button>
+      </div>
+      <ul class="errors" id="ruleErrors"></ul>
+      <details>
+        <summary>Rule syntax</summary>
+        <table>
+          <tr><td><code>John Appleseed</code></td><td>Plain text: blurs that exact text (any case).</td></tr>
+          <tr><td><code>Phone number: {number}</code></td><td>Label stays visible, only the <code>{…}</code> part is blurred.</td></tr>
+          <tr><td><code>{number}</code></td><td>Digits with spaces and <code>+ ( ) - .</code>, at least 4 digits. Stops at the first other character.</td></tr>
+          <tr><td><code>{word}</code></td><td>The next word.</td></tr>
+          <tr><td><code>{line}</code></td><td>Everything to the end of the line.</td></tr>
+          <tr><td><code>{[\d()\- ]}</code></td><td>Your own set of allowed characters.</td></tr>
+          <tr><td><code>/regex/flags</code></td><td>JavaScript regex. Blurs the whole match, or only the <code>(?&lt;blur&gt;…)</code> group if present.</td></tr>
+        </table>
+      </details>
+    </section>
+
+    <section>
+      <h2>Test</h2>
+      <textarea id="sample" rows="4" spellcheck="false">Phone number: (941)-555-0123
+Contact jane@site.com from 192.168.1.10
+Card 4111 1111 1111 1111</textarea>
+      <div id="preview" class="preview"></div>
+    </section>
+
+    <section>
+      <h2>Never blur on <span class="hint">includes subdomains</span></h2>
+      <div class="chips" id="siteChips"></div>
+      <div class="adder">
+        <input id="siteInput" data-chips="excludedSites" spellcheck="false" autocomplete="off" placeholder="Add a site, e.g. mybank.com">
+        <button type="button" data-add="excludedSites">Add</button>
+      </div>
+      <ul class="errors" id="siteErrors"></ul>
+    </section>
+  </div>
+
+  <div class="pane" id="refresh">
+    <header class="pane-head"><h1>auto-refresh</h1></header>
+    <section>
+      <h2>When a keyword is found</h2>
+      <label class="row"><input type="checkbox" data-path="refresh.continueAfterMatch"> Keep refreshing <span class="hint">(off: stop refreshing that tab)</span></label>
+      <label class="row"><input type="checkbox" data-path="refresh.notify"> Show a notification</label>
+    </section>
+    <section>
+      <h2>Alert sound</h2>
+      <div class="row">
+        <label><input type="radio" name="soundKind" value="chime"> built-in chime</label>
+        <label><input type="radio" name="soundKind" value="link"> sound file link</label>
+        <label><input type="radio" name="soundKind" value="none"> none</label>
+        <button type="button" class="btn" id="testSound">test</button>
+      </div>
+      <div class="row" id="soundLinkRow" hidden>
+        <input type="url" class="text" id="soundLink" placeholder="https://… (.mp3, .wav, .ogg)" spellcheck="false">
+      </div>
+      <p class="hint" id="soundError"></p>
+    </section>
+    <section>
+      <h2>How it works</h2>
+      <p class="hint">Turn it on per tab in the popup: a fixed interval, or a random one between two values (seconds).
+        Keywords (up to 20, any one counts) are matched against the page's visible text, ignoring case; they're only
+        seen while the tab is in the foreground. The toolbar badge counts down on that tab.</p>
+    </section>
+  </div>
+
+  <div class="pane" id="shortener">
+    <header class="pane-head"><h1>url shortener</h1></header>
+    <div id="shortenerServices"></div>
+    <section>
+      <p class="hint">Keys are stored only in this browser. x.gd and spoo.me have no monthly limit: their links
+        are counted per calendar month in this browser. dub.sh's figures come from dub.sh itself (new links, until
+        they reset; 25 a month on its free plan). Dynamic QR codes use spoo.me or dub.sh, with your key.</p>
+    </section>
+  </div>
+
+  <div class="pane" id="redirect">
+    <header class="pane-head">
+      <h1>url auto redirect</h1>
+      <label class="toggle"><input type="checkbox" role="switch" data-path="redirect.enabled"><span>on</span></label>
+    </header>
+    <section>
+      <h2>Rules <span class="hint">applied top to bottom</span></h2>
+      <div class="rules-grid head"><span>on</span><span>domain</span><span>find</span><span></span><span>replace with</span><span>auto</span><span></span></div>
+      <div id="ruleRows"></div>
+      <button type="button" class="btn" id="addRule">+ add rule</button>
+    </section>
+    <section>
+      <h2>Try a URL</h2>
+      <input type="url" class="text wide" id="tryUrl" placeholder="Paste a URL to see where the rules send it" spellcheck="false">
+      <p class="hint" id="tryResult"></p>
+    </section>
+    <section>
+      <h2>How rules work</h2>
+      <table>
+        <tr><td><code>SY500</code> → <code>SY1600</code></td><td><b>find</b> plain text: replaced as is (first match).</td></tr>
+        <tr><td><code>/edit{line}</code> → <code>/copy</code></td><td><code>{line}</code> = rest of the URL, <code>{word}</code> = one path part,
+          <code>{number}</code> = digits, <code>{[a-z-]}</code> = your own characters. Insert them in the target with <code>{1}</code>, <code>{2}</code>…</td></tr>
+        <tr><td><code>(1306983.)7860$</code> → <code>$199999</code></td><td><b>regex</b>: text with <code>( ) [ ] \ ^ $ | * +</code> is a regex; or put it in slashes to add flags
+          (<code>/www(\.)/gi</code>). Use <code>$1</code> or <code>$&lt;name&gt;</code> in the target.</td></tr>
+        <tr><td><b>auto</b> ✓ / ✗</td><td>Auto rules redirect as the page starts loading. The others run from the page's right-click menu,
+          <i>Redirect with rules</i>, or <b>go</b> in the popup (for pages that have their own right-click menu).</td></tr>
+        <tr><td>loops</td><td>A tab is never redirected again from a URL a rule just sent it to, and more than 4 redirects in 10 s
+          pauses redirecting that tab for a minute.</td></tr>
+      </table>
+    </section>
+  </div>
+
+  <div class="pane" id="remove">
+    <header class="pane-head"><h1>remove elements</h1></header>
+    <section>
+      <h2>Sites <span class="hint">click a name to turn it off or on · × deletes it · hover for its address · removals apply to the whole site and its subdomains</span></h2>
+      <div id="removeSites"></div>
+    </section>
+    <section>
+      <h2>How it works</h2>
+      <p class="hint">In the tools, page tab → <b>remove elements</b> → <b>pick</b>, then click everything you want gone
+        (↑ selects the parent, Ctrl/⌘+Z puts the last one back, Esc or Enter when done). While picking, a panel in the corner
+        lists what's removed on the site: point at an entry to see that element, the eye shows it again (or hides it again), × deletes it, and <b>discard all</b> puts back everything picked in that session without saving it. Removed elements stay hidden on every
+        later visit — the page is held back until they're hidden, so they never flash, even on slow loads.
+        <b>Show removed on this site</b> brings them back with a red dashed outline until you switch it off or restart Chrome.</p>
+    </section>
+  </div>
+
+  <div class="pane" id="highlight">
+    <header class="pane-head">
+      <h1>highlight words</h1>
+      <label class="toggle"><input type="checkbox" role="switch" id="hlEnabled"><span>on</span></label>
+    </header>
+    <section>
+      <h2>Look <span class="hint">how marks are drawn on pages · examples use the global list's color</span></h2>
+      <div class="hl-looks" id="hlLooks"></div>
+    </section>
+    <section class="hl-lists">
+      <h2>Lists <span class="hint">the global list marks every site; a site's own list marks only that site (and its subdomains), drawn over the global one</span></h2>
+      <div class="hl-split">
+        <nav class="hl-nav" id="hlNav" aria-label="Highlight lists"></nav>
+        <div class="hl-detail" id="hlDetail"></div>
+      </div>
+    </section>
+    <section>
+      <h2>How it works <button type="button" class="btn blue" id="hlSample" title="A small example file to fill in and import"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/></svg>sample CSV</button></h2>
+      <p class="hint">Pick a list on the left to edit it on the right; the switch beside each list turns it off without deleting it.
+        Words and phrases are matched as whole words (or anywhere inside words, with <b>Match → inside words too</b> for that list), any case, and marked as pages load and change (infinite scroll,
+        in-app navigation, live updates) without touching the page itself. A site's own list is drawn over the global one where both match.
+        Limits: 1,000 global words, 300 per site, 200 sites, 100 characters each; at most 5,000 marks per page.
+        CSV (in a list's ⋯ menu): one word or phrase per row (first column; a "word" header is fine). Import adds to the list and skips duplicates.
+        In the tools: the main switch, <b>exclude &lt;site&gt; from global</b>, and <b>&lt;site&gt; list</b> to switch a site's list off without deleting it.</p>
+    </section>
+    <input type="file" id="hlImportFile" accept=".csv,.txt,text/csv,text/plain" hidden>
+  </div>
+
+  <div class="pane" id="clipboard">
+    <header class="pane-head">
+      <h1>clipboard history</h1>
+      <label class="toggle"><input type="checkbox" role="switch" data-path="clip.enabled"><span>on</span></label>
+    </header>
+    <section>
+      <h2>Keep</h2>
+      <div class="row">
+        <label><input type="radio" name="clipLimit" value="50" data-path="clip.limit" data-number> last 50</label>
+        <label><input type="radio" name="clipLimit" value="100" data-path="clip.limit" data-number> 100</label>
+        <label><input type="radio" name="clipLimit" value="200" data-path="clip.limit" data-number> 200</label>
+        <label><input type="radio" name="clipLimit" value="500" data-path="clip.limit" data-number> 500</label>
+      </div>
+      <div class="row">
+        <span class="hint" style="margin:0">and delete entries older than</span>
+        <label><input type="radio" name="clipAge" value="0" data-path="clip.maxAgeDays" data-number> never</label>
+        <label><input type="radio" name="clipAge" value="1" data-path="clip.maxAgeDays" data-number> 1 day</label>
+        <label><input type="radio" name="clipAge" value="7" data-path="clip.maxAgeDays" data-number> 7 days</label>
+        <label><input type="radio" name="clipAge" value="30" data-path="clip.maxAgeDays" data-number> 30 days</label>
+      </div>
+      <p class="hint">Pinned entries are kept for good and don't count towards the limit. Each entry holds up to 20,000 characters;
+        longer copies are trimmed. Copying the same text again moves it to the top.</p>
+    </section>
+    <section>
+      <h2>Right-click menu</h2>
+      <label class="row"><input type="checkbox" data-path="clip.menu"> Show pinned entries in the right-click menu (<i>Paste pinned</i>)</label>
+      <p class="hint">Up to 20 pinned entries, offered only when you right-click somewhere you can type on a web page (a text box or an editable area). Choosing one types it in there.
+        Chrome doesn't let extensions type into other extensions' windows or its own pages, so the menu isn't shown there.</p>
+    </section>
+    <section>
+      <h2>Never record on <span class="hint">sites where copied text isn't saved, e.g. your bank or password manager</span></h2>
+      <div class="rm-pills wrap" id="clipExcludePills"></div>
+      <div class="add-row"><input type="text" class="text" id="clipExcludeAdd" placeholder="example.com" spellcheck="false"><button type="button" class="btn" id="clipExcludeBtn">add</button></div>
+    </section>
+    <section>
+      <h2>History <span class="hint" id="clipCount"></span> <button type="button" class="btn ghost" id="clipClearAll">clear (keeps pinned)</button></h2>
+      <p class="hint">Saved: text you copy or cut on web pages with the keyboard, the right-click menu or a site's copy button.
+        Not saved: copies in other apps or on Chrome's own pages, anything from password and one-time-code fields, and copies on the sites above.
+        The history stays in this browser and is part of Drive backups and the settings file. Browse, search, pin and copy it from the tools.</p>
+    </section>
+  </div>
+
+  <div class="pane" id="upload">
+    <header class="pane-head"><h1>image upload</h1></header>
+    <section>
+      <h2>Upload to</h2>
+      <div class="row">
+        <label><input type="radio" name="uploadMenu" value="both" data-path="upload.menu"> show both hosts</label>
+        <label><input type="radio" name="uploadMenu" value="imglink" data-path="upload.menu"> always imglink</label>
+        <label><input type="radio" name="uploadMenu" value="x02" data-path="upload.menu"> always X02</label>
+      </div>
+      <p class="hint">For right-click uploads and screenshots (☁). With both hosts on, <i>show both hosts</i> lets you pick each time:
+        the right-click item opens the two, and ☁ opens a small picker. <i>Always</i> uploads straight to that host.
+        With only one host on, that one is used either way. If an upload fails, the screenshot card offers the other host.</p>
+    </section>
+    <section>
+      <h2>ImgLink <span class="hint" id="imglinkState"></span></h2>
+      <label class="row"><input type="checkbox" data-path="upload.imglink"> Offer "Upload image to imglink" when right-clicking images</label>
+      <div class="row">
+        <input type="password" class="text" id="imglinkKey" placeholder="ImgLink API key (optional)" spellcheck="false" autocomplete="off">
+        <button type="button" class="btn ghost" data-reveal>show</button>
+        <button type="button" class="btn" id="imglinkSave">save &amp; verify</button>
+      </div>
+      <div class="host-usage" id="imglinkUsage" hidden>
+        <div class="meter" id="imglinkStorage"><div class="meter-head"><span>storage</span><b></b></div><div class="bar"><i></i></div></div>
+        <div class="meter" id="imglinkHourly"><div class="meter-head"><span>hourly uploads</span><b></b></div><div class="bar"><i></i></div></div>
+        <p class="meter-note" id="imglinkUsageNote"></p>
+      </div>
+      <p class="hint">Works without a key: uploads are anonymous, up to 25 MB each and 10 uploads per 10 minutes (a rolling window, per IP address). With a key (ImgLink → Dashboard → API Keys)
+        they go to your account: up to 50 MB each, 10 GB of storage once your email is verified, and you can manage them there.
+        Either way every upload is sent as <b>private</b>, so it's never listed in ImgLink's gallery or search; anyone with the link can still open it.
+        <a href="https://imglink.cc" target="_blank" rel="noopener">imglink.cc</a></p>
+    </section>
+    <section>
+      <h2>X02 <span class="hint" id="x02State"></span></h2>
+      <div class="row">
+        <input type="password" class="text" id="x02Key" placeholder="X02 API key" spellcheck="false" autocomplete="off">
+        <button type="button" class="btn ghost" data-reveal>show</button>
+        <button type="button" class="btn" id="x02Save">save &amp; verify</button>
+      </div>
+      <div class="host-usage" id="x02Usage" hidden>
+        <div class="meter" id="x02Storage"><div class="meter-head"><span>storage</span><b></b></div><div class="bar"><i></i></div></div>
+        <div class="meter" id="x02Daily"><div class="meter-head"><span>daily uploads</span><b></b></div><div class="bar"><i></i></div></div>
+        <p class="meter-note" id="x02UsageNote"></p>
+      </div>
+      <label class="row" id="x02UseRow"><input type="checkbox" data-path="upload.x02"> Offer "Upload image to X02" when right-clicking images</label>
+      <p class="hint">X02 has no anonymous uploads, so it's only available once your key checks out.
+        Get a key at <a href="https://x02.me" target="_blank" rel="noopener">x02.me</a>.</p>
+    </section>
+    <section>
+      <h2>How it works</h2>
+      <p class="hint">Right-click any image → <i>Upload image to …</i> (with both hosts on, the item branches into the two, unless one is picked above).
+        The link is copied, a notification confirms it, and it's listed in the popup's upload history.
+        Uploads are unlisted on both hosts: not shown in any gallery, but anyone with the link can open it.
+        X02 is first asked to fetch the image itself; otherwise (and always for ImgLink) Extra Guac downloads it, with your
+        cookies so images behind a sign-in work, and uploads the file.</p>
+    </section>
+  </div>
+
+  <div class="pane" id="backup">
+    <header class="pane-head"><h1>backup</h1></header>
+    <section>
+      <h2>Google Drive <span class="hint" id="driveState"></span></h2>
+      <div class="row">
+        <span class="drive-on" id="driveOn" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Google Drive connected</span>
+        <button type="button" class="btn" id="driveConnect">connect Google Drive</button>
+        <button type="button" class="btn ghost" id="driveDisconnect" hidden>disconnect</button>
+      </div>
+      <p class="hint">Sign in with Google and allow access, that's all. Extra Guac only gets access to the files it creates
+        itself, kept in a folder named “Extra Guac backups” in your own Drive; nothing goes anywhere else. If Google says it
+        hasn't verified the app, click <b>Advanced → Go to Extra Guac</b>.</p>
+    </section>
+    <section>
+      <h2>Auto-sync</h2>
+      <div class="row" id="driveInterval">
+        <label><input type="radio" name="driveInterval" value="0"> off</label>
+        <label><input type="radio" name="driveInterval" value="1"> every hour</label>
+        <label><input type="radio" name="driveInterval" value="2"> 2 h</label>
+        <label><input type="radio" name="driveInterval" value="4"> 4 h</label>
+        <label><input type="radio" name="driveInterval" value="6"> 6 h</label>
+        <label><input type="radio" name="driveInterval" value="12"> 12 h</label>
+        <label><input type="radio" name="driveInterval" value="24"> 24 h</label>
+      </div>
+      <p class="hint">A snapshot is saved only when something changed: your bookmarks, and Extra Guac's settings and data
+        (API keys included, blur rules, removed elements, histories). Older ones thin out like a time machine — the 3 latest,
+        about 1 week, 2 weeks, 1 month, 2 months, 6 months and 1 year old, and the oldest one forever. Each browser's latest is
+        always kept, and so is the copy taken before every restore or import (for 30 days).</p>
+    </section>
+    <section>
+      <h2>Snapshots <button type="button" class="btn" id="driveNow">sync now</button></h2>
+      <div id="driveSnaps"><p class="rm-empty">Connect Google Drive to see your snapshots.</p></div>
+      <p class="hint"><b>restore settings</b> replaces Extra Guac's settings and data with the snapshot's.
+        <b>restore bookmarks</b> adds the snapshot's bookmarks in a new folder under Other bookmarks, next to the ones you have now.
+        <b>.html</b> saves them as a bookmarks file any browser can import.
+        Before every restore or import, the current settings are saved first — <b>undo last restore</b> below puts them back.</p>
+    </section>
+    <section>
+      <h2>Settings file</h2>
+      <div class="row">
+        <button type="button" class="btn" id="exportLocal">export…</button>
+        <button type="button" class="btn" id="importLocal">import…</button>
+        <button type="button" class="btn ghost" id="undoRestore" hidden>undo last restore</button>
+        <input type="file" id="importFile" accept=".json,.gz,application/json,application/gzip" hidden>
+      </div>
+      <p class="hint">Extra Guac's settings and data as a .json file, API keys included (not the Google sign-in) — keep it somewhere private.
+        Import takes such a file or a Drive snapshot (.json.gz) and replaces the current settings and data.</p>
+    </section>
+  </div>
+  </main>
+  </div>
+
+  <footer class="site-foot">
+    <button type="button" data-open="https://rycpot.github.io/" title="Opens in a new tab"><svg class="ico" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span>rycpot.github.io</span><svg class="out" viewBox="0 0 12 12" aria-hidden="true"><path d="M3.5 8.5l5-5M4.5 3.5h4v4"/></svg></button>
+    <button type="button" data-open="https://istome.love/" title="Opens in a new tab"><img src="icons/istome.png" alt=""><span class="lab">istome.love ID:</span><code>bright-otter-269</code><svg class="out" viewBox="0 0 12 12" aria-hidden="true"><path d="M3.5 8.5l5-5M4.5 3.5h4v4"/></svg></button>
+  </footer>
+
+  <template id="serviceTpl">
+    <section class="service">
+      <h2><span class="name"></span> <span class="hint count"></span></h2>
+      <div class="row">
+        <input type="password" class="text key" spellcheck="false" autocomplete="off">
+        <button type="button" class="btn ghost reveal">show</button>
+      </div>
+      <p class="hint about"></p>
+      <p class="key-tip" hidden></p>
+      <div class="row analytics-row" hidden>
+        <label><input type="checkbox" class="analytics"> short link analytics <span class="hint">(off to start) · anyone can see a
+          link's analytics by adding <b>+</b> to its end (x.gd/abc+), so only turn this on for links you don't mind being counted in public</span></label>
+      </div>
+      <div class="row paid-row" hidden>
+        <label><input type="checkbox" class="paid"> I'm on a paid plan <span class="hint">(its count is then only shown here)</span></label>
+      </div>
+      <p class="hint">Get a key: <a class="keylink" target="_blank" rel="noopener"></a></p>
+    </section>
+  </template>
+
+  <script src="shared.js"></script>
+  <script src="pii-rules.js"></script>
+  <script src="redirect-rules.js"></script>
+  <script src="settings-blur.js"></script>
+  <script src="chime.js"></script>
+  <script src="color-menu.js"></script>
+<script src="settings.js"></script>
+</body>
+</html>

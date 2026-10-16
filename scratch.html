@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scratch pads · Extra Guac</title>
+  <link rel="icon" href="icons/icon32.png">
+  <link rel="stylesheet" href="scratch.css">
+</head>
+<body>
+  <header class="top">
+    <span class="brand">Scratch pads</span>
+    <nav class="pads" id="pads" aria-label="Pads"></nav>
+    <button class="title" id="title" title="Rename this pad"></button>
+    <input class="title-input" id="titleInput" maxlength="120" aria-label="Pad name" hidden>
+    <span class="spacer"></span>
+    <button class="text-btn" id="restore" title="Put back what this pad held before it was last replaced (press again to swap back)" hidden>
+      <svg viewBox="0 0 24 24" class="stroke"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span>Restore previous</span>
+    </button>
+    <div class="seg" role="group" aria-label="Pad type">
+      <button id="modeRich" title="Rich text: bold, lists, colors, links, images">Rich</button>
+      <button id="modePlain" title="Plain text: code and any text file, with colors for its language">Plain</button>
+    </div>
+    <button class="icon-btn" id="previewBtn" aria-pressed="false" hidden>
+      <svg viewBox="0 0 24 24" class="stroke"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+    </button>
+    <button class="icon-btn" id="exportBtn" title="Export this pad as a file">
+      <svg viewBox="0 0 24 24" class="stroke"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/></svg>
+    </button>
+    <button class="icon-btn danger" id="clearBtn" title="Clear this pad (Restore previous brings it back)"><svg viewBox="75.36 15.05 118.95 118.95" fill="currentColor" aria-hidden="true"><g transform="matrix(1 0 0 1 79.23996826171879 114.2724609375)"><path d="M41.2042-1.20658C43.2875-1.20658 44.6028-2.51622 44.5491-4.43149L43.0559-55.5903C43.0022-57.5387 41.6405-58.7774 39.6802-58.7774C37.6695-58.7774 36.3124-57.4953 36.3661-55.5628L37.8593-4.40233C37.913-2.45392 39.2575-1.20658 41.2042-1.20658ZM55.5951-1.20658C57.639-1.20658 59.0166-2.48707 59.0166-4.40065L59.0166-55.5834C59.0166-57.4969 57.639-58.7774 55.5951-58.7774C53.5599-58.7774 52.1737-57.4969 52.1737-55.5834L52.1737-4.40065C52.1737-2.48707 53.5599-1.20658 55.5951-1.20658ZM70.0209-1.18938C71.9328-1.18938 73.3207-2.44532 73.3744-4.39373L74.8242-55.5542C74.8779-57.4867 73.5557-58.7688 71.5101-58.7688C69.5412-58.7688 68.1795-57.4867 68.1258-55.5817L66.676-4.42289C66.6223-2.50762 67.9462-1.18938 70.0209-1.18938ZM33.4375-72.3612L42.4385-72.3612L42.4385-82.4667C42.4385-85.0307 44.203-86.6431 46.9237-86.6431L64.2146-86.6431C66.9004-86.6431 68.6649-85.0307 68.6649-82.4667L68.6649-72.3612L77.7094-72.3612L77.7094-82.9421C77.7094-90.3838 72.9315-94.8217 64.8269-94.8217L46.2679-94.8217C38.2154-94.8217 33.4375-90.3838 33.4375-82.9421ZM11.7686-67.0693L99.4217-67.0693C101.853-67.0693 103.705-68.9325 103.705-71.355C103.705-73.7741 101.801-75.6201 99.4217-75.6201L11.7686-75.6201C9.43294-75.6201 7.47656-73.7655 7.47656-71.355C7.47656-68.9239 9.43294-67.0693 11.7686-67.0693ZM33.1927 15.3156L78.041 15.3156C85.5137 15.3156 90.3776 10.7705 90.7445 3.26125L94.074-67.9797L85.0345-67.9797L81.8314 1.82353C81.6982 4.75101 79.7889 6.70302 76.9904 6.70302L34.1392 6.70302C31.4362 6.70302 29.4835 4.70758 29.3503 1.82353L26.0083-67.9711L17.1163-67.9711L20.4978 3.30468C20.8647 10.8139 25.6332 15.3156 33.1927 15.3156Z"></path></g></svg></button>
+  </header>
+
+  <main class="doc" id="doc">
+    <div class="rich-view" id="richView">
+      <iframe id="richFrame" title="Pad text"></iframe>
+    </div>
+    <div class="preview-view" id="previewView" hidden>
+      <div class="web-bar" id="webBar" hidden>
+        <svg viewBox="0 0 24 24" class="stroke"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>
+        <span>Images and styles from the web are blocked in this preview.</span>
+        <button id="webAllow">Load them for this pad</button>
+      </div>
+      <iframe id="mdFrame" title="Markdown preview" hidden></iframe>
+      <iframe id="htmlFrame" title="HTML preview" sandbox="allow-popups allow-popups-to-escape-sandbox" hidden></iframe>
+    </div>
+    <div class="plain-view" id="plainView" hidden>
+      <div class="text-scroll" id="textScroll">
+        <div class="text-doc">
+          <pre class="text-gutter" id="gutter" aria-hidden="true"></pre>
+          <div class="text-stack">
+            <textarea class="text-input" id="textInput" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" wrap="off" aria-label="Pad text"></textarea>
+            <pre class="text-hl" aria-hidden="true"><code id="hl"></code></pre>
+          </div>
+        </div>
+      </div>
+      <div class="drop-hint" id="dropHint" hidden>
+        <div class="drop-pill"><svg viewBox="0 0 24 24" class="stroke"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/></svg>Drag &amp; drop a file anywhere</div>
+        <div class="drop-card">
+          <div class="drop-head">
+            <span class="drop-icon"><svg viewBox="0 0 24 24" class="stroke"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9.5 12.5h5M9.5 16h5"/></svg></span>
+            <span><b>Text &amp; code</b><span>Notes, JSON, logs, scripts</span></span>
+          </div>
+          <p>TXT · MD · JSON · YAML · HTML · JS · PY · LOG · any text</p>
+        </div>
+        <span class="drop-or">or just start typing</span>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+  <div class="img-nudge" id="imgNudge" role="status" hidden>
+    <svg viewBox="0 0 24 24" class="stroke"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m4 18 5-5 3.5 3.5L15 14l5 5"/></svg>
+    <span id="imgNudgeText"></span>
+    <button class="see" id="imgNudgeSee">See where</button>
+    <button class="later" id="imgNudgeLater">Not now</button>
+  </div>
+
+  <footer class="foot">
+    <div class="tools" id="richTools" role="toolbar" aria-label="Formatting">
+      <span class="group">
+        <button class="tool" data-cmd="bold" title="Bold (Ctrl/⌘+B)"><svg viewBox="0 0 24 24" class="stroke"><path d="M7 5h6a3.5 3.5 0 0 1 0 7H7zM7 12h7a3.5 3.5 0 0 1 0 7H7z"/></svg></button>
+        <button class="tool" data-cmd="italic" title="Italic (Ctrl/⌘+I)"><svg viewBox="0 0 24 24" class="stroke"><path d="M19 4h-9M14 20H5M15 4 9 20"/></svg></button>
+      </span>
+      <span class="group pop-wrap">
+        <button class="tool color-tool" id="colorBtn" title="Text color"><span class="a">A</span><span class="bar" id="colorBar"></span></button>
+        <span class="pop colors" id="colorPop" hidden></span>
+      </span>
+      <span class="group pop-wrap">
+        <button class="tool" id="alignBtn" title="Alignment"><svg viewBox="0 0 24 24" class="stroke"><path d="M4 6h16M4 10h10M4 14h16M4 18h10"/></svg></button>
+        <span class="pop" id="alignPop" hidden>
+          <button class="tool" data-cmd="justifyLeft" title="Align left"><svg viewBox="0 0 24 24" class="stroke"><path d="M4 6h16M4 10h10M4 14h16M4 18h10"/></svg></button>
+          <button class="tool" data-cmd="justifyCenter" title="Center"><svg viewBox="0 0 24 24" class="stroke"><path d="M4 6h16M7 10h10M4 14h16M7 18h10"/></svg></button>
+          <button class="tool" data-cmd="justifyRight" title="Align right"><svg viewBox="0 0 24 24" class="stroke"><path d="M4 6h16M10 10h10M4 14h16M10 18h10"/></svg></button>
+        </span>
+      </span>
+      <span class="group">
+        <button class="tool" data-cmd="insertUnorderedList" title="Bulleted list"><svg viewBox="0 0 24 24" class="stroke"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg></button>
+        <button class="tool" data-cmd="insertOrderedList" title="Numbered list"><svg viewBox="0 0 24 24" class="stroke"><path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 4.5h1.5V9M3.5 9h3M3.5 13.5a1.5 1.5 0 1 1 2.6 1L3.5 18h3" stroke-width="1.5"/></svg></button>
+      </span>
+      <span class="group pop-wrap">
+        <button class="tool" id="linkBtn" title="Link (Ctrl/⌘+K)"><svg viewBox="0 0 24 24" class="stroke"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></button>
+        <form class="pop linkform" id="linkForm" hidden>
+          <input type="text" id="linkText" placeholder="Text to show">
+          <input type="text" id="linkUrl" placeholder="https://" required>
+          <button class="apply" type="submit">Apply</button>
+        </form>
+        <button class="tool" id="imageBtn" title="Add an image (or paste or drop one)"><svg viewBox="0 0 24 24" class="stroke"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m4 18 5-5 3.5 3.5L15 14l5 5"/></svg></button>
+      </span>
+      <span class="group">
+        <button class="tool" data-act="undo" title="Undo (Ctrl/⌘+Z)"><svg viewBox="84.11 33.10 100.92 100.92" fill="currentColor" aria-hidden="true"><g transform="matrix(1 0 0 1 75.38989746093739 114.2724609375)"><path d="M105.905-16.5756C105.905-35.9327 92.8645-49.2793 70.6686-49.2793L39.9004-49.2793L23.4658-48.5663L25.0109-45.7498L37.1783-56.0337L49.7184-68.2926C50.7142-69.2347 51.282-70.4294 51.282-72.0142C51.282-75.0268 49.2195-77.1824 46.0744-77.1824C44.7123-77.1824 43.2663-76.5894 42.198-75.521L14.1578-47.9156C13.054-46.8637 12.4609-45.4241 12.4609-43.9649C12.4609-42.5143 13.054-41.0312 14.1578-39.9708L42.198-12.3756C43.2663-11.3592 44.7123-10.7228 46.0744-10.7228C49.2195-10.7228 51.282-12.9132 51.282-15.9258C51.282-17.5107 50.7142-18.6705 49.7184-19.6126L37.1783-31.8527L25.0109-42.1451L23.4658-39.3201L39.9004-38.6156L70.9756-38.6156C86.6869-38.6156 95.3443-29.6802 95.3443-16.9664C95.3443-4.24406 86.6869 5.07823 70.9756 5.07823L59.6069 5.07823C56.3938 5.07823 54.2023 7.46063 54.2023 10.3926C54.2023 13.3681 56.4024 15.7505 59.6155 15.7505L71.3114 15.7505C93.125 15.7505 105.905 2.92773 105.905-16.5756Z"></path></g></svg></button>
+        <button class="tool" data-act="redo" title="Redo (Ctrl/⌘+Shift+Z)"><svg viewBox="84.11 33.10 100.92 100.92" fill="currentColor" aria-hidden="true"><g transform="matrix(1 0 0 1 75.38989746093739 114.2724609375)"><path d="M12.4609-16.5756C12.4609 2.92773 25.2411 15.7505 47.0547 15.7505L58.7506 15.7505C61.9637 15.7505 64.2073 13.3681 64.2073 10.3926C64.2073 7.46063 61.9723 5.07823 58.7592 5.07823L47.3905 5.07823C31.6792 5.07823 23.0218-4.24406 23.0218-16.9664C23.0218-29.6802 31.6792-38.6156 47.3905-38.6156L78.5092-38.6156L94.9004-39.3201L93.3986-42.1451L81.1878-31.8527L68.6477-19.6126C67.6953-18.6705 67.0841-17.5107 67.0841-15.9258C67.0841-12.9132 69.19-10.7228 72.3352-10.7228C73.6538-10.7228 75.1432-11.3592 76.1682-12.3756L104.252-39.9708C105.356-41.0312 105.905-42.5143 105.905-43.9649C105.905-45.4241 105.356-46.8637 104.252-47.9156L76.1682-75.521C75.1432-76.5894 73.6538-77.1824 72.3352-77.1824C69.19-77.1824 67.0841-75.0268 67.0841-72.0142C67.0841-70.4294 67.6953-69.2347 68.6477-68.2926L81.1878-56.0337L93.3986-45.7498L94.9004-48.5663L78.5092-49.2793L47.7409-49.2793C25.5451-49.2793 12.4609-35.9327 12.4609-16.5756Z"></path></g></svg></button>
+      </span>
+    </div>
+    <span class="md-note" id="previewNote" hidden></span>
+    <div class="tools" id="plainTools" hidden>
+      <span class="group"><label class="tool wide select"><select id="lang" aria-label="Language"></select><svg viewBox="0 0 24 24" class="stroke"><path d="m6 9 6 6 6-6"/></svg></label></span>
+      <form class="group jump" id="jumpForm" autocomplete="off"><input id="jumpInput" type="text" inputmode="numeric" placeholder="Jump to row" aria-label="Jump to row number" title="Type a row number and press Enter (Ctrl/⌘+G)"></form>
+      <span class="group"><button class="tool" id="wrapBtn" title="Wrap long lines"><svg viewBox="0 0 24 24" class="stroke"><path d="M4 6h16M4 12h13a3 3 0 0 1 0 6h-4M4 18h5"/><path d="m15 16-2 2 2 2"/></svg></button></span>
+      <span class="group">
+        <button class="tool" data-act="undo" title="Undo (Ctrl/⌘+Z)"><svg viewBox="84.11 33.10 100.92 100.92" fill="currentColor" aria-hidden="true"><g transform="matrix(1 0 0 1 75.38989746093739 114.2724609375)"><path d="M105.905-16.5756C105.905-35.9327 92.8645-49.2793 70.6686-49.2793L39.9004-49.2793L23.4658-48.5663L25.0109-45.7498L37.1783-56.0337L49.7184-68.2926C50.7142-69.2347 51.282-70.4294 51.282-72.0142C51.282-75.0268 49.2195-77.1824 46.0744-77.1824C44.7123-77.1824 43.2663-76.5894 42.198-75.521L14.1578-47.9156C13.054-46.8637 12.4609-45.4241 12.4609-43.9649C12.4609-42.5143 13.054-41.0312 14.1578-39.9708L42.198-12.3756C43.2663-11.3592 44.7123-10.7228 46.0744-10.7228C49.2195-10.7228 51.282-12.9132 51.282-15.9258C51.282-17.5107 50.7142-18.6705 49.7184-19.6126L37.1783-31.8527L25.0109-42.1451L23.4658-39.3201L39.9004-38.6156L70.9756-38.6156C86.6869-38.6156 95.3443-29.6802 95.3443-16.9664C95.3443-4.24406 86.6869 5.07823 70.9756 5.07823L59.6069 5.07823C56.3938 5.07823 54.2023 7.46063 54.2023 10.3926C54.2023 13.3681 56.4024 15.7505 59.6155 15.7505L71.3114 15.7505C93.125 15.7505 105.905 2.92773 105.905-16.5756Z"></path></g></svg></button>
+        <button class="tool" data-act="redo" title="Redo (Ctrl/⌘+Shift+Z)"><svg viewBox="84.11 33.10 100.92 100.92" fill="currentColor" aria-hidden="true"><g transform="matrix(1 0 0 1 75.38989746093739 114.2724609375)"><path d="M12.4609-16.5756C12.4609 2.92773 25.2411 15.7505 47.0547 15.7505L58.7506 15.7505C61.9637 15.7505 64.2073 13.3681 64.2073 10.3926C64.2073 7.46063 61.9723 5.07823 58.7592 5.07823L47.3905 5.07823C31.6792 5.07823 23.0218-4.24406 23.0218-16.9664C23.0218-29.6802 31.6792-38.6156 47.3905-38.6156L78.5092-38.6156L94.9004-39.3201L93.3986-42.1451L81.1878-31.8527L68.6477-19.6126C67.6953-18.6705 67.0841-17.5107 67.0841-15.9258C67.0841-12.9132 69.19-10.7228 72.3352-10.7228C73.6538-10.7228 75.1432-11.3592 76.1682-12.3756L104.252-39.9708C105.356-41.0312 105.905-42.5143 105.905-43.9649C105.905-45.4241 105.356-46.8637 104.252-47.9156L76.1682-75.521C75.1432-76.5894 73.6538-77.1824 72.3352-77.1824C69.19-77.1824 67.0841-75.0268 67.0841-72.0142C67.0841-70.4294 67.6953-69.2347 68.6477-68.2926L81.1878-56.0337L93.3986-45.7498L94.9004-48.5663L78.5092-49.2793L47.7409-49.2793C25.5451-49.2793 12.4609-35.9327 12.4609-16.5756Z"></path></g></svg></button>
+      </span>
+    </div>
+    <span class="status">
+      <span class="pop-wrap meter-wrap">
+        <button class="meter-btn" id="meterBtn" hidden><span class="meter" id="meter"><span class="fill" id="meterFill"></span></span><span id="meterText"></span><svg viewBox="0 0 24 24" class="stroke chev"><path d="m6 15 6-6 6 6"/></svg></button>
+        <div class="pop img-pop" id="imgPop" hidden></div>
+      </span>
+      <span id="status"></span>
+    </span>
+  </footer>
+  <input type="file" id="imageFile" accept="image/png,image/jpeg,image/gif,image/webp,image/bmp,image/avif" multiple hidden>
+
+  <script src="shared.js"></script>
+  <script src="pad-store.js"></script>
+  <script src="md-render.js"></script>
+  <script src="scratch.js"></script>
+</body>
+</html>

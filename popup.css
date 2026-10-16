@@ -1,0 +1,354 @@
+@font-face { font-family: "Inter"; src: url("fonts/InterVariable.woff2") format("woff2"); font-weight: 100 900; font-display: block; } /* Inter, SIL Open Font License (fonts/Inter.LICENSE) */
+
+/* Extra Guac popup / side panel: near-black panel with a faint film grain,
+   hairline dividers, rounded controls, green switches. */
+:root {
+  --bg: #0b0b0b;
+  --text: rgba(255,255,255,.92);
+  --text2: rgba(255,255,255,.66);
+  --text3: rgba(255,255,255,.44);
+  --divider: rgba(255,255,255,.08);
+  --chip: rgba(255,255,255,.09);
+  --field: rgba(255,255,255,.07);
+  --row: rgba(255,255,255,.045);
+  --hover: rgba(255,255,255,.07);
+  --stroke: rgba(255,255,255,.2);
+  --switch-off: rgba(255,255,255,.14);
+  --green: #30d158;
+  --yellow: #ffd60a;
+  --red: #ff453a;
+  --grain: .05;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] {
+    --bg: #f8f7f4; --text: rgba(0,0,0,.88); --text2: rgba(0,0,0,.68); --text3: rgba(0,0,0,.52);
+    --divider: rgba(0,0,0,.1); --chip: rgba(0,0,0,.11); --field: rgba(0,0,0,.06); --row: rgba(0,0,0,.032);
+    --hover: rgba(0,0,0,.06); --stroke: rgba(0,0,0,.28); --switch-off: rgba(0,0,0,.15);
+    --green: #28a745; --yellow: #b8860b; --red: #d70015; --grain: .035; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f8f7f4; --text: rgba(0,0,0,.88); --text2: rgba(0,0,0,.68); --text3: rgba(0,0,0,.52);
+  --divider: rgba(0,0,0,.1); --chip: rgba(0,0,0,.11); --field: rgba(0,0,0,.06); --row: rgba(0,0,0,.032);
+  --hover: rgba(0,0,0,.06); --stroke: rgba(0,0,0,.28); --switch-off: rgba(0,0,0,.15);
+  --green: #28a745; --yellow: #b8860b; --red: #d70015; --grain: .035; color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  width: 380px;
+  height: 600px; /* the tallest popup Chrome allows */
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font: 400 12.5px/1.3 "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+}
+body.side-panel { width: auto; height: 100vh; } /* side panel: as wide and tall as Chrome makes it */
+body::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; opacity: var(--grain);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+main { height: 100%; overflow-y: auto; overflow-x: hidden; padding: 14px 16px 18px; scrollbar-width: thin; }
+
+svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+button:disabled { cursor: default; }
+button:focus-visible, input:focus-visible { outline: 1.5px solid var(--stroke); outline-offset: 2px; }
+
+/* Top bar: tab group on the left, settings + power on the right */
+.top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.tabs { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--divider); border-radius: 14px; }
+.tab { width: 44px; height: 30px; border-radius: 10px; display: grid; place-items: center; color: var(--text2); }
+.tab svg { width: 18px; height: 18px; }
+.tab.active { background: var(--chip); color: var(--text); }
+.tab:disabled { opacity: .35; }
+.tab:not(.active):not(:disabled):hover { background: var(--hover); }
+.top-actions { display: flex; gap: 6px; }
+.icon-btn { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; color: var(--text2); }
+.icon-btn:hover { background: var(--hover); color: var(--text); }
+.icon-btn svg { width: 18px; height: 18px; }
+.icon-btn.small { width: 24px; height: 24px; }
+.icon-btn.small svg { width: 15px; height: 15px; }
+
+/* Rows, separated by hairlines */
+section { border-top: 1px solid var(--divider); }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 52px; }
+.row.tight { min-height: 0; padding: 12px 0 8px; }
+section.block { padding-bottom: 12px; }
+/* Nothing shown under the heading (no latest pick, no options): as much space below it as above. */
+section.block:not(:has(> :nth-child(n+2):not([hidden]))) { padding-bottom: 4px; }
+.label { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--text); white-space: nowrap; }
+.label svg { width: 17px; height: 17px; color: var(--text2); }
+.actions { display: flex; align-items: center; gap: 4px; }
+.status { color: var(--text3); font-size: 11px; white-space: nowrap; }
+
+.text-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 7px; border-radius: 10px; color: var(--text); }
+.text-btn svg { width: 15px; height: 15px; color: var(--text2); }
+.text-btn:hover { background: var(--hover); }
+.text-btn.danger.armed { background: color-mix(in srgb, var(--red) 16%, transparent); color: var(--red); }
+.text-btn.danger.armed svg { color: var(--red); }
+.text-btn.busy { opacity: .5; pointer-events: none; }
+
+/* Green / gray switch */
+.switch { width: 38px; height: 22px; border-radius: 11px; background: var(--switch-off); position: relative; transition: background .15s; flex: none; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s; }
+.switch[aria-checked="true"] { background: var(--green); }
+.switch[aria-checked="true"]::after { transform: translateX(16px); }
+body:not(.settled) .switch, body:not(.settled) .switch::after { transition: none; }
+
+/* Segmented choice (fixed/random, shortener service) */
+.seg { display: inline-flex; padding: 2px; border-radius: 12px; background: var(--row); }
+.seg button { padding: 4px 8px; border-radius: 9px; color: var(--text2); white-space: nowrap; } /* a narrow popup wraps the label beside it, never a choice */
+.seg button[aria-checked="true"] { background: var(--chip); color: var(--text); }
+.seg button:not([aria-checked="true"]):hover { color: var(--text); }
+
+.num, .field { font: inherit; color: var(--text); background: var(--field); border: 1px solid transparent; border-radius: 10px; }
+.num { width: 52px; padding: 4px 6px; text-align: right; -moz-appearance: textfield; }
+.num::-webkit-inner-spin-button { -webkit-appearance: none; }
+.field { width: 100%; padding: 7px 9px; }
+.field::placeholder { color: var(--text3); }
+.num:focus, .field:focus { outline: none; border-color: var(--stroke); }
+input:disabled, .seg button:disabled { opacity: .55; }
+
+.ar-config { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; color: var(--text2); }
+#autoRefresh[data-mode="fixed"] .ar-random, #autoRefresh[data-mode="random"] .ar-fixed { display: none; }
+#autoRefresh.running .status { color: var(--green); }
+
+/* Keywords: pills in one sideways-scrolling line. Click a pill to turn it off/on,
+   double-click to delete it; + opens the editor sheet. */
+.kw-row { display: flex; align-items: center; gap: 6px; min-height: 31px; }
+.chips { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 3px 0;
+  overflow-x: auto; overflow-y: hidden; white-space: nowrap; scrollbar-width: thin; scrollbar-color: var(--stroke) transparent; }
+.chips::-webkit-scrollbar { height: 3px; }
+/* Soft edges where pills run past the visible part of the line */
+.chips.fade-r { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+.chips.fade-l { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px); }
+.chips.fade-l.fade-r { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
+.chips::-webkit-scrollbar-thumb { background: var(--stroke); border-radius: 3px; }
+.chip { flex: none; padding: 3px 10px; border-radius: 20px; font-size: 12px; cursor: pointer; user-select: none;
+  border: 1px solid color-mix(in srgb, var(--green) 55%, transparent); background: color-mix(in srgb, var(--green) 9%, transparent); color: var(--text); }
+.chip:hover { border-color: var(--green); }
+.chip.off { border-color: color-mix(in srgb, var(--red) 60%, transparent); background: color-mix(in srgb, var(--red) 8%, transparent);
+  color: var(--red); opacity: .75; text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--red) 55%, transparent); }
+.chip.off:hover { opacity: 1; }
+.chips-empty { color: var(--text3); font-size: 11px; }
+.kw-count { color: var(--text3); font-size: 11px; font-variant-numeric: tabular-nums; }
+.kw-count.over { color: var(--red); }
+/* Option rows under a heading sit as close to it as awake's or auto-refresh's own rows. */
+.row.tight.sub-row { padding: 0; margin-top: 2px; }
+.row.tight.sub-row + .sub-row { margin-top: 8px; }
+#newTabLastText { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#newTabSame { white-space: nowrap; flex: none; }
+/* A text button in a heading with options below it keeps the heading as tall as one with a
+   switch, so the gap under every heading is the same. */
+.row.tight:has(+ .sub-row) .text-btn { margin-block: -2px; }
+.kw-note { margin: 3px 0 0; font-size: 10.5px; color: var(--yellow); }
+.note { margin: 4px 0 0; font-size: 10.5px; line-height: 1.4; color: var(--text3); }
+#driveRow.problem #driveStatus { color: var(--yellow); }
+.kw-hint { margin: 10px 0 0; font-size: 11px; color: var(--text3); }
+.kw-text { flex: 1; margin-top: 8px; resize: none; line-height: 1.5; }
+.kw-foot { display: flex; align-items: center; justify-content: space-between; padding-top: 10px; }
+.text-btn.primary { background: var(--chip); }
+.text-btn.primary:hover { background: var(--stroke); }
+#autoRefresh.found .status { color: var(--yellow); }
+
+.short-go { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.go { width: 30px; height: 28px; border-radius: 10px; display: grid; place-items: center; background: var(--chip); }
+.go:hover { background: var(--stroke); }
+.go.small { width: 26px; height: 24px; }
+.go.small svg { width: 13px; height: 13px; fill: currentColor; }
+.go.busy { opacity: .5; pointer-events: none; }
+.link-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 6px 6px 6px 12px; border-radius: 12px; background: var(--row); }
+.link-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text2); }
+#shortCount.limit { color: var(--red); }
+#shortCount.two { white-space: normal; font-size: 9.5px; line-height: 1.12; text-align: right; }
+#shortCount .warn { color: var(--yellow); }
+
+.volume { flex: 1; justify-content: flex-end; gap: 10px; }
+.volume input { width: 170px; -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; cursor: pointer;
+  background: linear-gradient(to right, var(--text2) var(--fill, 100%), var(--switch-off) var(--fill, 100%)); }
+.volume input::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+  background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.25), 0 1px 3px rgba(0,0,0,.35); }
+.volume input:disabled { opacity: .35; cursor: default; }
+output { width: 38px; text-align: right; color: var(--text2); font-variant-numeric: tabular-nums; }
+
+.presets button { padding: 5px 6px; border-radius: 9px; color: var(--text); min-width: 28px; }
+.presets button:hover { background: var(--hover); }
+.presets button.active { color: var(--yellow); background: color-mix(in srgb, var(--yellow) 14%, transparent); }
+.awake-custom { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.custom { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.unit { width: 40px; padding: 4px 0; border-radius: 9px; background: var(--row); color: var(--text2); }
+.unit:hover { color: var(--text); }
+#awake.active .status { color: var(--yellow); }
+
+/* History sheet that slides over the popup */
+.sheet { position: absolute; inset: 0; z-index: 5; background: var(--bg); padding: 14px 16px; display: flex; flex-direction: column;
+  animation: slide .16s ease-out; }
+@keyframes slide { from { transform: translateY(14px); opacity: 0; } }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid var(--divider); }
+.history { list-style: none; margin: 0; padding: 8px 0 0; overflow-y: auto; flex: 1; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; align-content: start; }
+.history li { display: flex; align-items: center; gap: 8px; padding: 7px 6px 7px 12px; border-radius: 12px; background: var(--row); }
+.history .meta { flex: 1; min-width: 0; }
+.history .short { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history .long { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text3); font-size: 11px; margin-top: 2px; }
+.history .empty { background: none; color: var(--text3); justify-content: center; padding: 30px 0; }
+
+.toast { position: absolute; left: 16px; right: 16px; bottom: 14px; z-index: 10; padding: 9px 12px; border-radius: 12px;
+  background: var(--text); color: var(--bg); font-size: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.35); }
+.toast.error { background: var(--red); color: #fff; }
+[hidden] { display: none !important; }
+
+/* Nuke progress: replaces the refresh buttons while it runs */
+#refreshRow { position: relative; }
+.nuke-progress { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex: 1; min-width: 0; }
+.nuke-progress .status { overflow: hidden; text-overflow: ellipsis; }
+.nuke-progress .bar { width: 70px; flex: none; height: 3px; border-radius: 2px; background: var(--switch-off); overflow: hidden; }
+.nuke-progress .bar i { display: block; height: 100%; width: 0; background: var(--red); transition: width .35s ease; }
+.nuke-progress.done .bar i { background: var(--green); }
+.nuke-progress.done .status { color: var(--green); }
+
+/* Two-step clear */
+.history .del.armed { background: color-mix(in srgb, var(--red) 16%, transparent); color: var(--red); }
+#clearHistory.armed { background: color-mix(in srgb, var(--red) 16%, transparent); color: var(--red); }
+
+/* Page tools tab */
+.swatch { width: 16px; height: 16px; border-radius: 4px; flex: none; box-shadow: inset 0 0 0 1px var(--stroke); }
+.hosts { display: flex; gap: 6px; }
+.host { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px 5px 8px; border-radius: 12px; background: var(--row); color: var(--text2); }
+.host i { width: 7px; height: 7px; border-radius: 50%; background: var(--switch-off); }
+.host[aria-pressed="true"] { background: var(--chip); color: var(--text); }
+.host[aria-pressed="true"] i { background: var(--green); }
+.host:disabled { opacity: .45; cursor: default; }
+.host:not(:disabled):hover { color: var(--text); }
+
+/* Sections are placed by the saved layout before the tabs show. */
+main:not(.laid-out) .panel { visibility: hidden; }
+.empty-panel { margin: 18px 4px; color: var(--text3); font-size: 12px; text-align: center; }
+
+/* Clipboard history */
+.clip-search { margin-top: 10px; }
+.clip-list li { align-items: flex-start; cursor: pointer; }
+.clip-list li:hover { background: var(--hover); }
+.clip-list .clip-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; word-break: break-word; }
+.clip-list .clip-meta { display: block; color: var(--text3); font-size: 11px; margin-top: 3px; }
+.clip-list li.pinned { box-shadow: inset 2px 0 0 var(--yellow); }
+.clip-list .icon-btn.on { color: var(--yellow); }
+.clip-list .actions { flex: none; }
+
+/* A title with a small status line under it */
+.label .titles { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.label .titles .sub { font-size: 10.5px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; }
+/* A long hint (a long site name) is cut short rather than pushing the switches out. */
+.row > .label:has(.titles) { min-width: 0; }
+.row > .label:has(.titles) + .actions { flex: none; }
+.label .titles .sub:empty { display: none; }
+
+/* A long status gives way (cut short with …) rather than pushing the row's buttons out. */
+#driveStatus, #arStatus, #shortCount { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.row > .actions:has(#driveStatus, #arStatus, #shortCount) { min-width: 0; }
+
+/* Narrow side panel: the screenshot row keeps its usual spacing while it fits, and tightens
+   only as much as its own width needs (a little, then more near the narrowest side panel), so
+   the title and every button (icon and name) stay on one line; only narrower still do the
+   buttons move to a line of their own. The auto-sync choices tighten too. */
+[data-section="screenshot"] { flex-wrap: wrap; row-gap: 2px; container-type: inline-size; }
+[data-section="screenshot"] .actions { margin-left: auto; }
+@container (max-width: 340px) {
+  [data-section="screenshot"] .label .icon-btn { margin-left: -2px; } /* the icon-to-title gap stays as in every row */
+  [data-section="screenshot"] .actions { gap: 2px; }
+  [data-section="screenshot"] .text-btn { gap: 5px; padding: 6px 5px; }
+}
+@container (max-width: 320px) {
+  [data-section="screenshot"] .label { margin-right: -6px; } /* less space before the buttons (the row is the container, so its own gap can't change here) */
+  [data-section="screenshot"] .label .icon-btn { margin-left: -4px; }
+  [data-section="screenshot"] .actions { gap: 0; }
+  [data-section="screenshot"] .text-btn { gap: 4px; padding: 6px 3px; }
+  [data-section="screenshot"] .text-btn svg { width: 14px; height: 14px; }
+}
+@media (max-width: 360px) {
+  #driveInterval button { padding: 4px 6px; }
+}
+
+/* Drive signed out on its own: a notice at the bottom of tab 1 (it can be hidden with ×) */
+.drive-notice { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 8px 6px 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--red) 35%, transparent); border-radius: 12px;
+  background: color-mix(in srgb, color-mix(in srgb, var(--red) 70%, #ff6fa8) 13%, var(--bg, #161616)); color: color-mix(in srgb, var(--red) 85%, #ff2d8a); }
+#panel-tools[hidden] ~ .drive-notice { display: none; }
+.drive-notice > svg { width: 16px; height: 16px; flex: none; }
+.drive-notice .msg { flex: 1; min-width: 0; font-size: 12px; line-height: 1.35; }
+.drive-notice .text-btn { flex: none; color: inherit; background: color-mix(in srgb, var(--red) 16%, transparent); }
+.drive-notice .icon-btn { flex: none; color: inherit; }
+
+
+/* Scratch pads: 1–6 as one segmented strip; a pad with something in it gets a soft green
+   fill and a green dot in its corner. */
+.pad-strip { display: flex; }
+.pad-strip button { position: relative; flex: 1; height: 30px; border: 1px solid var(--stroke); border-left-width: 0; color: var(--text3); font-weight: 700; font-variant-numeric: tabular-nums; }
+.pad-strip button:first-child { border-left-width: 1px; border-radius: 9px 0 0 9px; }
+.pad-strip button:last-child { border-radius: 0 9px 9px 0; }
+.pad-strip button.filled { background: color-mix(in srgb, var(--green) 9%, transparent); color: var(--text); }
+.pad-strip button.filled::after { content: ""; position: absolute; top: 5px; right: 6px; width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+.pad-strip button:hover { background: var(--hover); color: var(--text); }
+
+/* Screenshot history: each shot full width, its four actions under it. */
+.shot-list { gap: 10px; grid-auto-rows: max-content; }
+.shot-list li.shot { display: block; padding: 0; overflow: hidden; }
+.shot-list .thumb { display: block; width: 100%; height: auto; max-height: 300px; object-fit: cover; object-position: top; background: var(--field); cursor: zoom-in; }
+/* Upload history: 1–10 … 91–100, pinned above the list; the range on screen lights up. */
+.range-bar { flex: none; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; padding: 8px 0 2px; }
+.range-bar button { height: 24px; padding: 0; border: 0; border-radius: 7px; background: var(--row); color: var(--text2); font: 600 11px/1 inherit; font-variant-numeric: tabular-nums; cursor: pointer; }
+.range-bar button:hover { background: var(--hover); color: var(--text); }
+.range-bar button[aria-current="true"] { background: var(--chip); color: var(--text); box-shadow: inset 0 0 0 1px var(--stroke); }
+.shot-list .thumb.missing { height: 80px; display: grid; place-items: center; color: var(--text3); font-size: 11px; cursor: pointer; }
+.shot-list .shot-meta { display: flex; justify-content: space-between; gap: 8px; padding: 7px 10px 0; font-size: 11px; color: var(--text3); }
+.shot-list .shot-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shot-list .shot-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px; }
+.shot-list .shot-actions .icon-btn { flex: 1; }
+.shot-list .serial { flex: none; min-width: 26px; padding: 0 4px 0 6px; color: var(--text3); font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; text-align: left; }
+.shot-list .shot-actions .icon-btn { width: auto; height: 30px; border-radius: 8px; }
+.shot-list .shot-actions .icon-btn:hover { background: var(--hover); }
+.shot-list .hosts { flex: 1 1 100%; display: flex; gap: 4px; }
+.shot-list .hosts .text-btn { flex: 1; justify-content: center; }
+.history .del.armed, .shot-list .del.armed { background: color-mix(in srgb, var(--red) 16%, transparent); color: var(--red); }
+
+/* Beam (backup tab): beam/beam.css styles the inside; here only its place in the tab. */
+.beam-section #beam { margin-top: 4px; }
+.beam-section .beam-card { padding: 14px 12px; }
+.beam-section .beam-code { font-size: 34px; }
+
+/* Proxy: the month's data, this site (add it, its country, or the full list to make room). */
+.px-ic { width: 20px; height: 12.5px; flex: none; margin-right: -1px; }
+#proxyRow .seg button { padding: 2px 8px; font-size: 11.5px; }
+.px-usage { display: flex; flex-direction: column; gap: 5px; width: 100%; }
+.px-bar { height: 4px; border-radius: 2px; background: var(--field); overflow: hidden; }
+.px-bar i { display: block; height: 100%; min-width: 3px; background: var(--green); border-radius: 2px; }
+.px-bar.warn i { background: var(--yellow); }
+.px-bar.out i { background: var(--red); }
+.px-usage .status.bad, #pxMore .status.bad { color: var(--red); white-space: normal; }
+.px-site { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: 12px; color: var(--text); overflow: hidden; }
+.px-site > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.px-site small { color: var(--text3); font-size: 11px; white-space: nowrap; }
+.px-site small.warn { color: var(--yellow); }
+#pxMore .text-btn { flex: none; white-space: nowrap; }
+.px-end { display: flex; align-items: center; gap: 8px; flex: none; }
+.mini-sel { appearance: none; -webkit-appearance: none; border: 0; border-radius: 7px; padding: 3px 18px 3px 8px; color: var(--text); font: inherit; font-size: 11px; max-width: 120px; cursor: pointer;
+  background: var(--field) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M1 1l3 3 3-3' fill='none' stroke='%23999' stroke-width='1.3'/%3E%3C/svg%3E") no-repeat right 6px center; }
+.mini-sel option { background: var(--bg); color: var(--text); }
+.px-full { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: var(--row); margin-top: 8px; }
+.px-full p { margin: 0; font-size: 12px; color: var(--text2); }
+.px-full b { color: var(--text); font-weight: 500; }
+.px-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+.px-pills button { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 4px 0 9px; border-radius: 999px; background: var(--field); font-size: 11px; color: var(--text); }
+.px-pills button i { font-style: normal; color: var(--text3); padding: 0 4px; }
+.px-pills button:hover { background: color-mix(in srgb, var(--red) 18%, transparent); }
+.px-pills button:hover i { color: var(--red); }
+.px-full .px-cancel { align-self: flex-end; font-size: 11.5px; color: var(--text3); padding: 2px 4px; }
+.px-full .px-cancel:hover { color: var(--text); }
+/* Nothing under it (no key yet): as tall as a one-line row, like tab volume. */
+#proxyRow:has(> #pxMore:empty) { padding-bottom: 0; }
+#proxyRow:has(> #pxMore:empty) > .row.tight { min-height: 51px; padding: 0; } /* + its 1px top line */

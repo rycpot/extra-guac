@@ -1,0 +1,23 @@
+/* Dark mode inside a frame embedded in a darkened page (dark-frame.js sets
+   data-tt-dark-frame): the page's filter already inverts the whole frame, so only its
+   pictures and video are flipped back, as dark.css does in the page. */
+
+html[data-tt-dark-frame] :is(img:not([data-tt-dark-keep]), video, embed, object, [data-tt-dark-media],
+  iframe:is([src*="youtube."], [src*="youtube-nocookie."], [src*="vimeo."], [src*="maps."], [src*="/maps"], [src*="twitch."],
+    [src*="dailymotion."], [src*="player."], [src*="spotify."], [src*="soundcloud."],
+    [src*="google.com/recaptcha"], [src*="recaptcha.net"], [src*="hcaptcha."])),
+html[data-tt-dark-frame] [data-tt-dark-before]::before,
+html[data-tt-dark-frame] [data-tt-dark-after]::after {
+  filter: invert(1) hue-rotate(180deg) !important;
+}
+
+html[data-tt-dark-frame] [data-tt-dark-media] :is(img, video, canvas, embed, object, [data-tt-dark-media]),
+html[data-tt-dark-frame] :is([data-tt-dark-media], [data-tt-dark-media] *)[data-tt-dark-before]::before,
+html[data-tt-dark-frame] :is([data-tt-dark-media], [data-tt-dark-media] *)[data-tt-dark-after]::after {
+  filter: none !important;
+}
+
+html[data-tt-dark-frame] ::selection {
+  background: rgb(155 196 248) !important;
+  color: #000 !important;
+}
