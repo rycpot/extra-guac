@@ -69,6 +69,8 @@ Download the zip from [Releases](../../releases) and unzip it, then:
 2. Click **Load unpacked** and pick the folder.
 3. Pin the icon to the toolbar.
 
+<a href="https://chromewebstore.google.com/detail/extra-guac/kgaeicakljpjmpeacalbmfbcmlpploni"><img src="https://fonts.gstatic.com/s/i/productlogos/chrome_store/v7/192px.svg" width="24" align="absmiddle" alt="Chrome Web Store"></a>&nbsp;<a href="https://chromewebstore.google.com/detail/extra-guac/kgaeicakljpjmpeacalbmfbcmlpploni"><b>Install from the Chrome Web Store</b></a>
+
 ## Notes
 
 - Privacy: everything stays in your browser unless a tool you use needs an outside service, and then it goes only there. See [PRIVACY.md](PRIVACY.md).
