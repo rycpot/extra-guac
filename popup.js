@@ -309,6 +309,14 @@ function initQr() {
 
 function initScreenshot() {
   $("shotSettings").onclick = () => send("openSettings", { section: "screenshot" }).then(() => closePopup(), fail);
+  // Image annotate: the screenshot editor with no image yet, beside this tab.
+  $("shotImage").onclick = async () => {
+    try {
+      const [t] = await chrome.tabs.query({ active: true, currentWindow: true });
+      await chrome.tabs.create({ url: chrome.runtime.getURL("shot-view.html#annotate"), ...(t ? { index: t.index + 1, openerTabId: t.id } : {}) });
+      closePopup();
+    } catch (err) { fail(err); }
+  };
   for (const btn of document.querySelectorAll("[data-shot]")) {
     btn.onclick = async () => {
       const mode = btn.dataset.shot;

@@ -59,6 +59,16 @@ const captureHandlers = {
     const { blob, name } = await fetchImage(src, sender.tab, sender.frameId);
     await openShotView([{ name, dataUrl: await blobToDataUrl(blob) }], "Image from the page", sender.tab?.url || "", sender.tab);
   },
+  // From an Image annotate tab: an image dropped, pasted or chosen there, kept until the tab
+  // reloads with it. It goes in the screenshot history only once it's saved, copied or
+  // uploaded (shotHistoryAdd).
+  shotViewPut: ({ items, label }) => ({ id: holdShotView({ items, label, fresh: true }) }),
+  shotHistoryAdd: async ({ items, label }) => {
+    const id = SHOTS.newId();
+    await recordShot({ items, label }, null, id);
+    const { shotHistory = [] } = await chrome.storage.local.get("shotHistory");
+    return { id: shotHistory.some((s) => s.id === id) ? id : "" }; // "" with the history off
+  },
   shotViewGet: ({ id }) => {
     const v = shotViews.get(id);
     shotViews.delete(id);
@@ -73,10 +83,15 @@ const shotViews = new Map(); // id → { items, label } on their way to a shot-v
 // only until that tab asks for it.
 // historyId: the shot's screenshot history entry, which its edits replace.
 async function openShotView(items, label, source, tab, historyId) {
-  const id = crypto.randomUUID();
-  shotViews.set(id, { items, label, source: source || "", historyId: historyId || "" });
-  setTimeout(() => shotViews.delete(id), 60000); // never picked up: drop it
+  const id = holdShotView({ items, label, source: source || "", historyId: historyId || "" });
   await chrome.tabs.create({ url: chrome.runtime.getURL(`shot-view.html#${id}`), ...(tab ? { index: tab.index + 1, openerTabId: tab.id, windowId: tab.windowId } : {}) });
+}
+
+function holdShotView(v) {
+  const id = crypto.randomUUID();
+  shotViews.set(id, v);
+  setTimeout(() => shotViews.delete(id), 60000); // never picked up: drop it
+  return id;
 }
 
 // ---- Screenshot history (shot-store.js): every shot goes in, the newest 10 stay ----

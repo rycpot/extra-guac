@@ -5,6 +5,8 @@
 // from settings → image upload; with both hosts on and "show both hosts", a small picker),
 // all with the edits drawn in. Bottom bar: zoom, then what save and upload make (PNG or JPG,
 // 1x-3x, an optional target file size) and the size of the file Save would make.
+// Opened as #annotate (Image annotate in the panel) it starts empty: drop, paste or choose
+// any image and it opens here the same way; another one later replaces it.
 (async () => {
   const $ = (id) => document.getElementById(id);
   const ICON_CHECK = '<svg class="i" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
@@ -15,7 +17,98 @@
   };
   const say = (text, bad = false) => { const st = $("status"); st.textContent = text; st.classList.toggle("bad", bad); st.title = text; };
 
+  // ---- Images dropped, pasted or chosen ----------------------------------------------------
+  // JPEG and PNG come in as they are; any other image Chrome can show (WebP, GIF, AVIF, BMP,
+  // SVG, ICO…) is turned into a PNG, so saving, blur and copy work as with a screenshot.
+  let image = null; // the editor, once an image is in
+  let leavingOk = false; // replacing the image: the leave warning has been answered already
+  const isImage = (f) => /^image\//.test(f.type) || /\.(png|jpe?g|webp|gif|avif|bmp|svg|ico)$/i.test(f.name);
+  const toDataUrl = (blob) => new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = () => reject(fr.error);
+    fr.readAsDataURL(blob);
+  });
+  async function readImage(file) {
+    const base = (file.name || "").replace(/\.[^.]+$/, "").trim() || "pasted image";
+    const url = URL.createObjectURL(file);
+    try {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      if (file.type === "image/jpeg") return { name: `${base}.jpg`, dataUrl: await toDataUrl(file) };
+      if (file.type === "image/png") return { name: `${base}.png`, dataUrl: await toDataUrl(file) };
+      const w = img.naturalWidth || 1000, h = img.naturalHeight || 1000; // an SVG without a size
+      const c = new OffscreenCanvas(w, h);
+      c.getContext("2d").drawImage(img, 0, 0, w, h);
+      return { name: `${base}.png`, dataUrl: await toDataUrl(await c.convertToBlob({ type: "image/png" })) };
+    } catch {
+      throw new Error(`${file.name || "That image"} couldn't be opened`);
+    } finally { URL.revokeObjectURL(url); }
+  }
+  // The page reloads with the new image (the editor starts afresh).
+  async function openImage(files) {
+    const file = [...files].find(isImage);
+    if (!file) return files.length && tell(`${files[0].name || "That"} isn't an image`);
+    if (image?.edited() && !confirm("Replace this image? Your marks on it haven't been saved.")) return;
+    try {
+      tell("Opening…", false);
+      const item = await readImage(file);
+      const { id } = await send("shotViewPut", { items: [item], label: "Image" });
+      leavingOk = true;
+      location.replace(`#${id}`);
+      location.reload();
+    } catch (err) { tell(err.message); }
+  }
+  // Messages show in the drop box while it's there, else in the bottom bar.
+  const tell = (text, bad = true) => {
+    const note = document.querySelector(".drop .note");
+    if (!note) return say(text, bad);
+    note.textContent = text;
+    note.classList.toggle("bad", bad);
+  };
+  const imageDrag = (e) => [...(e.dataTransfer?.items || [])].some((i) => i.kind === "file" && /^image\//.test(i.type));
+  // (Any file dropped is kept from opening in the tab.)
+  addEventListener("dragover", (e) => {
+    if (!e.dataTransfer?.types.includes("Files")) return;
+    e.preventDefault();
+    if (imageDrag(e)) document.body.classList.add("dragging");
+  });
+  addEventListener("dragleave", (e) => { if (!e.relatedTarget) document.body.classList.remove("dragging"); });
+  addEventListener("drop", (e) => {
+    document.body.classList.remove("dragging");
+    const files = [...(e.dataTransfer?.files || [])];
+    if (!files.length) return;
+    e.preventDefault();
+    if (files.some(isImage) || !image) openImage(files); // with an image in, a font file goes to the text tool (shot-edit.js)
+  });
+  addEventListener("paste", (e) => {
+    if (e.target.closest?.("input, textarea, [contenteditable]")) return;
+    const files = [...(e.clipboardData?.files || [])];
+    if (files.some(isImage)) { e.preventDefault(); openImage(files); }
+  });
+  $("imageFile").onchange = () => {
+    const files = [...$("imageFile").files];
+    $("imageFile").value = "";
+    if (files.length) openImage(files);
+  };
+
   const id = location.hash.slice(1);
+  if (id === "annotate") {
+    document.querySelector(".btns").hidden = true;
+    document.title = "Image annotate · Extra Guac";
+    $("name").textContent = "Image annotate";
+    say("no image yet");
+    $("shots").innerHTML = `<div class="drop">
+      <svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="13" height="11" rx="1.5"/><path d="m3.8 13.5 3.6-3.6 3 3 1.6-1.6 2.5 2.5"/><circle cx="12.6" cy="8" r="1.2"/><path d="m14 20 .6-2.6 5.2-5.2a1.4 1.4 0 0 1 2 2l-5.2 5.2z"/></svg>
+      <h2>Drop an image here</h2>
+      <div class="or">or paste one <span><kbd>Ctrl</kbd> + <kbd>V</kbd></span> · <button id="chooseImage">Choose a file</button></div>
+      <small class="note">PNG, JPG, WebP, GIF, AVIF, BMP, SVG or ICO · it stays on this computer</small>
+    </div>`;
+    if (/Mac/i.test(navigator.platform)) $("shots").querySelector("kbd").textContent = "⌘";
+    $("chooseImage").onclick = () => $("imageFile").click();
+    return;
+  }
   let res = null;
   try { res = await chrome.runtime.sendMessage({ type: "shotViewGet", id }); } catch {}
   if (!res?.ok) {
@@ -49,6 +142,8 @@
     onChange: () => { say(editor.edited() ? "Edited · not saved yet" : "not saved yet"); keepClear(); estimate(); },
   });
   await editor.ready;
+  image = editor;
+  document.body.classList.add("has-image");
   const first = $("shots").querySelector("img");
   $("info").textContent = `${res.label} · ${first?.naturalWidth} × ${first?.naturalHeight}${items.length > 1 ? ` · ${items.length} parts` : ""}`;
   say("not saved yet");
@@ -127,12 +222,17 @@
     return ` · ${fmtBytes(bytes)}${jpg && q != null ? ` (JPG ${Math.round(q * 100)}%)` : ""}`;
   };
   // Leaving with edits that haven't gone anywhere asks first.
-  addEventListener("beforeunload", (e) => { if (editor.edited()) e.preventDefault(); });
+  addEventListener("beforeunload", (e) => { if (editor.edited() && !leavingOk) e.preventDefault(); });
 
   // An edited shot that leaves the tab replaces its screenshot history entry, so what a blur
-  // hid isn't kept there (or backed up). markSaved only after that.
+  // hid isn't kept there (or backed up). markSaved only after that. An image opened here
+  // (Image annotate) goes in the history the first time it leaves the tab.
   let historyId = res.historyId || "";
   async function leaving(exported) {
+    if (res.fresh && !historyId) {
+      try { historyId = (await send("shotHistoryAdd", { items: exported, label: res.label })).id; } catch {}
+      return editor.markSaved();
+    }
     if (!editor.edited() || !historyId) return editor.markSaved();
     try { historyId = (await send("shotHistoryReplace", { id: historyId, items: exported })).id; } catch {}
     editor.markSaved();
