@@ -1,0 +1,75 @@
+# Extra Guac 🥑
+![Image](https://imglink.cc/cdn/KMLRslW1FC.png)
+![Image](https://imglink.cc/cdn/iPptfB4shl.png)
+![Image](https://imglink.cc/cdn/0VBfI2CYmj.png)
+![Image](https://imglink.cc/cdn/DyVAe-FlMh.png)
+![Image](https://imglink.cc/cdn/8DWl5KVcB7.png)
+![Image](https://imglink.cc/cdn/3bkb8dNuRR.png)
+![Image](https://imglink.cc/cdn/ivK8v2HTRG.png)
+![Image](https://imglink.cc/cdn/mGvr4vrnPm.png)
+![Image](https://imglink.cc/cdn/N9g45oLPjN.png)
+![Image](https://imglink.cc/cdn/K_ptEAbLZr.png)
+
+25+ tools for the page you're on, in one side panel. We may have gotten carried away.
+
+A Chrome extension. Click its icon to open the side panel (or a popup, in settings → general). The gear opens settings; ⏻ stops everything running on the tab.
+
+## Tools
+
+**Tab 1**
+
+| Tool | What it does |
+|---|---|
+| **Screenshot** | Capture an area, the visible tab or the full page. Mark it up, blur parts or remove the background in the editor, then save, copy or upload it. The last 10 shots stay in a history. |
+| **Text from image** | Drag a box over any text on screen; it's read and copied. Shown in a card where you can fix it and read it again with another engine. |
+| **Privacy blur** | Hides emails, phone numbers, card numbers, keys and your own rules on every page. Blur, bars or masked characters; hover to peek. |
+| **Scratch pads** | Six pads that save as you type, in rich or plain text. Drop in a text or code file to read it with colors; Markdown and HTML have a preview. |
+| **Refresh** | **hard** reloads without the cache. **nuke** clears the site's cookies, storage and cache, then reloads. |
+| **Auto-refresh** | Reloads a tab on a fixed or random timer. Optionally watches for your keywords and alerts you when they appear. |
+| **URL shorten** | Shortens the tab's address with x.gd, spoo.me or dub.sh, copied right away. x.gd and spoo.me work without a key. |
+| **QR code** | A code for the page, a link, text, a phone number or an email, in Extra Guac's avocado look. Static, or dynamic so you can change where it points later. Add your own icon in the middle. |
+| **Tab volume** | Turns one noisy tab down, from 0 to 100%. |
+| **Proxy** | Opens the sites you pick through your own Webshare proxies, in the country you choose. Free plan: 20 sites and 1 GB a month; paid plans can send every site but a skip list. |
+| **Awake** | Keeps the screen on for a set time, or until you stop it. |
+| **Highlight words** | Neon marks for your words, on every site or per site. Several sites can share one list. |
+| **Clipboard history** | Once on, keeps text you copy on web pages to search, pin and paste again. Password and card fields are never saved. |
+| **Enable copy & right-click** | Unlocks selecting, copying and right-clicking on sites that block them, one site at a time. |
+
+**Tab 2**
+
+| Tool | What it does |
+|---|---|
+| **What color?** | A magnifier over the page; click to copy a pixel's color as hex. |
+| **What element?** | Hover and click any element to copy its CSS selector or XPath. |
+| **What font?** | Click any text to see the font's real name, weight and size; the name is copied. |
+| **Zoom & rotate images** | Hold a key and scroll over an image to zoom it. Right-click it for rotate and zoom controls. |
+| **Save images on click** | Hold a key and click an image to save it as is, or as PNG, JPG or WebP. |
+| **Upload images** | Right-click an image to upload it to ImgLink or X02; the link is copied and kept in a history. |
+| **Dark mode** | Dark pages on every site or only the ones you pick. Sites with a dark theme of their own get that one. |
+| **Remove elements** | Click away clutter on a page; it stays gone on that site until you bring it back. |
+| **Open other site URLs in new tab** | On the sites you pick, links that leave the site open in a new tab. |
+| **URL auto redirect** | Rewrites addresses with your own find-and-replace rules, per domain. |
+| **Refresh on focus** | Reloads a page when you come back to it, if it's on your list. Normal or hard, until a date you choose. |
+
+**Backup tab**
+
+| Tool | What it does |
+|---|---|
+| **Drive backup** | Snapshots of your settings, data and bookmarks to your own Google Drive, by hand or every 1 to 24 hours. Restore any snapshot from the list. |
+| **Beam** | Send files between your devices with a 6-digit code or a QR code, encrypted end to end. The other device uses Extra Guac too, or just [rycpot.github.io/beam](https://rycpot.github.io/beam) in any browser. |
+| **Settings file** | Export everything as a .json file, or import one to replace it. |
+
+**Layout:** drag tools between tabs, or reorder them, in settings → general.
+
+## Install
+
+Download the zip from [Releases](../../releases) and unzip it, then:
+
+1. Open `chrome://extensions` and turn on **Developer mode**.
+2. Click **Load unpacked** and pick the folder.
+3. Pin the icon to the toolbar.
+
+## Notes
+
+- Privacy: everything stays in your browser unless a tool you use needs an outside service, and then it goes only there. See [PRIVACY.md](PRIVACY.md).
+- The interface font is [Inter](https://github.com/rsms/inter) (SIL Open Font License).
