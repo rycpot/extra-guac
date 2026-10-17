@@ -1,7 +1,7 @@
 # Extra Guac 🥑
 ![Image](https://imglink.cc/cdn/KMLRslW1FC.png)
 ![Image](https://imglink.cc/cdn/iPptfB4shl.png)
-![Image](https://imglink.cc/cdn/0VBfI2CYmj.png)
+![Image](https://imglink.cc/cdn/y41cuZzfDH.png)
 ![Image](https://imglink.cc/cdn/DyVAe-FlMh.png)
 ![Image](https://imglink.cc/cdn/8DWl5KVcB7.png)
 ![Image](https://imglink.cc/cdn/3bkb8dNuRR.png)
