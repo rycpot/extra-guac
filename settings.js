@@ -842,10 +842,19 @@
       return section("", ...kids);
     }
 
+    // WebRTC off on every site going through a proxy (bg-proxy.js), session switch profiles' too.
+    function webrtc() {
+      const box = el("input", { type: "checkbox", checked: cfg.webrtc, id: "pxWebrtc" });
+      box.onchange = () => save((p) => (p.webrtc = box.checked));
+      return section("WebRTC",
+        el("label", { className: "row" }, box, " Turn off WebRTC on sites that go through a proxy"),
+        el("p", { className: "hint", textContent: "WebRTC (used for calls and live connections) could otherwise show such a site your own address. It's turned off only on sites going through a proxy, the ones listed here and session switch profiles' sites, and only while the proxy is in use; everywhere else it works as usual." }));
+    }
+
     function render() {
       const body = $("pxBody");
       if (!cfg.key) body.replaceChildren(...setup());
-      else body.replaceChildren(...alerts(), card(), ...(free() ? [] : [modeSwitch()]), countrySection(), ...(st.plan?.limit ? [whenOut()] : []), siteList());
+      else body.replaceChildren(...alerts(), card(), ...(free() ? [] : [modeSwitch()]), countrySection(), ...(st.plan?.limit ? [whenOut()] : []), siteList(), webrtc());
       if (refocus) { body.querySelector(`[data-focus="${refocus}"]`)?.focus(); refocus = ""; }
     }
 

@@ -267,8 +267,8 @@ async function applyProxyNow() {
   sessionRouted = domains;
   sessionProxyFailure = "";
   let usable = false;
+  const own = !blocked && !!(proxyActive(cfg, st) && (proxyMode(cfg, st) === "full" || proxySites(cfg, st).length));
   if (!blocked) {
-    const own = !!(proxyActive(cfg, st) && (proxyMode(cfg, st) === "full" || proxySites(cfg, st).length));
     if (own || domains.length) {
       const data = proxyScript(cfg, st, own, profiles);
       if (levelOfControl === "controlled_by_this_extension" && value?.pacScript?.data === data) {
@@ -291,9 +291,43 @@ async function applyProxyNow() {
     }
   }
   await sessionBlock(domains.length && !usable ? domains : []);
-  await sessionGuard(domains);
+  await proxyGuard(cfg, st, own, domains);
   proxyCreds = null;
   await proxyTabIcons();
+}
+
+// ---- WebRTC on proxied sites -------------------------------------------------------------
+// WebRTC could show a site the user's own address past the proxy, so it's turned off on the pages
+// of every site going through one (webrtc-guard.js, in the page before its own scripts), unless
+// switched off in settings (proxy.webrtc): the listed sites (with every site going through, all
+// but the skipped ones) and Session Switch profiles' sites, only while their proxy is in use.
+// Everywhere else it works as usual.
+const GUARD_ID = "webrtc-guard";
+const guardPatterns = (sites) => sites.flatMap((d) => (/^[\d.]+$/.test(d) || d.includes(":") ? [`*://${d}/*`] : [`*://${d}/*`, `*://*.${d}/*`]));
+async function proxyGuard(cfg, st, own, profileDomains) {
+  let matches = [], excludeMatches = [];
+  if (cfg.webrtc) {
+    if (own && proxyMode(cfg, st) === "full") {
+      matches = ["<all_urls>"];
+      // Skipped sites go direct, unless a profile's proxy takes them.
+      const skipped = [...cfg.skip.filter((s) => s.on).map((s) => s.site), "webshare.io"];
+      excludeMatches = guardPatterns(skipped.filter((s) => !profileDomains.some((d) => TT.proxyCovers(s, d))));
+    } else {
+      matches = guardPatterns([...new Set([...(own ? proxySites(cfg, st).map((s) => s.site) : []), ...profileDomains])]);
+    }
+  }
+  // Before 257 it was Session Switch's own, for profiles' sites only.
+  const have = await chrome.scripting.getRegisteredContentScripts({ ids: ["ss-webrtc-guard", GUARD_ID] });
+  if (have.some((s) => s.id === "ss-webrtc-guard")) await chrome.scripting.unregisterContentScripts({ ids: ["ss-webrtc-guard"] });
+  const existing = have.some((s) => s.id === GUARD_ID);
+  if (!matches.length) {
+    if (existing) await chrome.scripting.unregisterContentScripts({ ids: [GUARD_ID] });
+    return;
+  }
+  const script = { id: GUARD_ID, js: ["webrtc-guard.js"], matches, runAt: "document_start", allFrames: true, world: "MAIN", matchOriginAsFallback: true, persistAcrossSessions: true };
+  if (excludeMatches.length) script.excludeMatches = excludeMatches;
+  if (existing) await chrome.scripting.updateContentScripts([script]);
+  else await chrome.scripting.registerContentScripts([script]);
 }
 
 // ---- Proxy logins ---------------------------------------------------------------------

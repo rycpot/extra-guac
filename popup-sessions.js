@@ -536,7 +536,7 @@ function proxySheet({ profileId }) {
   return {
     title: `proxy for ${profile.name}`,
     body: [
-      h("p", {}, `While ${profile.name} is active, ${site()} goes through this proxy and WebRTC is off on it. Other sites use your own connection. If the proxy can't be used, the site doesn't open.`),
+      h("p", {}, `While ${profile.name} is active, ${site()} goes through this proxy, with WebRTC off on it (see the proxy settings). Other sites use your own connection. If the proxy can't be used, the site doesn't open.`),
       !info.hasKey && h("p", {}, "Add your Webshare API key in the proxy settings to pick a proxy."),
       info.problem && h("p", { class: "bad" }, info.problem),
       h("div", { class: "options" }, options),

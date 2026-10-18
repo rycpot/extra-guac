@@ -29,7 +29,7 @@ A Chrome extension. Click its icon to open the side panel (or a popup, in settin
 | **URL shorten** | Shortens the tab's address with x.gd, spoo.me or dub.sh, copied right away. x.gd and spoo.me work without a key. |
 | **QR code** | A code for the page, a link, text, a phone number or an email, in Extra Guac's avocado look. Static, or dynamic so you can change where it points later. Add your own icon in the middle. |
 | **Tab volume** | Turns one noisy tab down, from 0 to 100%. |
-| **Proxy** | Opens the sites you pick through your own Webshare proxies, in the country you choose. Free plan: 20 sites and 1 GB a month; paid plans can send every site but a skip list. |
+| **Proxy** | Opens the sites you pick through your own Webshare proxies, in the country you choose. Free plan: 20 sites and 1 GB a month; paid plans can send every site but a skip list. WebRTC is turned off on proxied sites, so they can't see your own address. |
 | **Awake** | Keeps the screen on for a set time, or until you stop it. |
 | **Highlight words** | Neon marks for your words, on every site or per site. Several sites can share one list. |
 | **Clipboard history** | Once on, keeps text you copy on web pages to search, pin and paste again. Password and card fields are never saved. |

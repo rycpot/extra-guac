@@ -1,6 +1,6 @@
-// Runs in the page itself, before the site's own scripts, on sites that go through a profile's
-// proxy. WebRTC could show the site the user's own address past the proxy, so it is turned off on
-// these pages only: creating a connection fails with an error that says why. Frames the page makes
+// Runs in the page itself, before the site's own scripts, on sites that go through a proxy (the
+// proxy's own sites and Session Switch profiles', registered by bg-proxy.js). WebRTC could show the
+// site the user's own address past the proxy, so it is turned off on these pages only: creating a connection fails with an error that says why. Frames the page makes
 // itself (a blank iframe, a window it opens) are covered as soon as the page reaches into them.
 (() => {
   const message = "WebRTC is turned off on this site while it goes through a proxy.";

@@ -1,4 +1,4 @@
-// Settings → session switch: WebRTC on sites that go through a profile's proxy, and encrypted
+// Settings → session switch: Drive backups of profiles, linked sites, and encrypted
 // backups of every profile (a key is derived from the passphrase with PBKDF2 and the data is sealed
 // with AES-GCM; restoring hands the opened backup to the background, bg-sessions.js, to add).
 (() => {
@@ -72,13 +72,6 @@
     else sites();
   });
   $("ssSites").addEventListener("focusout", () => setTimeout(() => later && !typing() && ((later = false), sites())));
-
-  // ---- WebRTC ----
-
-  call("proxy-info").then((info) => ($("ssWebrtc").checked = info.webrtc), (err) => say(err.message, true));
-  $("ssWebrtc").addEventListener("change", (e) => {
-    call("webrtc", { on: e.target.checked }).catch((err) => say(err.message, true));
-  });
 
   const added = (r) => `Added ${r.added} profile${r.added === 1 ? "" : "s"}.${r.skipped ? ` ${r.skipped} were already here.` : ""}${r.noRoom ? ` ${r.noRoom} came without their proxy: all the plan's proxy sites are in use.` : ""}`;
 

@@ -11,7 +11,6 @@
 //   ssGroups        { [id]: Group }   one per site: its registrable domain plus any linked sites
 //   ssProfile:<id>  Profile           a saved login: its cookies and a few details
 //   ssData:<id>     { [origin]: { local, session, idb, savedAt } }   the profile's page storage
-//   ssWebrtc        false to leave WebRTC on for sites that go through a profile's proxy
 // Messages are "ss:<name>": the popup's and settings' from extension pages, the pages' own
 // (ss-page.js) from tabs. A profile's proxy uses Extra Guac's Webshare account (bg-proxy.js).
 // Everything here stays inside this function, apart from what bg-proxy.js calls (see Proxy).
@@ -739,7 +738,6 @@ const UNQUEUED = {
   // The encrypted backup file (settings): made and opened here, with the same sealing.
   "file-seal": (m) => sealFile(m.passphrase),
   "file-open": (m) => openFile(m.text, m.passphrase),
-  webrtc: (m) => chrome.storage.local.set({ ssWebrtc: !!m.on }).then(applyProxy).then(proxyInfo),
 };
 
 const PAGE = {
@@ -1428,13 +1426,12 @@ globalThis.sessionDriveRestore = (sealed) => driveOpen(sealed, null, false);
 // A profile's proxy uses Extra Guac's Webshare account (getProxy in bg-proxy.js): its key, its
 // proxies and their logins. bg-proxy.js puts the profiles' routes (sessionProxyRoutes) into its
 // routing script. While that script is being replaced, or Chrome's proxy setting is held elsewhere,
-// it blocks the profiles' sites (sessionBlock), so they never open over the own connection, and
-// WebRTC is off on them (sessionGuard) unless turned on in the settings.
+// it blocks the profiles' sites (sessionBlock), so they never open over the own connection; WebRTC
+// is off on them as on every proxied site (see bg-proxy.js).
 
 const CLOSED = "PROXY 127.0.0.1:9";
 const BLOCK_RULE = 9001;
 const controlledElsewhere = (level) => level === "not_controllable" || level === "controlled_by_other_extensions";
-const webrtcOff = async () => (await chrome.storage.local.get("ssWebrtc")).ssWebrtc !== false;
 
 // Each domain that goes through a profile's proxy now, with the routing answer for it: the
 // proxies of the profile's country (any country for ''), or a closed port when there are none.
@@ -1466,8 +1463,6 @@ function block(domains) {
 
 globalThis.sessionProxyRoutes = proxyRoutes;
 globalThis.sessionBlock = block;
-globalThis.sessionGuard = async (domains) => registerScript(
-  { id: "ss-webrtc-guard", js: ["ss-webrtc-guard.js"], world: "MAIN", matchOriginAsFallback: true }, await webrtcOff() ? domains : []);
 
 // The sites whose profiles use a proxy, kept in storage.local "ssProxySites" for the proxy
 // settings and the popup's proxy section, where they're listed and count toward the plan's sites:
@@ -1526,7 +1521,7 @@ async function proxyInfo() {
   const counts = {};
   for (const p of st.proxies || []) counts[p.c] = (counts[p.c] || 0) + 1;
   return {
-    hasKey: !!cfg.key, free: !!st.plan?.free, problem: st.error || "", checkedAt: st.listAt || 0, webrtc: await webrtcOff(),
+    hasKey: !!cfg.key, free: !!st.plan?.free, problem: st.error || "", checkedAt: st.listAt || 0,
     countries: Object.entries(counts).map(([code, count]) => ({ code, count })).sort((a, b) => a.code.localeCompare(b.code)),
     elsewhere: controlledElsewhere((await chrome.proxy.settings.get({})).levelOfControl),
   };
@@ -1688,6 +1683,13 @@ serial(async () => {
 
 async function start() {
   await getGroups();
+  // Before 257, WebRTC on profiles' sites had a setting here (ssWebrtc); it's the proxy's now, for
+  // every proxied site, and a choice to leave it on carries over.
+  const { ssWebrtc, proxy } = await chrome.storage.local.get(["ssWebrtc", "proxy"]);
+  if (ssWebrtc !== undefined) {
+    if (ssWebrtc === false) await chrome.storage.local.set({ proxy: { ...TT.proxyOf(proxy), webrtc: false } });
+    await chrome.storage.local.remove("ssWebrtc");
+  }
   await saveProxySites();
   applyProxy();
   await registerPageScript(allGroups().flatMap((g) => g.domains)).catch((e) => console.warn("Page script:", e));
