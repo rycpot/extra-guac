@@ -94,25 +94,11 @@
       <h2>How it works</h2>
       <p class="hint">Keep several logins for the same site and switch between them in the session switch section of the
         popup (tab 3 unless you move it in general). Each profile is a saved login for one site: its cookies, its pages'
-        localStorage and sessionStorage, and, if you turn it on for the site, its IndexedDB. The active profile is kept up to
+        localStorage and sessionStorage, and the app data some web apps keep in the page. The active profile is kept up to
         date while you use the site, so a login the site renews, or one you make again after being logged out, is saved as
         it changes. A profile can open its site through one of your Webshare proxies (the key goes in
         <a href="#proxy">proxy</a>): only that site goes through it, only while that profile is active, and if the proxy
         can't be used, the site doesn't open rather than open without it.</p>
-    </section>
-    <section>
-      <h2>Sites</h2>
-      <p class="hint">The sites you keep profiles for. <b>Linked sites</b>: some logins live on two domains, and then a
-        switch has to swap both. For example, Jira and Confluence run on <i>yourteam.atlassian.net</i> but sign you in through
-        <i>atlassian.com</i>, so link atlassian.com to atlassian.net; Stack Overflow's login also covers
-        <i>stackexchange.com</i>. A linked site goes through the same profile, proxy included. Leave out Google and Microsoft
-        sign-in domains: they tie logins to the device and break when swapped.</p>
-      <p class="hint"><b>IndexedDB</b>: most sites keep a login in cookies, which every profile always includes. A few web
-        apps keep it, or the account's data, in the page's IndexedDB database instead (some chat, mail and note apps,
-        and apps that work offline): if switching shows the wrong account's data, or logs you out, turn it on for that site.
-        It's copied from the site's open tabs at each switch, up to 25 MB per profile, so leave it off where it isn't needed.</p>
-      <div id="ssSites"></div>
-      <p class="hint" id="ssSitesStatus" role="status" aria-live="polite"></p>
     </section>
     <section>
       <h2>WebRTC</h2>
@@ -121,21 +107,10 @@
         turned off only on those sites, and only while their proxy is in use; everywhere else it works as usual.</p>
     </section>
     <section>
-      <h2>Encrypted backup file</h2>
-      <p class="hint">A backup holds every profile's saved logins, so anyone with the file and its passphrase can use those
-        accounts. It is encrypted with the passphrase you choose here (PBKDF2 and AES-GCM), and the passphrase isn't stored
-        anywhere. The Webshare key isn't included. Profiles aren't part of the settings file.</p>
-      <form id="ssExport">
-        <div class="row"><input class="text" id="ssPass1" type="password" autocomplete="new-password" minlength="10" required placeholder="passphrase, at least 10 characters" aria-label="Passphrase"></div>
-        <div class="row"><input class="text" id="ssPass2" type="password" autocomplete="new-password" minlength="10" required placeholder="passphrase again" aria-label="Passphrase again"></div>
-        <div class="row"><button class="btn" type="submit">download backup</button></div>
-      </form>
-    </section>
-    <section>
       <h2>Google Drive backup <span class="hint" id="ssDriveState"></span></h2>
       <p class="hint">Off unless you turn it on here. Then, when Drive backup (in <a href="#backup">backup</a>) uploads a
         snapshot, every profile goes with it, sealed with a passphrase you choose: Drive only gets ciphertext, and anyone
-        who gets into your Drive still can't sign in as you. IndexedDB copies are left out, so it stays small: a few KB to a
+        who gets into your Drive still can't sign in as you. App data copies are left out, so it stays small: a few KB to a
         few hundred KB per profile, depending on how much the site keeps in its pages. This browser keeps the key, so
         backups run without asking; the passphrase isn't stored. Restoring a snapshot on another browser asks for it.</p>
       <form id="ssDriveOnForm">
@@ -152,6 +127,17 @@
       <p class="hint" id="ssDriveStatus" role="status" aria-live="polite"></p>
     </section>
     <section>
+      <h2>Encrypted backup file</h2>
+      <p class="hint">A backup holds every profile's saved logins, so anyone with the file and its passphrase can use those
+        accounts. It is encrypted with the passphrase you choose here (PBKDF2 and AES-GCM), and the passphrase isn't stored
+        anywhere. The Webshare key isn't included. Profiles aren't part of the settings file.</p>
+      <form id="ssExport">
+        <div class="row"><input class="text" id="ssPass1" type="password" autocomplete="new-password" minlength="10" required placeholder="passphrase, at least 10 characters" aria-label="Passphrase"></div>
+        <div class="row"><input class="text" id="ssPass2" type="password" autocomplete="new-password" minlength="10" required placeholder="passphrase again" aria-label="Passphrase again"></div>
+        <div class="row"><button class="btn" type="submit">download backup</button></div>
+      </form>
+    </section>
+    <section>
       <h2>Restore</h2>
       <p class="hint">Profiles from the backup are added next to the ones here, inactive. Profiles already here are left as they are.</p>
       <form id="ssImport">
@@ -160,6 +146,16 @@
         <div class="row"><button class="btn" type="submit">restore profiles</button></div>
       </form>
       <p class="hint" id="ssStatus" role="status" aria-live="polite"></p>
+    </section>
+    <section>
+      <h2>Sites</h2>
+      <p class="hint">The sites you keep profiles for. <b>Linked sites</b>: some logins live on two domains, and then a
+        switch has to swap both. For example, Jira and Confluence run on <i>yourteam.atlassian.net</i> but sign you in through
+        <i>atlassian.com</i>, so link atlassian.com to atlassian.net; Stack Overflow's login also covers
+        <i>stackexchange.com</i>. A linked site goes through the same profile, proxy included. Leave out Google and Microsoft
+        sign-in domains: they tie logins to the device and break when swapped.</p>
+      <div id="ssSites"></div>
+      <p class="hint" id="ssSitesStatus" role="status" aria-live="polite"></p>
     </section>
   </div>
 

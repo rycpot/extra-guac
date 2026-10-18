@@ -495,7 +495,7 @@ function detailsSheet({ data }) {
           h("thead", {}, h("tr", {}, h("th", {}, "origin"), h("th", {}, "items"), h("th", {}, "saved"))),
           h("tbody", {}, storage.map((s) => h("tr", {},
             h("td", { class: "name-cell" }, s.origin),
-            h("td", {}, `${s.local} local, ${s.session} session${s.databases ? `, ${s.databases} IndexedDB` : ""}`),
+            h("td", {}, `${s.local} local, ${s.session} session${s.databases ? `, app data` : ""}`),
             h("td", {}, s.savedAt ? relative(s.savedAt) : "")))))
         : h("p", {}, "None saved yet."),
     ],
@@ -570,6 +570,11 @@ function newSheet(view) {
         proxies && info.countries.filter((c) => c.code).map((c) => option(countryName(c.code), { country: c.code }, count(c.count)))),
     ],
     foot: [
+      // Profiles are logins: until a passphrase seals them, Drive backups leave them out.
+      state.drive === false && h("div", { class: "ss-ask", id: "ssDriveNote" },
+        h("p", {}, h("b", {}, "Drive backup"), " of profiles is off"),
+        h("button", { type: "button", class: "ss-btn primary", onclick: () => openSettings("sessions") }, "Turn on"),
+        h("p", { class: "ss-ask-hint" }, "Turn it on by adding a passphrase: your logins are encrypted before they go to Drive.")),
       !proxies && h("button", { type: "button", class: "text-btn", onclick: () => openSettings("proxy") }, icon("gear"), "proxy settings"),
       h("button", { type: "button", class: "text-btn primary", id: "ssStartBtn", onclick: start }, icon("plus"), "start profile"),
     ].filter(Boolean),

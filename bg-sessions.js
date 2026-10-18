@@ -297,11 +297,10 @@ function remember(profile, group) {
 
 // ---- Saved sites and profiles (see the keys at the top) ----
 //
-// Group: { id, domains, activeId, order, loginCookie, idb, epoch, pending, origins }
+// Group: { id, domains, activeId, order, loginCookie, epoch, pending, origins }
 //   activeId     the profile whose login is in the browser now; it is kept up to date
 //   order        profile ids, in the order shown
 //   loginCookie  the cookie the user picked for the expiry date, or null to pick automatically
-//   idb          whether IndexedDB is part of each profile
 //   epoch        goes up on every switch, so pages loaded before it can be told apart
 //   pending      origins whose storage still has to be written the next time one of their pages opens
 //   origins      every origin of the site a page has been seen on
@@ -328,7 +327,7 @@ const groupById = (id) => groups[id] || null;
 function makeGroup(site) {
   const group = {
     id: crypto.randomUUID(), domains: [site], activeId: null, order: [], loginCookie: null,
-    idb: false, epoch: 1, pending: [], origins: [],
+    epoch: 1, pending: [], origins: [],
   };
   groups[group.id] = group;
   return group;
@@ -428,8 +427,8 @@ async function idbCall(tabId, op, arg) {
     target: { tabId },
     func: (op, json) => self.__sessionSwitchIdb[op](JSON.parse(json)),
     args: [op, JSON.stringify(arg)],
-  }), 60000, [{ result: { problems: ["IndexedDB took too long"] } }]);
-  return result?.result || { problems: ["IndexedDB could not be reached"] };
+  }), 60000, [{ result: { problems: ["its app data took too long"] } }]);
+  return result?.result || { problems: ["its app data could not be reached"] };
 }
 
 // The storage of every first-party frame in these tabs, by origin. The main tab is read first, so
@@ -456,7 +455,7 @@ async function readStorage(tabs, domains, mainTabId, idb) {
       problems.push(...(skipped || []).map((p) => `${origin}: ${p}`));
     } catch (e) {
       incomplete.add(origin);
-      problems.push(`${origin}: IndexedDB could not be read (${e.message})`);
+      problems.push(`${origin}: its app data could not be read (${e.message})`);
     }
   }
   return { found, problems, incomplete };
@@ -557,7 +556,7 @@ async function writeParked(tabId, local, session, idb) {
     try {
       problems.push(...((await idbCall(tabId, "load", idb)).problems || []));
     } catch (e) {
-      problems.push(`IndexedDB could not be written (${e.message})`);
+      problems.push(`App data could not be written (${e.message})`);
     }
   }
   return problems;
@@ -721,8 +720,8 @@ const POPUP = {
   hue: (m) => setHue(m.profileId, m.hue),
   details: (m) => details(m.profileId),
   "login-cookie": (m) => setGroup(m.groupId, (group) => (group.loginCookie = m.name || null)),
-  idb: (m) => setGroup(m.groupId, (group) => (group.idb = !!m.on)),
   sites: () => sitesInfo(),
+  open: (m) => openSite(m.site),
   "drive-info": () => driveInfo(),
   link: (m) => link(m.groupId, m.domain),
   unlink: (m) => unlink(m.groupId, m.domain),
@@ -735,7 +734,7 @@ const UNQUEUED = {
   "proxy-info": () => proxyInfo(),
   // Deriving the key takes a moment; it doesn't hold up switches.
   "drive-on": (m) => driveOn(m.passphrase),
-  "drive-off": () => chrome.storage.local.remove(["ssDriveKey", "ssDriveCache"]).then(driveInfo),
+  "drive-off": () => chrome.storage.local.remove(["ssDriveKey", "ssDriveCache"]).then(notify).then(driveInfo),
   "drive-open": (m) => driveOpen(null, m.passphrase, false),
   // The encrypted backup file (settings): made and opened here, with the same sealing.
   "file-seal": (m) => sealFile(m.passphrase),
@@ -803,8 +802,8 @@ async function describe(tabId) {
   const profiles = group ? await getProfiles(group.order) : [];
   const proxies = await proxyStatuses(profiles);
   return {
-    supported: true, host, domains, proxy: await proxyInfo(),
-    group: group && { id: group.id, loginCookie: group.loginCookie, idb: group.idb, activeId: group.activeId },
+    supported: true, host, domains, proxy: await proxyInfo(), drive: (await driveInfo()).on,
+    group: group && { id: group.id, loginCookie: group.loginCookie, activeId: group.activeId },
     paused: ((paused) => paused && { id: paused.id, name: paused.name })(group?.paused && profiles.find((p) => p.id === group.paused)),
     unsaved: !group?.activeId && holdsLogin(jar),
     profiles: profiles.map((p, i) => {
@@ -830,7 +829,7 @@ async function saveCurrent(tabId, name) {
   const profile = makeProfile(group, cleanName(name, group));
   profile.cookies = await readCookies(group.domains);
   remember(profile, group);
-  const { found: storage, problems } = await readStorage(await siteTabs(group.domains), group.domains, tab.id, group.idb);
+  const { found: storage, problems } = await readStorage(await siteTabs(group.domains), group.domains, tab.id, true);
   group.activeId = profile.id;
   group.pending = [];
   delete group.paused;
@@ -926,7 +925,7 @@ async function swap(group, incoming, mainTab) {
       problems.push(`The login on ${domains[0]} had been changed outside Session Switch, so ${outgoing.name} kept its own login and that one was discarded.`);
       outData = await getData(outgoing.id);
     } else if (outgoing) {
-      const settled = await readStorage(parked.map((p) => p.tab), domains, mainTab.id, group.idb);
+      const settled = await readStorage(parked.map((p) => p.tab), domains, mainTab.id, true);
       problems.push(...frames.problems, ...settled.problems);
       keepIdb = settled.incomplete;
       outgoing.cookies = live;
@@ -976,10 +975,11 @@ async function swap(group, incoming, mainTab) {
   }
 }
 
-// Writes a profile's storage into the parked tabs: each origin's localStorage and IndexedDB once,
+// Writes a profile's storage into the parked tabs: each origin's localStorage and app data once,
 // and sessionStorage into the main tab only (the other tabs start without). Origins with no open
-// page are cleared now and filled the next time one of their pages opens. keepIdb lists origins
-// whose IndexedDB is left alone; also lists origins the outgoing profile used.
+// page have their localStorage cleared now and filled the next time one of their pages opens (their
+// app data stays). keepIdb lists origins whose app data is left alone; also lists origins the
+// outgoing profile used.
 async function placeStorage(group, data, parked, mainTabId, keepIdb = new Set(), also = []) {
   const problems = [], written = new Set();
   for (const { tab, origin } of parked) {
@@ -987,9 +987,12 @@ async function placeStorage(group, data, parked, mainTabId, keepIdb = new Set(),
     const saved = data[origin] || {};
     const first = !written.has(origin);
     written.add(origin);
+    // App data (IndexedDB) is always part of a profile: the outgoing profile's was just saved, so the
+    // incoming one's replaces it (none yet: the site starts without). Left as it is only when the
+    // outgoing copy couldn't be saved in full.
     let idb = null;
-    if (first && group.idb) {
-      if (keepIdb.has(origin)) problems.push(`IndexedDB on ${origin} was left as it was, because the outgoing profile's copy couldn't be saved in full.`);
+    if (first) {
+      if (keepIdb.has(origin)) problems.push(`The app data on ${origin} was left as it was, because the outgoing profile's copy couldn't be saved in full (it may be too large).`);
       else idb = saved.idb || [];
     }
     const session = tab.id === mainTabId ? saved.session || {} : {};
@@ -998,9 +1001,11 @@ async function placeStorage(group, data, parked, mainTabId, keepIdb = new Set(),
   const elsewhere = unique([...also, ...Object.keys(data), ...group.origins, ...group.pending])
     .filter((origin) => !written.has(origin) && inScope(hostOf(origin), group.domains));
   if (elsewhere.length) {
-    await chrome.browsingData.remove({ origins: elsewhere }, group.idb ? { localStorage: true, indexedDB: true } : { localStorage: true });
+    // App data stays: it's only ever copied from open pages, so what these origins have now was
+    // never saved, and clearing it could lose it.
+    await chrome.browsingData.remove({ origins: elsewhere }, { localStorage: true });
   }
-  group.pending = elsewhere.filter((origin) => Object.keys(data[origin]?.local || {}).length || (group.idb && data[origin]?.idb?.length));
+  group.pending = elsewhere.filter((origin) => Object.keys(data[origin]?.local || {}).length);
   return problems;
 }
 
@@ -1047,7 +1052,7 @@ async function adopt(tabId) {
   delete group.paused;
   await saveGroups();
   await syncCookies(group.id, true);
-  const { found } = await readStorage(await siteTabs(group.domains), group.domains, tab.id, group.idb);
+  const { found } = await readStorage(await siteTabs(group.domains), group.domains, tab.id, true);
   await putData(profile.id, mergeStorage({}, found));
   group.pending = [];
   await saveGroups();
@@ -1094,7 +1099,7 @@ async function details(profileId) {
   const data = await getData(profile.id);
   return {
     profile: { id: profile.id, name: profile.name, hue: profile.hue, active, createdAt: profile.createdAt, lastUsed: profile.lastUsed, syncedAt: profile.syncedAt },
-    group: { id: group.id, domains: group.domains, loginCookie: group.loginCookie, idb: group.idb },
+    group: { id: group.id, domains: group.domains, loginCookie: group.loginCookie },
     login: loginOf(cookies, group, profile.login),
     cookies: cookies
       .map((c) => ({
@@ -1110,14 +1115,30 @@ async function details(profileId) {
 }
 
 // Every site with profiles, for Settings → session switch: its domains (the first is the site,
-// the rest are linked), whether IndexedDB is part of its profiles, and its profiles' names.
+// the rest are linked), and its profiles' names.
 async function sitesInfo() {
   const sites = [];
   for (const group of allGroups()) {
     const profiles = await getProfiles(group.order);
-    sites.push({ id: group.id, domains: group.domains, idb: !!group.idb, profiles: profiles.map((p) => p.name) });
+    sites.push({ id: group.id, domains: group.domains, profiles: profiles.map((p) => p.name) });
   }
   return { sites: sites.sort((a, b) => a.domains[0].localeCompare(b.domains[0])) };
+}
+
+// From the proxy settings: brings up a tab of the site (a new one if none is open) and, where
+// Chrome allows it without a click on the toolbar, the popup or side panel on it.
+async function openSite(site) {
+  const group = groupFor(String(site || ""));
+  if (!group) throw new Error("That site has no profiles any more.");
+  const tab = (await siteTabs(group.domains))[0] || await chrome.tabs.create({ url: `https://${group.domains[0]}/` });
+  await chrome.tabs.update(tab.id, { active: true });
+  await chrome.windows.update(tab.windowId, { focused: true });
+  try {
+    await chrome.action.openPopup({ windowId: tab.windowId });
+  } catch {
+    await chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+  }
+  return { ok: true };
 }
 
 async function setGroup(groupId, change) {
@@ -1191,7 +1212,6 @@ async function importBackup(payload) {
       group = makeGroup(domains[0]);
       group.domains = domains;
       group.loginCookie = text(saved.loginCookie, null);
-      group.idb = saved.idb === true;
     }
     for (const id of Array.isArray(saved.order) ? saved.order : []) {
       const source = payload.profiles?.[id];
@@ -1233,7 +1253,7 @@ async function importBackup(payload) {
 
 // ---- Drive backups ----
 // Off unless turned on in Settings → session switch, with a passphrase. Then every profile, without
-// its IndexedDB copies, goes into Extra Guac's Drive snapshots (bg-backup.js), sealed with a key
+// its app data (IndexedDB) copies, goes into Extra Guac's Drive snapshots (bg-backup.js), sealed with a key
 // derived from the passphrase (PBKDF2, AES-GCM): Drive only gets ciphertext. The key stays in this
 // browser (ssDriveKey: { salt, iterations, key }) so scheduled backups can seal without asking; the
 // passphrase itself isn't kept. The same sealed copy is used again while the profiles haven't
@@ -1266,6 +1286,7 @@ async function driveOn(passphrase) {
   const raw = new Uint8Array(await crypto.subtle.exportKey("raw", key));
   await chrome.storage.local.set({ ssDriveKey: { salt: b64(salt), iterations: DRIVE_ITERATIONS, key: b64(raw) } });
   await chrome.storage.local.remove("ssDriveCache");
+  notify();
   return driveInfo();
 }
 
@@ -1276,7 +1297,7 @@ async function driveSeal() {
   await getGroups();
   const payload = { groups: {}, profiles: {}, data: {} };
   for (const group of allGroups()) {
-    payload.groups[group.id] = { domains: group.domains, order: group.order, loginCookie: group.loginCookie, idb: group.idb };
+    payload.groups[group.id] = { domains: group.domains, order: group.order, loginCookie: group.loginCookie };
     for (const profile of await getProfiles(group.order)) {
       payload.profiles[profile.id] = profile;
       const data = {};
@@ -1338,7 +1359,7 @@ async function driveOpen(sealed, passphrase, queued = true) {
 }
 
 // ---- The encrypted backup file (Settings → session switch) ----
-// { format: "session-switch-backup", version 1, kdf, cipher, data }: every profile, IndexedDB copies
+// { format: "session-switch-backup", version 1, kdf, cipher, data }: every profile, app data copies
 // included, sealed with the passphrase given (not kept). Opening one adds its missing profiles.
 
 async function sealFile(passphrase) {
@@ -1436,14 +1457,14 @@ globalThis.sessionGuard = async (domains) => registerScript(
 
 // The sites whose profiles use a proxy, kept in storage.local "ssProxySites" for the proxy
 // settings and the popup's proxy section, where they're listed and count toward the plan's sites:
-// [{ site, domains, profiles: [{ name, country, inUse }] }], one per site with profiles; inUse
+// [{ site, domains, profiles: [{ name, hue, country, inUse }] }], one per site with profiles; inUse
 // marks the profile whose login (and route) the site has now.
 async function saveProxySites() {
   await getGroups();
   const list = [];
   for (const group of allGroups()) {
     const inUse = group.activeId || group.paused;
-    const profiles = (await getProfiles(group.order)).filter((p) => p.proxy).map((p) => ({ name: p.name, country: p.proxy.country || "", inUse: p.id === inUse }));
+    const profiles = (await getProfiles(group.order)).filter((p) => p.proxy).map((p) => ({ name: p.name, hue: p.hue, country: p.proxy.country || "", inUse: p.id === inUse }));
     if (profiles.length) list.push({ site: group.domains[0], domains: group.domains, profiles });
   }
   const { ssProxySites = [] } = await chrome.storage.local.get("ssProxySites");
@@ -1544,7 +1565,7 @@ async function applyPending(groupId, tabId, origin, url) {
   const { parked } = await park([{ id: tabId, url }]);
   try {
     if (parked[0]?.origin !== origin) return;
-    const problems = await writeParked(tabId, saved?.local || {}, null, group.idb ? saved?.idb || [] : null);
+    const problems = await writeParked(tabId, saved?.local || {}, null, null);
     if (problems.length) console.warn("Session Switch:", ...problems);
     // Once only, even when something couldn't be written: the page reloads afterwards, and trying
     // again on every load would keep reloading it.

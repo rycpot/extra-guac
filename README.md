@@ -55,7 +55,7 @@ A Chrome extension. Click its icon to open the side panel (or a popup, in settin
 
 | Tool | What it does |
 |---|---|
-| **Session switch** | Several logins for the same site, and one click to switch between them. Each profile keeps the site's cookies and page storage (IndexedDB too, if you like) and stays up to date while you use it, with its login's expiry date shown. A profile can open its site through one of your Webshare proxies, in a country you pick. A login already saved in a profile is recognized by itself. A login changed from outside never overwrites a profile: a card on the page asks once what to do with it. Encrypted backups to a file, or into Drive backups if you turn that on. |
+| **Session switch** | Several logins for the same site, and one click to switch between them. Each profile keeps the site's cookies, page storage and app data and stays up to date while you use it, with its login's expiry date shown. A profile can open its site through one of your Webshare proxies, in a country you pick. A login already saved in a profile is recognized by itself. A login changed from outside never overwrites a profile: a card on the page asks once what to do with it. Encrypted backups to a file, or into Drive backups if you turn that on. |
 
 **Backup tab**
 

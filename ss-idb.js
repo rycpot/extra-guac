@@ -160,13 +160,13 @@ self.__sessionSwitchIdb ??= (() => {
         const snap = await dumpOne(db);
         const size = JSON.stringify(snap).length;
         if (total + size > maxBytes) {
-          problems.push(`IndexedDB "${name}" was left out: it is too large (${Math.ceil(size / 1e6)} MB)`);
+          problems.push(`app data "${name}" was left out: it is too large (${Math.ceil(size / 1e6)} MB)`);
           continue;
         }
         total += size;
         dbs.push(snap);
       } catch (e) {
-        problems.push(`IndexedDB "${name}" was left out: ${e.message}`);
+        problems.push(`app data "${name}" was left out: ${e.message}`);
       } finally {
         db?.close();
       }
@@ -184,7 +184,7 @@ self.__sessionSwitchIdb ??= (() => {
         await remove(name);
       } catch (e) {
         stuck.add(name);
-        problems.push(`IndexedDB "${name}" could not be cleared, so it was left as it was: ${e.message}`);
+        problems.push(`app data "${name}" could not be cleared, so it was left as it was: ${e.message}`);
       }
     }
     for (const snap of dbs) {
@@ -208,7 +208,7 @@ self.__sessionSwitchIdb ??= (() => {
         }
         await finished;
       } catch (e) {
-        problems.push(`IndexedDB "${snap.name}" could not be restored: ${e.message}`);
+        problems.push(`app data "${snap.name}" could not be restored: ${e.message}`);
       } finally {
         db?.close();
       }

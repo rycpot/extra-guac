@@ -437,3 +437,14 @@ main:not(.laid-out) .panel { visibility: hidden; }
 .ss-toast.busy::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; vertical-align: -1px; border-radius: 50%;
   border: 2px solid color-mix(in srgb, var(--bg) 35%, transparent); border-top-color: var(--bg); animation: ss-spin .8s linear infinite; }
 @keyframes ss-spin { to { transform: rotate(360deg); } }
+
+/* A notice above the new profile sheet's buttons: Drive backup of profiles is off */
+.ss-sheet .sheet-foot { flex-wrap: wrap; }
+.ss-ask { flex: 0 0 100%; display: grid; gap: 8px; justify-items: center; text-align: center; padding: 10px 12px; margin-bottom: 4px; border-radius: 12px;
+  background: color-mix(in srgb, var(--yellow) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--yellow) 40%, transparent); font-size: 12.5px; }
+.ss-ask p { margin: 0; }
+.ss-ask-hint { font-size: 11px; line-height: 1.4; color: var(--text3); }
+.ss-btn { display: inline-flex; align-items: center; justify-content: center; padding: 6px 12px; border-radius: 10px; background: var(--chip); }
+.ss-btn:hover { background: var(--stroke); }
+.ss-btn.primary { background: var(--text); color: var(--bg); }
+.ss-btn.primary:hover { opacity: .88; background: var(--text); }

@@ -18,7 +18,7 @@
   const saySites = (text, bad = false) => say(text, bad, "ssSitesStatus");
   const sayDrive = (text, bad = false) => say(text, bad, "ssDriveStatus");
 
-  // ---- Sites: linked sites and IndexedDB ----
+  // ---- Sites and their linked sites ----
 
   async function sites() {
     let list;
@@ -54,13 +54,10 @@
       const add = el("button", { type: "button", className: "btn", textContent: "Link" });
       add.onclick = link;
       input.addEventListener("keydown", (e) => e.key === "Enter" && link());
-      const idb = el("input", { type: "checkbox", checked: site.idb });
-      idb.onchange = () => call("idb", { groupId: site.id, on: idb.checked }).catch((err) => saySites(err.message, true));
       return el("div", { className: "ss-site" },
         el("h3", {}, site.domains[0], el("span", { className: "hint", textContent: ` ${site.profiles.length} profile${site.profiles.length === 1 ? "" : "s"}: ${site.profiles.join(", ")}` })),
         pills,
-        el("div", { className: "add-row" }, input, add),
-        el("label", { className: "row" }, idb, " Include IndexedDB in this site's profiles"));
+        el("div", { className: "add-row" }, input, add));
     }));
   }
   sites();

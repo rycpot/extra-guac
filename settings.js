@@ -813,13 +813,34 @@
         save((p) => p[key].push({ site, on: true, country: "" }));
       };
       const head = el("div", { className: "px-lhead" }, el("span", { textContent: full() ? "Sites that skip the proxy" : "Sites that use the proxy" }), el("span", { textContent: `${list.length + taken()} / ${total()}` }));
-      // Sites whose session switch profiles use a proxy: listed and counted here, changed in the
-      // popup's session switch section (each profile's proxy).
-      const profileRows = full() ? [] : ss.map((e) => el("div", { className: "px-site px-session" }, tile(e.site),
-        el("span", { className: "px-name" }, el("span", { textContent: e.domains.join(" + ") }),
-          el("small", { textContent: `session switch · ${e.profiles.map((p) => `${p.name} (${p.country ? TT.countryName(p.country) : "any country"})`).join(", ")}` })),
-        el("span", { className: "px-lock", textContent: "in the popup", title: "Change or remove it in the popup's session switch section: each profile's proxy" })));
-      rows.unshift(...profileRows);
+      // Sites whose session switch profiles use a proxy: a group of their own above the sites
+      // here, counted with them, changed in the popup's session switch section (each profile's
+      // proxy), which "change in popup" opens on the site.
+      if (!full() && ss.length) {
+        const initials = (name) => {
+          const w = name.split(/\s+/).filter(Boolean);
+          return (w.length > 1 ? Array.from(w[0])[0] + Array.from(w[1])[0] : Array.from(name).slice(0, 2).join("")).toUpperCase();
+        };
+        const group = (title, n) => el("div", { className: "px-group" }, el("span", { textContent: title }), el("span", { textContent: String(n) }));
+        const profileRows = ss.map((e) => {
+          const countries = [...new Set(e.profiles.map((p) => (p.country ? TT.countryName(p.country) : "any country")))].join(", ");
+          const open = el("button", { type: "button", className: "px-open", textContent: "change in popup", title: `Opens ${e.site}; each profile's proxy is set in the popup's session switch section` });
+          open.onclick = async () => {
+            const r = await chrome.runtime.sendMessage({ type: "ss:open", site: e.site }).catch((err) => ({ error: err.message }));
+            if (r?.error) alert(r.error);
+          };
+          return el("div", { className: "px-site px-session" }, tile(e.site),
+            el("span", { className: "px-name" }, el("span", { textContent: e.domains.join(" + ") })),
+            el("span", { className: "px-avs" }, ...e.profiles.map((p) => {
+              const a = el("span", { className: "px-av", textContent: initials(p.name), title: p.name });
+              a.style.background = `hsl(${p.hue ?? 210} 55% 42%)`;
+              return a;
+            })),
+            el("span", { className: "px-who", textContent: `${e.profiles.map((p) => p.name).join(", ")} · ${countries}` }),
+            open);
+        });
+        rows.unshift(group("Session switch profiles", ss.length), ...profileRows, group("Your sites", list.length));
+      }
       const empty = el("p", { className: "hint px-empty", textContent: full() ? "none: every site goes through the proxy" : "none yet: add a site below, or use add this site in the panel" });
       const kids = [el("div", { className: "px-list" }, head, ...(rows.length ? rows : [empty]), el("div", { className: "px-ladd" }, add))];
       if (full()) kids.push(el("p", { className: "hint", textContent: "Everything goes through the proxy except these, which use your own connection (banks, or sites that block proxies). Webshare's own site always does." }));
