@@ -27,9 +27,16 @@
   guard(window);
 
   // A frame the page adds starts with an untouched window of the same origin. Every way of adding
-  // nodes guards all the page's frames as soon as it returns, and so do the ways of reaching a frame.
+  // nodes guards the page's new frames as soon as it returns, and so do the ways of reaching a frame.
+  // Only frames not seen before are looked at (a frame keeps its window when it's navigated, and
+  // its new page gets this script by itself).
+  const seen = [];
   const guardFrames = () => {
-    for (let i = 0; i < window.length; i++) guard(window[i]);
+    for (let i = 0; i < window.length; i++) {
+      const win = window[i];
+      if (win !== seen[i]) guard((seen[i] = win));
+    }
+    seen.length = window.length;
   };
   const after = (proto, name, kind = "value") => {
     const desc = Object.getOwnPropertyDescriptor(proto, name);

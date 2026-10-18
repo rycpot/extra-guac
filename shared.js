@@ -164,6 +164,10 @@
       key: typeof h.key === "string" ? h.key.trim() : "",
       on: h.on !== false,
       webrtc: h.webrtc !== false, // WebRTC off on proxied sites (see bg-proxy.js)
+      // Proxied sites see the proxy's place, time zone and language (see bg-proxy.js)
+      location: h.location !== false,
+      time: h.time !== false,
+      language: h.language !== false,
       mode: h.mode === "full" ? "full" : "sites",
       sites: list(h.sites),
       skip: list(h.skip),

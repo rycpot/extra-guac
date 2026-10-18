@@ -27,6 +27,9 @@
   let saveTimer = 0;
 
   TT.applyTheme();
+  // Left open for a while, Chrome's memory saver would unload the settings window, and it can come
+  // back as a new tab page instead of these settings: this one stays loaded.
+  chrome.tabs.getCurrent((tab) => tab && chrome.tabs.update(tab.id, { autoDiscardable: false }).catch(() => {}));
   init();
 
   async function init() {
@@ -851,10 +854,24 @@
         el("p", { className: "hint", textContent: "WebRTC (used for calls and live connections) could otherwise show such a site your own address. It's turned off only on sites going through a proxy, the ones listed here and session switch profiles' sites, and only while the proxy is in use; everywhere else it works as usual." }));
     }
 
+    // The proxy's place on proxied sites (bg-proxy.js): one switch each.
+    function warp() {
+      const row = (key, id, label) => {
+        const box = el("input", { type: "checkbox", checked: cfg[key], id });
+        box.onchange = () => save((p) => (p[key] = box.checked));
+        return el("label", { className: "row" }, box, label);
+      };
+      return section("Match the proxy's place",
+        row("location", "pxLocation", " Location: sites that ask where you are get a spot in the proxy's country"),
+        row("time", "pxTime", " Time zone: dates and times on the page follow the proxy's time zone"),
+        row("language", "pxLanguage", " Language: sites see the proxy country's language, with English after it"),
+        el("p", { className: "hint", textContent: "Only on sites going through a proxy, while they do. The place comes from each proxy's country and city, with a list built into Extra Guac: nothing is looked up. Sites still need your OK to use your location, and get nothing if you say no. A page's background workers keep your own time zone and language." }));
+    }
+
     function render() {
       const body = $("pxBody");
       if (!cfg.key) body.replaceChildren(...setup());
-      else body.replaceChildren(...alerts(), card(), ...(free() ? [] : [modeSwitch()]), countrySection(), ...(st.plan?.limit ? [whenOut()] : []), siteList(), webrtc());
+      else body.replaceChildren(...alerts(), card(), ...(free() ? [] : [modeSwitch()]), countrySection(), ...(st.plan?.limit ? [whenOut()] : []), siteList(), warp(), webrtc());
       if (refocus) { body.querySelector(`[data-focus="${refocus}"]`)?.focus(); refocus = ""; }
     }
 

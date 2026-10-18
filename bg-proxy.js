@@ -3,7 +3,7 @@
 // renewal date), the account's proxies (address, port, login, country) and the data used so
 // far; storage.local "proxyState" keeps that:
 //   { plan: { id, free, limit (bytes, 0: unlimited), count, residential }, start, end (this
-//     month of the plan), proxies: [{ h, p, u, w, c }], used, usedAt, listAt, error, blocked,
+//     month of the plan), proxies: [{ h, p, u, w, c, t (city) }], used, usedAt, listAt, error, blocked,
 //     warned: { start, at: [0.8, 1] } }
 // Chrome's proxy setting is a routing script written here from the lists (never fetched): a
 // listed site goes to the proxies of its country, then the backup countries in order (Chrome
@@ -97,7 +97,7 @@ async function refreshProxyNow({ list = false } = {}) {
       for (let page = 1; page <= 3; page++) {
         const d = await wsGet(cfg.key, `/proxy/list/?mode=direct&page=${page}&page_size=100&plan_id=${plan.id}`);
         for (const p of d.results || []) {
-          if (p.valid && p.proxy_address) proxies.push({ h: p.proxy_address, p: p.port, u: p.username, w: p.password, c: p.country_code || "" });
+          if (p.valid && p.proxy_address) proxies.push({ h: p.proxy_address, p: p.port, u: p.username, w: p.password, c: p.country_code || "", t: p.city_name || "" });
         }
         if (!d.next) break;
       }
@@ -206,9 +206,10 @@ function proxyCoversHost(cfg, st, host) {
   return proxySites(cfg, st).some((s) => TT.proxyCovers(host, s.site));
 }
 
+// What each site uses ({ rules: { site: answer }, fallback: the answer for every other site}).
 // own: whether the proxy's own sites are routed (else only the profiles' sites); profiles: the
 // Session Switch routes, which win over the rest.
-function proxyScript(cfg, st, own = true, profiles = {}) {
+function proxyRules(cfg, st, own = true, profiles = {}) {
   const rules = {};
   let fallback = "DIRECT";
   if (!own) {
@@ -230,6 +231,10 @@ function proxyScript(cfg, st, own = true, profiles = {}) {
     if (Object.keys(profiles).some((d) => TT.proxyCovers(site, d))) delete rules[site];
   }
   Object.assign(rules, profiles);
+  return { rules, fallback };
+}
+
+function proxyScript({ rules, fallback }) {
   // Walks up the host's labels (a.b.example.com, b.example.com, example.com) to the first
   // listed one. This computer and its network always go direct.
   return `var R = ${JSON.stringify(rules)};
@@ -266,11 +271,12 @@ async function applyProxyNow() {
   const domains = Object.keys(profiles);
   sessionRouted = domains;
   sessionProxyFailure = "";
-  let usable = false;
+  let usable = false, routed = null;
   const own = !blocked && !!(proxyActive(cfg, st) && (proxyMode(cfg, st) === "full" || proxySites(cfg, st).length));
   if (!blocked) {
     if (own || domains.length) {
-      const data = proxyScript(cfg, st, own, profiles);
+      routed = proxyRules(cfg, st, own, profiles);
+      const data = proxyScript(routed);
       if (levelOfControl === "controlled_by_this_extension" && value?.pacScript?.data === data) {
         usable = true;
       } else {
@@ -292,6 +298,7 @@ async function applyProxyNow() {
   }
   await sessionBlock(domains.length && !usable ? domains : []);
   await proxyGuard(cfg, st, own, domains);
+  await proxyWarp(cfg, st, usable ? routed : null);
   proxyCreds = null;
   await proxyTabIcons();
 }
@@ -317,17 +324,95 @@ async function proxyGuard(cfg, st, own, profileDomains) {
     }
   }
   // Before 257 it was Session Switch's own, for profiles' sites only.
-  const have = await chrome.scripting.getRegisteredContentScripts({ ids: ["ss-webrtc-guard", GUARD_ID] });
-  if (have.some((s) => s.id === "ss-webrtc-guard")) await chrome.scripting.unregisterContentScripts({ ids: ["ss-webrtc-guard"] });
-  const existing = have.some((s) => s.id === GUARD_ID);
-  if (!matches.length) {
-    if (existing) await chrome.scripting.unregisterContentScripts({ ids: [GUARD_ID] });
-    return;
+  await pageScripts((id) => id === GUARD_ID || id === "ss-webrtc-guard",
+    matches.length ? [{ id: GUARD_ID, js: ["webrtc-guard.js"], matches, excludeMatches }] : []);
+}
+
+// Puts the scripts run in proxied pages ahead of their own in place: scripts ({ id, js, matches,
+// excludeMatches }), and none of the others whose ids mine(id) says are these. Only what changed is
+// registered again.
+async function pageScripts(mine, scripts) {
+  const have = (await chrome.scripting.getRegisteredContentScripts()).filter((s) => mine(s.id));
+  const shape = (s) => JSON.stringify([s.js, s.matches, s.excludeMatches || []]);
+  const keep = scripts.filter((s) => have.some((h) => h.id === s.id && shape(h) === shape(s)));
+  const gone = have.filter((h) => !keep.some((s) => s.id === h.id)).map((h) => h.id);
+  if (gone.length) await chrome.scripting.unregisterContentScripts({ ids: gone });
+  const add = scripts.filter((s) => !keep.includes(s)).map((s) => ({
+    ...s, excludeMatches: s.excludeMatches?.length ? s.excludeMatches : undefined,
+    runAt: "document_start", allFrames: true, world: "MAIN", matchOriginAsFallback: true, persistAcrossSessions: true,
+  }));
+  if (add.length) await chrome.scripting.registerContentScripts(add);
+}
+
+// ---- The proxy's place on proxied sites ----------------------------------------------------
+// Sites going through a proxy see its place, unless switched off in settings (proxy.location, time
+// and language): a spot on the map in its country and time zone, that time zone, and the country's
+// language, in the page (warp.js and the scripts before it, ahead of the page's own) and in the
+// requests' language header. The place is that of the first proxy a site's route tries: its
+// country, and its city's time zone where the country has several (warp/places.js). One set of
+// scripts and one header rule per place, on its sites; none while the proxy isn't in use.
+const WARP_ID = "warp:";
+const WARP_RULES = 9100; // to 9199
+const WARP_TYPES = ["main_frame", "sub_frame", "stylesheet", "script", "image", "font", "object", "xmlhttprequest", "ping", "csp_report", "media", "websocket", "webtransport", "webbundle", "other"];
+
+// The place file (warp/<key>.js) for a proxy, "" for a country with none.
+function warpPlace(proxy) {
+  const zones = WARP_PLACES.zones[proxy.c];
+  if (!zones) return "";
+  const city = (proxy.t || "").trim().toLowerCase();
+  const zone = zones.find((z) => z === WARP_PLACES.cities[city])
+    || zones.find((z) => z.split("/").pop().replace(/_/g, " ").toLowerCase() === city)
+    || zones[0];
+  return `${proxy.c}_${zone.replace(/\//g, "-")}`;
+}
+
+// The language header for a country's language, with English after it (as warp-language.js has it).
+function warpLanguages(cc) {
+  const lang = WARP_PLACES.languages[cc] || "en-US";
+  const list = [...new Set([lang, lang.split("-")[0], "en-US", "en"])];
+  return list.map((l, i) => (i ? `${l};q=${(10 - i) / 10}` : l)).join(",");
+}
+
+// routed: the routing in use (proxyRules), null when nothing goes through a proxy.
+async function proxyWarp(cfg, st, routed) {
+  const features = [cfg.time && "warp-time.js", cfg.location && "warp-location.js", cfg.language && "warp-language.js"].filter(Boolean);
+  const places = new Map();
+  if (routed && features.length) {
+    const placeOf = (answer) => {
+      const [, host, port] = /^PROXY (\S+):(\d+)/.exec(answer) || [];
+      const proxy = host && (st.proxies || []).find((p) => p.h === host && String(p.p) === port);
+      return proxy ? warpPlace(proxy) : "";
+    };
+    const place = (key) => places.get(key) || places.set(key, { key, sites: [], all: false }).get(key);
+    for (const [site, answer] of Object.entries(routed.rules)) {
+      const key = placeOf(answer);
+      if (key) place(key).sites.push(site);
+    }
+    const key = placeOf(routed.fallback);
+    if (key) place(key).all = true;
   }
-  const script = { id: GUARD_ID, js: ["webrtc-guard.js"], matches, runAt: "document_start", allFrames: true, world: "MAIN", matchOriginAsFallback: true, persistAcrossSessions: true };
-  if (excludeMatches.length) script.excludeMatches = excludeMatches;
-  if (existing) await chrome.scripting.updateContentScripts([script]);
-  else await chrome.scripting.registerContentScripts([script]);
+  const scripts = [], rules = [];
+  const listed = Object.keys(routed?.rules || {});
+  for (const p of places.values()) {
+    // The sites inside its own that go another way (for the place every other site has, all of them).
+    const others = listed.filter((s) => !p.sites.includes(s));
+    const away = p.all ? others : others.filter((s) => p.sites.some((d) => s !== d && TT.proxyCovers(s, d)));
+    scripts.push({ id: WARP_ID + p.key, js: [`warp/${p.key}.js`, ...features, "warp.js"], matches: p.all ? ["<all_urls>"] : guardPatterns(p.sites), excludeMatches: guardPatterns(away) });
+    if (!cfg.language || rules.length === 100) continue; // the rule ids it has
+    const condition = { resourceTypes: WARP_TYPES };
+    if (!p.all) condition.requestDomains = p.sites;
+    const skip = p.all ? [...away, "localhost"] : away;
+    if (skip.length) condition.excludedRequestDomains = skip;
+    rules.push({
+      id: WARP_RULES + rules.length, priority: p.all ? 1 : 2, condition,
+      action: { type: "modifyHeaders", requestHeaders: [{ header: "accept-language", operation: "set", value: warpLanguages(p.key.slice(0, 2)) }] },
+    });
+  }
+  await pageScripts((id) => id.startsWith(WARP_ID), scripts);
+  const have = (await chrome.declarativeNetRequest.getDynamicRules()).filter((r) => r.id >= WARP_RULES && r.id < WARP_RULES + 100);
+  if (JSON.stringify(have.map(({ id, priority, action, condition }) => ({ id, priority, condition, action }))) !== JSON.stringify(rules)) {
+    await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: have.map((r) => r.id), addRules: rules });
+  }
 }
 
 // ---- Proxy logins ---------------------------------------------------------------------
@@ -430,4 +515,9 @@ async function syncProxyAlarm() {
 chrome.alarms.onAlarm.addListener((a) => a.name === "proxy-refresh" && proxyRefresh());
 
 chrome.runtime.onStartup.addListener(() => { applyProxy(); syncProxyAlarm(); });
-chrome.runtime.onInstalled.addListener(() => { applyProxy(); syncProxyAlarm(); });
+chrome.runtime.onInstalled.addListener(({ reason }) => {
+  applyProxy();
+  syncProxyAlarm();
+  // Proxies kept before 258 have no city (for their time zone): the list is asked for again.
+  if (reason === "update") getProxy().then(({ cfg }) => cfg.key && proxyRefresh({ list: true }));
+});
