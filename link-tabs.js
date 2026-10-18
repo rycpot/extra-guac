@@ -53,6 +53,6 @@
     window.open(url.href, "_blank", noref ? "noopener,noreferrer" : "noopener");
     // So the popup can offer "treat … as same site" for it.
     const to = url.hostname.toLowerCase().replace(/^www\./, "");
-    chrome.runtime.sendMessage({ type: "newTabOpened", site: entry, host: to, base: base(to) }).catch(() => {});
+    if (chrome.runtime?.id) chrome.runtime.sendMessage({ type: "newTabOpened", site: entry, host: to, base: base(to) }).catch(() => {}); // not once cut off by an extension update
   });
 })();

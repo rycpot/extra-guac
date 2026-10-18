@@ -5,7 +5,9 @@
   if (self.__sessionSwitchPage) return;
   self.__sessionSwitchPage = true;
 
-  const ask = (message) => chrome.runtime.sendMessage(message).catch(() => null);
+  // Nothing to say once an extension reload or update has cut this copy of the script off (the page
+  // gets the new one when it loads again).
+  const ask = async (message) => (chrome.runtime?.id ? chrome.runtime.sendMessage(message).catch(() => null) : null);
   const ancestors = [...(location.ancestorOrigins || [])];
   let epoch = null;
   let held = false;

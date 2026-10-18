@@ -14,7 +14,7 @@
     if (text === last && now - lastAt < 1500) return; // one copy reported twice
     last = text;
     lastAt = now;
-    chrome.runtime.sendMessage({ type: "clipAdd", text }).catch(() => {});
+    if (chrome.runtime?.id) chrome.runtime.sendMessage({ type: "clipAdd", text }).catch(() => {}); // not once cut off by an extension update
   }
 
   // The focused element, looking inside open shadow roots too.
