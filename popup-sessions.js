@@ -144,14 +144,13 @@ async function load() {
 function render() {
   const ok = state?.supported;
   $("ssSite").textContent = ok ? state.domains.join(" + ") : "";
-  $("ssSiteBtn").hidden = !ok || !state.group;
   $("ssNewBtn").hidden = !ok;
   $("ssNewBtn").disabled = busy;
   $("ssNewBtn").title = ok ? `Log ${site()} out here and start a new profile; the next login you make is saved to it` : "";
   content.replaceChildren(...[].concat(drawList()).filter(Boolean));
   // A sheet that shows the list's state follows it, unless the user is typing in it.
   const typing = sheet.contains(document.activeElement) && document.activeElement.tagName === "INPUT";
-  if (sheetView && ["proxy", "site"].includes(sheetView.kind) && !typing) drawSheet();
+  if (sheetView?.kind === "proxy" && !typing) drawSheet();
 }
 
 function drawList() {
@@ -437,7 +436,7 @@ function closeSheet() {
 
 function drawSheet() {
   const view = sheetView;
-  const draw = { confirm: confirmSheet, details: detailsSheet, proxy: proxySheet, site: siteSheet, new: newSheet }[view.kind];
+  const draw = { confirm: confirmSheet, details: detailsSheet, proxy: proxySheet, new: newSheet }[view.kind];
   const { title, body, foot } = draw(view);
   sheet.replaceChildren(...[
     h("div", { class: "sheet-head" }, h("h2", {}, title),
@@ -577,36 +576,6 @@ function newSheet(view) {
   };
 }
 
-function siteSheet() {
-  const { group, domains } = state;
-  if (!group) return { title: "site settings", body: h("p", {}, "This site has no profiles yet.") };
-  const input = h("input", { class: "field", type: "text", placeholder: "example.com", "aria-label": "Site to link" });
-  return {
-    title: `${domains[0]} settings`,
-    body: [
-      h("h3", {}, "linked sites"),
-      h("p", {}, "Some logins span two sites. Link the second one and each switch covers both; a profile picks it up the next time it is active. Leave out shared Google and Microsoft sign-in sites: they tie their logins to the device and break when swapped."),
-      h("div", { class: "chips" }, domains.map((d, i) => h("span", { class: `chip${i ? "" : " main"}` }, d,
-        i > 0 && h("button", { type: "button", title: `Unlink ${d}`, "aria-label": `Unlink ${d}`, onclick: () => run(() => call("unlink", { groupId: group.id, domain: d })) }, "×")))),
-      h("form", {
-        class: "adder",
-        onsubmit: (e) => {
-          e.preventDefault();
-          run(async () => toast(`Linked ${(await call("link", { groupId: group.id, domain: input.value })).site}.`));
-        },
-      }, input, h("button", { class: "text-btn primary", type: "submit" }, "link")),
-      h("h3", {}, "indexeddb"),
-      h("div", { class: "row" },
-        h("p", { style: "margin:0" }, "Include IndexedDB in each profile, for sites that keep the login there. Copied from the open tabs when you switch, up to 25 MB per profile and origin."),
-        h("button", {
-          class: "switch", type: "button", role: "switch", "aria-checked": String(!!group.idb), "aria-label": "Include IndexedDB",
-          onclick: () => run(() => call("idb", { groupId: group.id, on: !group.idb })),
-        })),
-    ],
-    foot: h("button", { type: "button", class: "text-btn", onclick: () => openSettings("sessions") }, icon("gear"), "backups and WebRTC"),
-  };
-}
-
 function openSettings(section) {
   chrome.runtime.sendMessage({ type: "openSettings", section }).catch(() => {});
   closePopup();
@@ -614,7 +583,6 @@ function openSettings(section) {
 
 // ---- Start ----
 
-$("ssSiteBtn").addEventListener("click", () => openSheet({ kind: "site" }));
 $("ssNewBtn").addEventListener("click", newProfile);
 
 document.addEventListener("keydown", (e) => {

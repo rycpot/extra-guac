@@ -591,13 +591,16 @@
   function initProxy() {
     const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
     let cfg = TT.proxyOf(), st = {};
+    let ss = []; // sites whose session switch profiles use a proxy (bg-sessions.js): they take some of the plan's sites
     let keyDraft = "", say = { text: "", bad: false }, refocus = "";
     const GB = 1024 ** 3;
     const size = (b) => (b >= GB ? `${+(b / GB).toFixed(b >= 10 * GB ? 0 : 1)} GB` : `${Math.max(0, Math.round(b / 1024 ** 2))} MB`);
     const day = (t) => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
     const free = () => st.plan?.free !== false;
-    const max = () => TT.PROXY_LIMITS[free() ? "free" : "paid"];
+    const total = () => TT.PROXY_LIMITS[free() ? "free" : "paid"];
     const full = () => !free() && cfg.mode === "full";
+    const taken = () => (full() ? 0 : ss.length);
+    const max = () => Math.max(0, total() - taken()); // what's left for the list here
     const out = () => !!(st.plan?.limit && st.used >= st.plan.limit);
     const countries = () => [...new Set((st.proxies || []).map((p) => p.c).filter(Boolean))].sort((a, b) => TT.countryName(a).localeCompare(TT.countryName(b)));
     async function save(fn) {
@@ -804,12 +807,19 @@
         if (!site) return void (add.value.trim() && alert("That doesn't look like a site, e.g. example.com"));
         if (list.some((e) => e.site === site)) return void (add.value = "");
         if (list.length >= max()) return void alert(free()
-          ? `The free plan takes up to ${max()} sites. Remove one to add ${site}.`
-          : `Up to ${max()} sites. Remove one to add ${site}.`);
+          ? `The free plan takes up to ${total()} sites${taken() ? `, ${taken()} of them through session switch profiles` : ""}. Remove one to add ${site}.`
+          : `Up to ${total()} sites${taken() ? `, ${taken()} of them through session switch profiles` : ""}. Remove one to add ${site}.`);
         refocus = "add";
         save((p) => p[key].push({ site, on: true, country: "" }));
       };
-      const head = el("div", { className: "px-lhead" }, el("span", { textContent: full() ? "Sites that skip the proxy" : "Sites that use the proxy" }), el("span", { textContent: `${list.length} / ${max()}` }));
+      const head = el("div", { className: "px-lhead" }, el("span", { textContent: full() ? "Sites that skip the proxy" : "Sites that use the proxy" }), el("span", { textContent: `${list.length + taken()} / ${total()}` }));
+      // Sites whose session switch profiles use a proxy: listed and counted here, changed in the
+      // popup's session switch section (each profile's proxy).
+      const profileRows = full() ? [] : ss.map((e) => el("div", { className: "px-site px-session" }, tile(e.site),
+        el("span", { className: "px-name" }, el("span", { textContent: e.domains.join(" + ") }),
+          el("small", { textContent: `session switch · ${e.profiles.map((p) => `${p.name} (${p.country ? TT.countryName(p.country) : "any country"})`).join(", ")}` })),
+        el("span", { className: "px-lock", textContent: "in the popup", title: "Change or remove it in the popup's session switch section: each profile's proxy" })));
+      rows.unshift(...profileRows);
       const empty = el("p", { className: "hint px-empty", textContent: full() ? "none: every site goes through the proxy" : "none yet: add a site below, or use add this site in the panel" });
       const kids = [el("div", { className: "px-list" }, head, ...(rows.length ? rows : [empty]), el("div", { className: "px-ladd" }, add))];
       if (full()) kids.push(el("p", { className: "hint", textContent: "Everything goes through the proxy except these, which use your own connection (banks, or sites that block proxies). Webshare's own site always does." }));
@@ -825,13 +835,14 @@
     }
 
     async function load() {
-      const got = await chrome.storage.local.get(["proxy", "proxyState"]);
+      const got = await chrome.storage.local.get(["proxy", "proxyState", "ssProxySites"]);
       cfg = TT.proxyOf(got.proxy);
       st = got.proxyState || {};
+      ss = Array.isArray(got.ssProxySites) ? got.ssProxySites : [];
       render();
     }
     load().then(() => cfg.key && send("proxyRefresh", {}).catch(() => {}));
-    chrome.storage.onChanged.addListener((c, area) => area === "local" && (c.proxy || c.proxyState) && load());
+    chrome.storage.onChanged.addListener((c, area) => area === "local" && (c.proxy || c.proxyState || c.ssProxySites) && load());
   }
 
   // ---- Copy & right-click: remembered and this-session sites ----

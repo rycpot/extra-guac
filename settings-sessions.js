@@ -3,8 +3,6 @@
 // with AES-GCM; restoring hands the opened backup to the background, bg-sessions.js, to add).
 (() => {
   const $ = (id) => document.getElementById(id);
-  const encoder = new TextEncoder();
-  const ITERATIONS = 600000;
 
   async function call(type, data = {}) {
     const reply = await chrome.runtime.sendMessage({ type: `ss:${type}`, ...data });
@@ -12,10 +10,71 @@
     return reply;
   }
 
-  function say(text, bad = false) {
-    $("ssStatus").classList.toggle("bad", bad);
-    $("ssStatus").textContent = text;
+  // A message under the section it's about.
+  function say(text, bad = false, where = "ssStatus") {
+    $(where).classList.toggle("bad", bad);
+    $(where).textContent = text;
   }
+  const saySites = (text, bad = false) => say(text, bad, "ssSitesStatus");
+  const sayDrive = (text, bad = false) => say(text, bad, "ssDriveStatus");
+
+  // ---- Sites: linked sites and IndexedDB ----
+
+  async function sites() {
+    let list;
+    try {
+      ({ sites: list } = await call("sites"));
+    } catch (err) {
+      return saySites(err.message, true);
+    }
+    const box = $("ssSites");
+    if (!list.length) {
+      box.innerHTML = `<p class="rm-empty">No profiles yet: start one in the popup's session switch section.</p>`;
+      return;
+    }
+    const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
+    box.replaceChildren(...list.map((site) => {
+      const pills = el("div", { className: "rm-pills wrap" });
+      for (const domain of site.domains.slice(1)) {
+        const x = el("button", { type: "button", className: "chip-x", textContent: "×" });
+        x.setAttribute("aria-label", `Unlink ${domain}`);
+        x.onclick = () => call("unlink", { groupId: site.id, domain }).catch((err) => saySites(err.message, true));
+        pills.append(el("span", { className: "chip" }, el("span", { className: "chip-text", textContent: domain }), x));
+      }
+      const input = el("input", { type: "text", className: "text", placeholder: "link a site, e.g. atlassian.com", spellcheck: false });
+      const link = async () => {
+        if (!input.value.trim()) return input.focus();
+        try {
+          const r = await call("link", { groupId: site.id, domain: input.value });
+          saySites(`Linked ${r.site} to ${site.domains[0]}.`);
+        } catch (err) {
+          saySites(err.message, true);
+        }
+      };
+      const add = el("button", { type: "button", className: "btn", textContent: "Link" });
+      add.onclick = link;
+      input.addEventListener("keydown", (e) => e.key === "Enter" && link());
+      const idb = el("input", { type: "checkbox", checked: site.idb });
+      idb.onchange = () => call("idb", { groupId: site.id, on: idb.checked }).catch((err) => saySites(err.message, true));
+      return el("div", { className: "ss-site" },
+        el("h3", {}, site.domains[0], el("span", { className: "hint", textContent: ` ${site.profiles.length} profile${site.profiles.length === 1 ? "" : "s"}: ${site.profiles.join(", ")}` })),
+        pills,
+        el("div", { className: "add-row" }, input, add),
+        el("label", { className: "row" }, idb, " Include IndexedDB in this site's profiles"));
+    }));
+  }
+  sites();
+  // Sites and profiles coming and going change ssGroups (a profile's own record changes every time
+  // its cookies are saved), and ssProxySites follows names. Not while a site is being typed in:
+  // then once that box is left.
+  let later = false;
+  const typing = () => $("ssSites").contains(document.activeElement) && document.activeElement.value;
+  chrome.storage.onChanged.addListener((c, area) => {
+    if (area !== "local" || !(c.ssGroups || c.ssProxySites)) return;
+    if (typing()) later = true;
+    else sites();
+  });
+  $("ssSites").addEventListener("focusout", () => setTimeout(() => later && !typing() && ((later = false), sites())));
 
   // ---- WebRTC ----
 
@@ -24,69 +83,68 @@
     call("webrtc", { on: e.target.checked }).catch((err) => say(err.message, true));
   });
 
-  // ---- Backups ----
+  const added = (r) => `Added ${r.added} profile${r.added === 1 ? "" : "s"}.${r.skipped ? ` ${r.skipped} were already here.` : ""}${r.noRoom ? ` ${r.noRoom} came without their proxy: all the plan's proxy sites are in use.` : ""}`;
 
-  const toBase64 = (bytes) => {
-    let text = "";
-    for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-    return btoa(text);
-  };
-  const fromBase64 = (text) => Uint8Array.from(atob(text), (ch) => ch.charCodeAt(0));
+  // ---- Google Drive backup ----
 
-  async function keyFor(passphrase, salt, iterations) {
-    const base = await crypto.subtle.importKey("raw", encoder.encode(passphrase), "PBKDF2", false, ["deriveKey"]);
-    return crypto.subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt, iterations }, base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
-  }
-
-  async function seal(passphrase) {
-    const { ssGroups = {} } = await chrome.storage.local.get("ssGroups");
-    const ids = Object.values(ssGroups).flatMap((g) => g.order || []);
-    const saved = await chrome.storage.local.get(ids.flatMap((id) => [`ssProfile:${id}`, `ssData:${id}`]));
-    const payload = { groups: ssGroups, profiles: {}, data: {} };
-    for (const id of ids) {
-      if (saved[`ssProfile:${id}`]) payload.profiles[id] = saved[`ssProfile:${id}`];
-      if (saved[`ssData:${id}`]) payload.data[id] = saved[`ssData:${id}`];
-    }
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const key = await keyFor(passphrase, salt, ITERATIONS);
-    const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoder.encode(JSON.stringify(payload))));
-    return {
-      file: {
-        format: "session-switch-backup", version: 1, created: new Date().toISOString(),
-        kdf: { name: "PBKDF2", hash: "SHA-256", iterations: ITERATIONS, salt: toBase64(salt) },
-        cipher: { name: "AES-GCM", iv: toBase64(iv) },
-        data: toBase64(sealed),
-      },
-      count: Object.keys(payload.profiles).length,
-    };
-  }
-
-  async function open(file, passphrase) {
-    let box;
+  async function drive(info) {
     try {
-      box = JSON.parse(await file.text());
-    } catch {
-      box = null;
+      info ||= await call("drive-info");
+    } catch (err) {
+      return sayDrive(err.message, true);
     }
-    if (box?.format !== "session-switch-backup" || box.version !== 1) throw new Error("This file isn't a Session Switch backup.");
-    const iterations = Number(box.kdf?.iterations);
-    if (!(iterations >= 100000 && iterations <= 5000000)) throw new Error("This backup uses settings that are not supported.");
-    const key = await keyFor(passphrase, fromBase64(box.kdf.salt), iterations);
-    try {
-      const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromBase64(box.cipher.iv) }, key, fromBase64(box.data));
-      return JSON.parse(new TextDecoder().decode(plain));
-    } catch {
-      throw new Error("The passphrase is wrong, or the file is damaged.");
+    $("ssDriveState").textContent = info.on ? "on" : "off";
+    $("ssDriveOnForm").hidden = info.on;
+    $("ssDriveOffRow").hidden = !info.on;
+    $("ssDriveOpenForm").hidden = !info.pending;
+    if (info.pending) {
+      const n = info.pending.profiles;
+      $("ssDrivePending").textContent = `The restored Drive backup holds ${n} profile${n === 1 ? "" : "s"} sealed with another passphrase. Enter it to add them next to the ones here.`;
     }
   }
+  $("ssDriveOnForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if ($("ssDrivePass1").value !== $("ssDrivePass2").value) return sayDrive("The passphrases don't match.", true);
+    sayDrive("Turning it on…");
+    try {
+      await drive(await call("drive-on", { passphrase: $("ssDrivePass1").value }));
+      e.target.reset();
+      sayDrive("Profiles go into the next Drive backups, sealed. Keep the passphrase somewhere safe: without it they can't be restored elsewhere.");
+    } catch (err) {
+      sayDrive(err.message, true);
+    }
+  });
+  $("ssDriveOff").addEventListener("click", async () => {
+    try {
+      await drive(await call("drive-off"));
+      sayDrive("Profiles are left out of the next Drive backups.");
+    } catch (err) {
+      sayDrive(err.message, true);
+    }
+  });
+  $("ssDriveOpenForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    sayDrive("Opening the profiles…");
+    try {
+      const result = await call("drive-open", { passphrase: $("ssDrivePass").value });
+      e.target.reset();
+      await drive();
+      sayDrive(added(result));
+    } catch (err) {
+      sayDrive(err.message, true);
+    }
+  });
+  drive();
+  chrome.storage.onChanged.addListener((c, area) => area === "local" && (c.ssDriveKey || c.ssDrivePending) && drive());
+
+  // ---- Backup file (sealed and opened by bg-sessions.js) ----
 
   $("ssExport").addEventListener("submit", async (e) => {
     e.preventDefault();
     if ($("ssPass1").value !== $("ssPass2").value) return say("The passphrases don't match.", true);
     say("Encrypting…");
     try {
-      const { file, count } = await seal($("ssPass1").value);
+      const { file, count } = await call("file-seal", { passphrase: $("ssPass1").value });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(new Blob([JSON.stringify(file)], { type: "application/json" }));
       link.download = `session-switch-backup-${new Date().toISOString().slice(0, 10)}.json`;
@@ -103,10 +161,9 @@
     e.preventDefault();
     say("Opening the backup…");
     try {
-      const payload = await open($("ssFile").files[0], $("ssPass").value);
-      const result = await call("import", { payload });
+      const result = await call("file-open", { text: await $("ssFile").files[0].text(), passphrase: $("ssPass").value });
       e.target.reset();
-      say(`Added ${result.added} profile${result.added === 1 ? "" : "s"}.${result.skipped ? ` ${result.skipped} were already here.` : ""}`);
+      say(added(result));
     } catch (err) {
       say(err.message, true);
     }

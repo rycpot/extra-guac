@@ -444,3 +444,13 @@ dialog.ask .ask-opt + .ask-btns { margin-top: 12px; }
 .px-radio label { display: flex; gap: 8px; align-items: baseline; cursor: pointer; }
 .px-radio small { color: var(--muted); }
 .px-mode { margin-bottom: 12px; }
+
+/* Proxy list: a site whose session switch profiles use a proxy (changed in the popup) */
+.px-session .px-lock { color: var(--muted); font-size: 11px; white-space: nowrap; padding: 0 4px; }
+
+/* Session switch: each site with profiles, its linked sites and IndexedDB */
+.ss-site { padding: 10px 0 6px; border-top: 1px solid var(--line); }
+.ss-site:first-child { border-top: 0; }
+.ss-site h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+.ss-site h3 .hint { font-weight: 400; }
+.ss-site .rm-pills.wrap:empty::after { content: "no linked sites"; }

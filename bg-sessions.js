@@ -606,6 +606,10 @@ chrome.cookies.onChanged.addListener(({ cookie, removed, cause }) => {
   const outside = removed && cause === "explicit" && !isOwnRemoval(cookie.name);
   getGroups().then(() => {
     const group = groupFor(bare(cookie.domain));
+    if (group && !group.activeId && !group.paused && !group.switching) {
+      if (!removed && score(cookie) >= 4) recognizeSoon(group.id);
+      return;
+    }
     if (!group?.activeId) return;
     if (outside && !((siteCleared.get(group.id) || 0) > Date.now())) outsideRemovals.set(group.id, (outsideRemovals.get(group.id) || 0) + 1);
     clearTimeout(timers.get(group.id));
@@ -653,6 +657,43 @@ async function pause(group, profile, card = true) {
   if (card) await showCard(group);
 }
 
+// A login in the browser that a saved profile already holds (the same value of that profile's
+// login cookie: after restoring a backup, say, or logging in again with the same session) makes
+// that profile the active one, with the browser's copy of the login, which is the newer one.
+async function recognize(groupId) {
+  const group = groupById(groupId);
+  if (!group || group.activeId || group.paused || group.switching) return false;
+  const cookies = await readCookies(group.domains);
+  // Only a login cookie found with confidence (or picked), with a value long enough to be a
+  // session of its own (not "yes" or "1"), and only when exactly one profile has it.
+  const matches = (await getProfiles(group.order)).filter((profile) => {
+    const { name, how } = loginOf(profile.cookies, group, profile.login);
+    if (!name || how === "guess") return false;
+    const saved = profile.cookies.filter((c) => c.name === name && c.value.length >= 16).map((c) => c.value);
+    return saved.length && cookies.some((c) => c.name === name && saved.includes(c.value));
+  });
+  for (const profile of matches.length === 1 ? matches : []) {
+    group.activeId = profile.id;
+    group.pending = [];
+    profile.cookies = cookies;
+    profile.syncedAt = Date.now();
+    remember(profile, group);
+    await putProfile(profile);
+    await saveGroups();
+    await applyProxy();
+    await groupsChanged();
+    return true;
+  }
+  return false;
+}
+const recognizeSoon = (groupId) => {
+  clearTimeout(timers.get(groupId));
+  timers.set(groupId, setTimeout(() => {
+    timers.delete(groupId);
+    serial(() => recognize(groupId));
+  }, 1000));
+};
+
 async function syncCookies(groupId, adopting = false) {
   const group = groupById(groupId);
   const profile = group?.switching ? null : await getProfile(group?.activeId);
@@ -681,9 +722,10 @@ const POPUP = {
   details: (m) => details(m.profileId),
   "login-cookie": (m) => setGroup(m.groupId, (group) => (group.loginCookie = m.name || null)),
   idb: (m) => setGroup(m.groupId, (group) => (group.idb = !!m.on)),
+  sites: () => sitesInfo(),
+  "drive-info": () => driveInfo(),
   link: (m) => link(m.groupId, m.domain),
   unlink: (m) => unlink(m.groupId, m.domain),
-  import: (m) => importBackup(m.payload),
   "proxy-profile": (m) => setProfileProxy(m.profileId, m.proxy),
   adopt: (m) => adopt(m.tabId),
 };
@@ -691,6 +733,13 @@ const POPUP = {
 // Settings-page requests that don't wait in the queue with switches and saves.
 const UNQUEUED = {
   "proxy-info": () => proxyInfo(),
+  // Deriving the key takes a moment; it doesn't hold up switches.
+  "drive-on": (m) => driveOn(m.passphrase),
+  "drive-off": () => chrome.storage.local.remove(["ssDriveKey", "ssDriveCache"]).then(driveInfo),
+  "drive-open": (m) => driveOpen(null, m.passphrase, false),
+  // The encrypted backup file (settings): made and opened here, with the same sealing.
+  "file-seal": (m) => sealFile(m.passphrase),
+  "file-open": (m) => openFile(m.text, m.passphrase),
   webrtc: (m) => chrome.storage.local.set({ ssWebrtc: !!m.on }).then(applyProxy).then(proxyInfo),
 };
 
@@ -749,6 +798,7 @@ async function describe(tabId) {
     return { supported: false, reason: e.message };
   }
   const { host, group, domains } = place;
+  if (group) await recognize(group.id);
   const jar = await readCookies(domains);
   const profiles = group ? await getProfiles(group.order) : [];
   const proxies = await proxyStatuses(profiles);
@@ -809,6 +859,7 @@ async function addProfile(tabId, name, discard, proxy) {
   const { tab, group: found, domains } = await locate(tabId);
   await pauseIfChangedOutside(found);
   if (!discard && await unsaved(found, domains)) return { confirm: true };
+  if (proxy) await assertProxyRoom(domains[0]);
   const group = found || makeGroup(domains[0]);
   const profile = makeProfile(group, cleanName(name, group));
   if (proxy) profile.proxy = { country: /^[A-Z]{2}$/.test(proxy.country) ? proxy.country : "" };
@@ -971,7 +1022,7 @@ async function rename(profileId, name) {
   if (!profile) return { ok: false };
   profile.name = cleanName(name, groupById(profile.groupId));
   await putProfile(profile);
-  await allBadges();
+  await saveProxySites();
   notify();
   return { ok: true };
 }
@@ -982,7 +1033,6 @@ async function setHue(profileId, hue) {
   if (!Number.isFinite(Number(hue))) return { ok: false };
   profile.hue = Math.round(Number(hue)) % 360;
   await putProfile(profile);
-  await allBadges();
   notify();
   return { ok: true };
 }
@@ -1059,6 +1109,17 @@ async function details(profileId) {
   };
 }
 
+// Every site with profiles, for Settings → session switch: its domains (the first is the site,
+// the rest are linked), whether IndexedDB is part of its profiles, and its profiles' names.
+async function sitesInfo() {
+  const sites = [];
+  for (const group of allGroups()) {
+    const profiles = await getProfiles(group.order);
+    sites.push({ id: group.id, domains: group.domains, idb: !!group.idb, profiles: profiles.map((p) => p.name) });
+  }
+  return { sites: sites.sort((a, b) => a.domains[0].localeCompare(b.domains[0])) };
+}
+
 async function setGroup(groupId, change) {
   const group = groupById(groupId);
   if (!group) return { ok: false };
@@ -1114,7 +1175,8 @@ async function unlink(groupId, domain) {
 // Adds the profiles of an opened backup. Each joins the site it belongs to here (or a new one),
 // inactive; a profile that is already here is left alone.
 async function importBackup(payload) {
-  let added = 0, skipped = 0;
+  let added = 0, skipped = 0, noRoom = 0;
+  const proxied = new Set(); // sites given a proxy by this import, not yet in ssProxySites
   const text = (value, fallback) => (typeof value === "string" ? value : fallback);
   for (const saved of Object.values(payload?.groups || {})) {
     // Only domains the browser accepts as a site: never a public suffix like com.
@@ -1143,12 +1205,20 @@ async function importBackup(payload) {
       for (const [origin, d] of Object.entries(payload.data?.[id] || {})) {
         if (inScope(hostOf(origin), group.domains) && d && typeof d === "object") data[origin] = d;
       }
+      let proxy = source.proxy && typeof source.proxy === "object" ? { country: /^[A-Z]{2}$/.test(source.proxy.country) ? source.proxy.country : "" } : null;
+      // A proxy takes one of the plan's sites: kept only while there's room for it.
+      if (proxy && !proxied.has(group.domains[0])) {
+        if (await proxyRoom(group.domains[0], proxied.size)) proxied.add(group.domains[0]);
+        else {
+          proxy = null;
+          noRoom++;
+        }
+      }
       group.order.push(id);
       await putProfile({
         id, groupId: group.id, name: text(source.name, "Profile").slice(0, 40), hue: Number(source.hue) % 360 || 210,
         createdAt: Number(source.createdAt) || Date.now(), lastUsed: Number(source.lastUsed) || Date.now(),
-        syncedAt: Number(source.syncedAt) || Date.now(), cookies, login: text(source.login, null),
-        proxy: source.proxy && typeof source.proxy === "object" ? { country: /^[A-Z]{2}$/.test(source.proxy.country) ? source.proxy.country : "" } : null,
+        syncedAt: Number(source.syncedAt) || Date.now(), cookies, login: text(source.login, null), proxy,
       });
       await putData(id, data);
       added++;
@@ -1156,9 +1226,168 @@ async function importBackup(payload) {
     if (!group.order.length) dropGroup(group.id);
   }
   await saveGroups();
+  for (const group of allGroups()) await recognize(group.id);
   await groupsChanged();
-  return { ok: true, added, skipped };
+  return { ok: true, added, skipped, noRoom };
 }
+
+// ---- Drive backups ----
+// Off unless turned on in Settings → session switch, with a passphrase. Then every profile, without
+// its IndexedDB copies, goes into Extra Guac's Drive snapshots (bg-backup.js), sealed with a key
+// derived from the passphrase (PBKDF2, AES-GCM): Drive only gets ciphertext. The key stays in this
+// browser (ssDriveKey: { salt, iterations, key }) so scheduled backups can seal without asking; the
+// passphrase itself isn't kept. The same sealed copy is used again while the profiles haven't
+// changed (ssDriveCache), so an unchanged snapshot stays unchanged. Restoring a snapshot adds its
+// profiles next to the ones here: right away when this browser has the key, else it waits in
+// ssDrivePending until the passphrase is given in settings.
+
+const DRIVE_ITERATIONS = 600000;
+const b64 = (bytes) => {
+  let text = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(text);
+};
+const unb64 = (text) => Uint8Array.from(atob(text), (ch) => ch.charCodeAt(0));
+
+async function deriveKey(passphrase, salt, iterations) {
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt, iterations }, base, { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
+}
+
+async function driveInfo() {
+  const { ssDriveKey, ssDrivePending } = await chrome.storage.local.get(["ssDriveKey", "ssDrivePending"]);
+  return { on: !!ssDriveKey, pending: ssDrivePending ? { profiles: ssDrivePending.profiles || 0, at: ssDrivePending.at || 0 } : null };
+}
+
+async function driveOn(passphrase) {
+  if (typeof passphrase !== "string" || passphrase.length < 10) throw new Error("Use a passphrase of at least 10 characters.");
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await deriveKey(passphrase, salt, DRIVE_ITERATIONS);
+  const raw = new Uint8Array(await crypto.subtle.exportKey("raw", key));
+  await chrome.storage.local.set({ ssDriveKey: { salt: b64(salt), iterations: DRIVE_ITERATIONS, key: b64(raw) } });
+  await chrome.storage.local.remove("ssDriveCache");
+  return driveInfo();
+}
+
+// The profiles, sealed for a snapshot, or null when it's off.
+async function driveSeal() {
+  const { ssDriveKey, ssDriveCache } = await chrome.storage.local.get(["ssDriveKey", "ssDriveCache"]);
+  if (!ssDriveKey) return null;
+  await getGroups();
+  const payload = { groups: {}, profiles: {}, data: {} };
+  for (const group of allGroups()) {
+    payload.groups[group.id] = { domains: group.domains, order: group.order, loginCookie: group.loginCookie, idb: group.idb };
+    for (const profile of await getProfiles(group.order)) {
+      payload.profiles[profile.id] = profile;
+      const data = {};
+      for (const [origin, d] of Object.entries(await getData(profile.id))) data[origin] = { local: d.local, session: d.session, savedAt: d.savedAt };
+      payload.data[profile.id] = data;
+    }
+  }
+  const text = JSON.stringify(payload);
+  // When profiles were last saved or used doesn't make a snapshot new (they change all the time).
+  const lasting = JSON.stringify(payload, (k, v) => (["syncedAt", "lastUsed", "savedAt"].includes(k) ? undefined : v));
+  const hash = b64(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ssDriveKey.salt + lasting))));
+  if (ssDriveCache?.hash === hash) return ssDriveCache.sealed;
+  const key = await crypto.subtle.importKey("raw", unb64(ssDriveKey.key), "AES-GCM", false, ["encrypt"]);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(text)));
+  const sealed = {
+    format: "session-switch-drive", version: 1, profiles: Object.keys(payload.profiles).length, at: Date.now(),
+    kdf: { name: "PBKDF2", hash: "SHA-256", iterations: ssDriveKey.iterations, salt: ssDriveKey.salt },
+    cipher: { name: "AES-GCM", iv: b64(iv) }, data: b64(data),
+  };
+  await chrome.storage.local.set({ ssDriveCache: { hash, sealed } });
+  // As stored (storage orders its keys its own way), so the next unchanged snapshot reads the same.
+  return (await chrome.storage.local.get("ssDriveCache")).ssDriveCache.sealed;
+}
+
+// Opens sealed profiles (from a restored snapshot, or the one waiting) and adds them. With no
+// passphrase, only this browser's own key is tried, and the profiles wait if it doesn't fit.
+// queued: called from the message queue already (adding them mustn't queue behind itself).
+async function driveOpen(sealed, passphrase, queued = true) {
+  const { ssDrivePending } = await chrome.storage.local.get("ssDrivePending");
+  const fromPending = !sealed;
+  sealed ||= ssDrivePending;
+  if (sealed?.format !== "session-switch-drive" || sealed.version !== 1) throw new Error("There are no profiles waiting to be restored.");
+  const iterations = Number(sealed.kdf?.iterations);
+  if (!(iterations >= 100000 && iterations <= 5000000)) throw new Error("This backup uses settings that are not supported.");
+  let key = null;
+  if (passphrase) key = await deriveKey(passphrase, unb64(sealed.kdf.salt), iterations);
+  else {
+    const { ssDriveKey } = await chrome.storage.local.get("ssDriveKey");
+    if (ssDriveKey?.salt === sealed.kdf.salt) key = await crypto.subtle.importKey("raw", unb64(ssDriveKey.key), "AES-GCM", false, ["decrypt"]);
+  }
+  let payload = null;
+  if (key) {
+    try {
+      const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(sealed.cipher.iv) }, key, unb64(sealed.data));
+      payload = JSON.parse(new TextDecoder().decode(plain));
+    } catch {
+      if (passphrase) throw new Error("The passphrase is wrong, or the backup is damaged.");
+    }
+  }
+  if (!payload) {
+    await chrome.storage.local.set({ ssDrivePending: sealed });
+    notify();
+    return { ok: true, pending: true };
+  }
+  const result = queued ? await importBackup(payload) : await serial(() => getGroups().then(() => importBackup(payload)));
+  if (fromPending || ssDrivePending?.data === sealed.data) await chrome.storage.local.remove("ssDrivePending");
+  return result;
+}
+
+// ---- The encrypted backup file (Settings → session switch) ----
+// { format: "session-switch-backup", version 1, kdf, cipher, data }: every profile, IndexedDB copies
+// included, sealed with the passphrase given (not kept). Opening one adds its missing profiles.
+
+async function sealFile(passphrase) {
+  if (typeof passphrase !== "string" || passphrase.length < 10) throw new Error("Use a passphrase of at least 10 characters.");
+  await getGroups();
+  const payload = { groups: {}, profiles: {}, data: {} };
+  for (const group of allGroups()) {
+    payload.groups[group.id] = group;
+    for (const profile of await getProfiles(group.order)) {
+      payload.profiles[profile.id] = profile;
+      payload.data[profile.id] = await getData(profile.id);
+    }
+  }
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(passphrase, salt, DRIVE_ITERATIONS);
+  const data = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(JSON.stringify(payload))));
+  return {
+    file: {
+      format: "session-switch-backup", version: 1, created: new Date().toISOString(),
+      kdf: { name: "PBKDF2", hash: "SHA-256", iterations: DRIVE_ITERATIONS, salt: b64(salt) },
+      cipher: { name: "AES-GCM", iv: b64(iv) }, data: b64(data),
+    },
+    count: Object.keys(payload.profiles).length,
+  };
+}
+
+async function openFile(text, passphrase) {
+  let box;
+  try {
+    box = JSON.parse(text);
+  } catch {
+    box = null;
+  }
+  if (box?.format !== "session-switch-backup" || box.version !== 1) throw new Error("This file isn't a Session Switch backup.");
+  const iterations = Number(box.kdf?.iterations);
+  if (!(iterations >= 100000 && iterations <= 5000000)) throw new Error("This backup uses settings that are not supported.");
+  const key = await deriveKey(String(passphrase || ""), unb64(box.kdf.salt), iterations);
+  let payload;
+  try {
+    payload = JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(box.cipher.iv) }, key, unb64(box.data))));
+  } catch {
+    throw new Error("The passphrase is wrong, or the file is damaged.");
+  }
+  return serial(() => getGroups().then(() => importBackup(payload)));
+}
+
+globalThis.sessionDriveSeal = driveSeal;
+globalThis.sessionDriveRestore = (sealed) => driveOpen(sealed, null, false);
 
 // ---- Proxy ----
 // A profile's proxy uses Extra Guac's Webshare account (getProxy in bg-proxy.js): its key, its
@@ -1205,6 +1434,39 @@ globalThis.sessionBlock = block;
 globalThis.sessionGuard = async (domains) => registerScript(
   { id: "ss-webrtc-guard", js: ["ss-webrtc-guard.js"], world: "MAIN", matchOriginAsFallback: true }, await webrtcOff() ? domains : []);
 
+// The sites whose profiles use a proxy, kept in storage.local "ssProxySites" for the proxy
+// settings and the popup's proxy section, where they're listed and count toward the plan's sites:
+// [{ site, domains, profiles: [{ name, country, inUse }] }], one per site with profiles; inUse
+// marks the profile whose login (and route) the site has now.
+async function saveProxySites() {
+  await getGroups();
+  const list = [];
+  for (const group of allGroups()) {
+    const inUse = group.activeId || group.paused;
+    const profiles = (await getProfiles(group.order)).filter((p) => p.proxy).map((p) => ({ name: p.name, country: p.proxy.country || "", inUse: p.id === inUse }));
+    if (profiles.length) list.push({ site: group.domains[0], domains: group.domains, profiles });
+  }
+  const { ssProxySites = [] } = await chrome.storage.local.get("ssProxySites");
+  if (JSON.stringify(list) !== JSON.stringify(ssProxySites)) await chrome.storage.local.set({ ssProxySites: list });
+}
+
+// A profile's proxy takes one of the plan's sites (the free plan has 20), shared with the proxy's
+// own list; a site whose profiles already use one doesn't take another.
+// (On a paid plan sending every site through the proxy, the list is of skipped sites, and profiles
+// take none of it.) extra: sites about to be added that ssProxySites doesn't have yet.
+async function proxyRoom(site, extra = 0) {
+  const [{ cfg, st }, { ssProxySites = [] }] = await Promise.all([getProxy(), chrome.storage.local.get("ssProxySites")]);
+  const free = st.plan?.free !== false;
+  if (ssProxySites.some((s) => s.site === site) || (!free && cfg.mode === "full")) return true;
+  return cfg.sites.length + ssProxySites.length + extra < TT.PROXY_LIMITS[free ? "free" : "paid"];
+}
+async function assertProxyRoom(site) {
+  if (await proxyRoom(site)) return;
+  const { st } = await getProxy();
+  const free = st.plan?.free !== false;
+  throw new Error(`All ${TT.PROXY_LIMITS[free ? "free" : "paid"]} proxy sites of the ${free ? "free plan" : "plan"} are in use. Remove one in the proxy settings to give this site a proxy.`);
+}
+
 // How each profile's proxy stands: null for none, else { ok, country, reason }.
 async function proxyStatuses(profiles) {
   const { cfg, st } = await getProxy();
@@ -1245,8 +1507,10 @@ chrome.proxy.settings.onChange.addListener((details) => {
 async function setProfileProxy(profileId, proxy) {
   const profile = await getProfile(profileId);
   if (!profile) return { ok: false };
+  if (proxy) await assertProxyRoom(groupById(profile.groupId)?.domains[0]);
   profile.proxy = proxy ? { country: /^[A-Z]{2}$/.test(proxy.country) ? proxy.country : "" } : null;
   await putProfile(profile);
+  await saveProxySites();
   await applyProxy();
   // The site's open pages load again, so the new route applies to all of their connections.
   const group = groupById(profile.groupId);
@@ -1301,52 +1565,6 @@ async function pageStorage(m, sender) {
   data[origin] = { ...data[origin], local: m.local, savedAt: Date.now() };
   await putData(group.activeId, data);
 }
-
-// ---- Toolbar badge ----
-
-function color(hue) {
-  const s = 0.6, l = 0.42;
-  const f = (n) => {
-    const k = (n + hue / 30) % 12;
-    return Math.round(255 * (l - s * Math.min(l, 1 - l) * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
-  };
-  return [f(0), f(8), f(4), 255];
-}
-
-function initials(name) {
-  const words = name.split(/\s+/).filter(Boolean);
-  const text = words.length > 1 ? Array.from(words[0])[0] + Array.from(words[1])[0] : Array.from(name).slice(0, 2).join("");
-  return text.toUpperCase();
-}
-
-// Shows the active profile's initials, in its color, on the site's tabs.
-async function badge(tabId, url) {
-  await getGroups();
-  const host = hostOf(url || "");
-  const group = host ? groupFor(host) : null;
-  await paint(tabId, await getProfile(group?.activeId));
-}
-
-async function paint(tabId, profile) {
-  await chrome.action.setBadgeText({ tabId, text: profile ? initials(profile.name) : "" }).catch(() => {});
-  if (!profile) return;
-  await chrome.action.setBadgeBackgroundColor({ tabId, color: color(profile.hue) }).catch(() => {});
-  await chrome.action.setBadgeTextColor?.({ tabId, color: "#ffffff" })?.catch(() => {});
-}
-
-async function allBadges() {
-  await getGroups();
-  const active = new Map((await getProfiles(allGroups().map((g) => g.activeId).filter(Boolean))).map((p) => [p.groupId, p]));
-  const tabs = await chrome.tabs.query({});
-  await Promise.all(tabs.map((tab) => {
-    const host = hostOf(tab.url || "");
-    return paint(tab.id, (host && active.get(groupFor(host)?.id)) || null);
-  }));
-}
-
-chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
-  if (change.url || change.status === "loading") badge(tabId, tab.url);
-});
 
 // ---- The card in the page ----
 // When a login is found changed from outside, the question the popup asks (save it as a new
@@ -1404,10 +1622,10 @@ async function cardChoice(choice, tabId) {
   throw new Error("Unknown choice.");
 }
 
-// After groups or profiles change: the page script follows the sites, badges and popup redraw.
+// After groups or profiles change: the page script follows the sites, cards and popup redraw.
 async function groupsChanged() {
   await registerPageScript(allGroups().flatMap((g) => g.domains)).catch((e) => console.warn("Page script:", e));
-  await allBadges();
+  await saveProxySites();
   await closeSettledCards();
   notify();
 }
@@ -1435,6 +1653,7 @@ serial(async () => {
 
 async function start() {
   await getGroups();
+  await saveProxySites();
   applyProxy();
   await registerPageScript(allGroups().flatMap((g) => g.domains)).catch((e) => console.warn("Page script:", e));
   // Catch up on cookie changes made while the extension wasn't running.
@@ -1445,6 +1664,6 @@ async function start() {
 // may be out of date after it was stopped.
 applyProxy();
 
-chrome.runtime.onInstalled.addListener(() => start().then(allBadges));
-chrome.runtime.onStartup.addListener(() => start().then(allBadges));
+chrome.runtime.onInstalled.addListener(() => start());
+chrome.runtime.onStartup.addListener(() => start());
 })();

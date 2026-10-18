@@ -1167,9 +1167,12 @@ function initProxy(isWeb) {
   const day = (t) => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
   const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
   let cfg = TT.proxyOf(), st = {}, making = false; // making: the "remove one to add this site" list is open
+  let ss = []; // sites whose session switch profiles use a proxy: they take some of the plan's sites
   const free = () => st.plan?.free !== false;
-  const max = () => TT.PROXY_LIMITS[free() ? "free" : "paid"];
   const full = () => !free() && cfg.mode === "full";
+  const total = () => TT.PROXY_LIMITS[free() ? "free" : "paid"];
+  const taken = () => (full() ? 0 : ss.length);
+  const max = () => Math.max(0, total() - taken()); // what's left for the proxy's own list
   async function save(fn) {
     const { proxy } = await chrome.storage.local.get("proxy");
     const next = TT.proxyOf(proxy);
@@ -1220,6 +1223,9 @@ function initProxy(isWeb) {
           });
         }));
     }
+    // A site whose session switch profiles use a proxy goes the way the active profile says.
+    const viaProfiles = ss.find((e) => e.profiles.some((p) => p.inUse) && e.domains.some((d) => TT.proxyCovers(host, d)));
+    if (viaProfiles) return subRow(el("span", { className: "px-site" }, el("span", { textContent: viaProfiles.site }), el("small", { textContent: "proxy set by its session switch profiles" })));
     const entry = cfg.sites.find((s) => TT.proxyCovers(host, s.site));
     if (!entry) {
       const add = el("button", { className: "text-btn", innerHTML: '<svg><use href="#i-plus"/></svg>add this site' });
@@ -1265,7 +1271,7 @@ function initProxy(isWeb) {
     }
     const cancel = el("button", { className: "px-cancel", textContent: "not now" });
     cancel.onclick = () => { making = false; render(); };
-    return el("div", { className: "px-full" }, el("p", {}, "All ", el("b", { textContent: String(max()) }), " sites are used. Remove one to add ", el("b", { textContent: host }), ":"), pills, cancel);
+    return el("div", { className: "px-full" }, el("p", {}, "All ", el("b", { textContent: String(total()) }), ` sites are used${taken() ? ` (${taken()} by session switch profiles)` : ""}. Remove one to add `, el("b", { textContent: host }), ":"), pills, cancel);
   }
 
   function render() {
@@ -1274,15 +1280,16 @@ function initProxy(isWeb) {
     setSwitch($("pxToggle"), cfg.on);
     $("pxMode").hidden = !keyed || free();
     for (const b of $("pxMode").querySelectorAll("button")) b.setAttribute("aria-checked", String(b.dataset.mode === cfg.mode));
-    $("pxStatus").textContent = !keyed ? "set up" : free() ? `${cfg.sites.length} / ${max()}` : "";
+    $("pxStatus").textContent = !keyed ? "set up" : free() ? `${cfg.sites.length + taken()} / ${total()}` : "";
     const more = keyed ? [usage(), cfg.sites.length >= max() && making && host && !full() ? makeRoom() : thisSite()].filter(Boolean) : [];
     $("pxMore").replaceChildren(...more);
   }
 
   async function load() {
-    const got = await chrome.storage.local.get(["proxy", "proxyState"]);
+    const got = await chrome.storage.local.get(["proxy", "proxyState", "ssProxySites"]);
     if (live.aborted) return;
     cfg = TT.proxyOf(got.proxy);
+    ss = Array.isArray(got.ssProxySites) ? got.ssProxySites : [];
     st = got.proxyState || {};
     if (cfg.sites.some((s) => TT.proxyCovers(host, s.site))) making = false;
     render();
@@ -1290,7 +1297,7 @@ function initProxy(isWeb) {
   load().then(() => {
     if (cfg.key && Date.now() - (st.usedAt || 0) > 120e3) send("proxyRefresh").catch(() => {});
   });
-  onStorage((c, area) => area === "local" && (c.proxy || c.proxyState) && load());
+  onStorage((c, area) => area === "local" && (c.proxy || c.proxyState || c.ssProxySites) && load());
   $("pxToggle").onclick = () => save((p) => (p.on = $("pxToggle").getAttribute("aria-checked") !== "true"));
   $("pxStatus").onclick = () => { if (!cfg.key) $("pxSettings").click(); };
   for (const b of $("pxMode").querySelectorAll("button")) b.onclick = () => save((p) => (p.mode = b.dataset.mode));

@@ -243,9 +243,15 @@ function trimBookmarks(node) {
   return out;
 }
 
-async function buildSnapshot(withBookmarks = true) {
+// With profiles, Session Switch's saved logins come along, sealed, when turned on (ssProfiles,
+// see bg-sessions.js): only in the snapshots uploaded to Drive.
+async function buildSnapshot(withBookmarks = true, { profiles = false } = {}) {
   const data = withoutWriters(await chrome.storage.local.get(BACKUP_KEYS));
   data.clips = await clipExport(); // clipboard history: one key per entry (bg-clip.js)
+  if (profiles) {
+    const sealed = await sessionDriveSeal().catch((err) => console.error("[backup] profiles", err));
+    if (sealed) data.ssProfiles = sealed;
+  }
   const snap = { app: "Extra Guac", format: 1, version: chrome.runtime.getManifest().version, createdAt: new Date().toISOString(), data };
   if (withBookmarks) snap.bookmarks = (await chrome.bookmarks.getTree())[0].children.map(trimBookmarks);
   return snap;
@@ -360,7 +366,7 @@ async function doBackup({ manual = false } = {}) {
   // scheduled runs leave Drive alone; "sync now" means "back this browser up".
   if (backupState.awaitingChoice && !manual) return { uploaded: false, awaitingChoice: true };
   try {
-    const snap = await buildSnapshot();
+    const snap = await buildSnapshot(true, { profiles: true });
     const hash = await sha256(JSON.stringify([snap.data, snap.bookmarks]));
     let snaps = await listSnapshots();
     let uploaded = false;
@@ -462,6 +468,9 @@ async function applyDataNow(data) {
     if (remove.length) await chrome.storage.local.remove(remove);
   });
   if (Array.isArray(data.clips)) await clipImport(data.clips); // older backups have none: keep what's there
+  // Saved logins sealed in the snapshot: added next to the ones here, now if this browser has
+  // their key, else once their passphrase is given in settings (bg-sessions.js).
+  if (data.ssProfiles) await sessionDriveRestore(data.ssProfiles).catch((err) => console.error("[backup] profiles", err));
   // Backups from 191 have a single QR icon ("qrIcon"): it becomes the first of yours.
   if (typeof data.qrIcon === "string" && data.qrIcons === undefined) await chrome.storage.local.set({ qrIcon: data.qrIcon });
 }
