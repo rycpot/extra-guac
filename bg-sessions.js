@@ -789,6 +789,17 @@ async function locate(tabId, parked = false) {
 // Whether cookies look like they hold a login (analytics and preference cookies don't).
 const holdsLogin = (cookies) => cookies.some((c) => score(c) >= 2);
 
+// Whether the cookies in the browser hold a login for the group's site. When its profiles show which
+// cookie holds the login (picked, or found with confidence), only that one counts: a logged-out
+// site keeps other cookies that look like a login, and those aren't a login to save.
+async function holdsSiteLogin(group, jar, profiles) {
+  if (!group) return holdsLogin(jar);
+  profiles ||= await getProfiles(group.order);
+  const names = group.loginCookie ? [group.loginCookie]
+    : unique(profiles.map((p) => loginOf(p.cookies, group, p.login)).filter((l) => l.name && l.how !== "guess").map((l) => l.name));
+  return names.length ? jar.some((c) => names.includes(c.name)) : holdsLogin(jar);
+}
+
 async function describe(tabId) {
   let place;
   try {
@@ -805,7 +816,7 @@ async function describe(tabId) {
     supported: true, host, domains, proxy: await proxyInfo(), ...((d) => ({ drive: d.on, drivePending: d.pending?.profiles || 0 }))(await driveInfo()),
     group: group && { id: group.id, loginCookie: group.loginCookie, activeId: group.activeId },
     paused: ((paused) => paused && { id: paused.id, name: paused.name })(group?.paused && profiles.find((p) => p.id === group.paused)),
-    unsaved: !group?.activeId && holdsLogin(jar),
+    unsaved: !group?.activeId && await holdsSiteLogin(group, jar, profiles),
     profiles: profiles.map((p, i) => {
       const active = p.id === group.activeId;
       return {
@@ -850,7 +861,7 @@ async function pauseIfChangedOutside(group) {
 
 // Whether the browser holds a login for the site that no profile has, which a switch would lose.
 async function unsaved(group, domains) {
-  return !group?.activeId && holdsLogin(await readCookies(domains));
+  return !group?.activeId && await holdsSiteLogin(group, await readCookies(domains));
 }
 
 // Starts a new, empty profile: the site is logged out, and whatever login comes next is saved in it.
