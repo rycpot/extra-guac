@@ -175,7 +175,8 @@ self.__sessionSwitchIdb ??= (() => {
   }
 
   // Deletes the origin's databases and puts the saved ones in their place. A database that can't be
-  // deleted is left as it is rather than filled with the other profile's records.
+  // deleted is left as it is rather than filled with the other profile's records; stuck names them.
+  // (Its deletion may still happen later, once it is closed: the request can't be taken back.)
   async function load(dbs) {
     const problems = [], stuck = new Set();
     for (const { name } of await indexedDB.databases()) {
@@ -184,7 +185,7 @@ self.__sessionSwitchIdb ??= (() => {
         await remove(name);
       } catch (e) {
         stuck.add(name);
-        problems.push(`app data "${name}" could not be cleared, so it was left as it was: ${e.message}`);
+        problems.push(`app data "${name}" could not be cleared, so this profile's copy of it wasn't put in: ${e.message}`);
       }
     }
     for (const snap of dbs) {
@@ -213,7 +214,7 @@ self.__sessionSwitchIdb ??= (() => {
         db?.close();
       }
     }
-    return { problems };
+    return { problems, stuck: [...stuck] };
   }
 
   return { dump, load };

@@ -10,7 +10,8 @@
 // Kept in storage.local:
 //   ssGroups        { [id]: Group }   one per site: its registrable domain plus any linked sites
 //   ssProfile:<id>  Profile           a saved login: its cookies and a few details
-//   ssData:<id>     { [origin]: { local, session, idb, savedAt } }   the profile's page storage
+//   ssData:<id>     { [origin]: { local, session, savedAt } }   the profile's page storage
+//   ssIdb:<id>      { [origin]: databases }   its app data (IndexedDB), for sites that need it
 // Messages are "ss:<name>": the popup's and settings' from extension pages, the pages' own
 // (ss-page.js) from tabs. A profile's proxy uses Extra Guac's Webshare account (bg-proxy.js).
 // Everything here stays inside this function, apart from what bg-proxy.js calls (see Proxy).
@@ -298,13 +299,14 @@ function remember(profile, group) {
 
 // ---- Saved sites and profiles (see the keys at the top) ----
 //
-// Group: { id, domains, activeId, order, loginCookie, epoch, pending, origins }
+// Group: { id, domains, activeId, order, loginCookie, epoch, pending, origins, foreignIdb }
 //   activeId     the profile whose login is in the browser now; it is kept up to date
 //   order        profile ids, in the order shown
 //   loginCookie  the cookie the user picked for the expiry date, or null to pick automatically
 //   epoch        goes up on every switch, so pages loaded before it can be told apart
 //   pending      origins whose storage still has to be written the next time one of their pages opens
 //   origins      every origin of the site a page has been seen on
+//   foreignIdb   app data in the browser that isn't the active profile's (see keepOwnIdb)
 // Profile: { id, groupId, name, hue, createdAt, lastUsed, syncedAt, cookies, login }
 
 
@@ -354,13 +356,36 @@ async function getProfiles(ids) {
 
 const putProfile = (profile) => chrome.storage.local.set({ [P(profile.id)]: profile });
 
+const I = (id) => "ssIdb:" + id;
+
+// A profile's page storage, by origin, with each origin's app data (idb) when it has any. The app
+// data is kept apart (ssIdb:<id>, { [origin]: databases }), so that saving a page's localStorage,
+// which happens every time one of its pages is hidden, doesn't read and write it too. Before 264
+// it was inside ssData; read from there until the profile is next saved.
 async function getData(id) {
+  const found = await chrome.storage.local.get([D(id), I(id)]);
+  const data = found[D(id)] || {};
+  for (const [origin, idb] of Object.entries(found[I(id)] || {})) data[origin] = { ...data[origin], idb };
+  return data;
+}
+
+function putData(id, data) {
+  const pages = {}, idb = {};
+  for (const [origin, { idb: dbs, ...rest }] of Object.entries(data)) {
+    pages[origin] = rest;
+    if (dbs) idb[origin] = dbs;
+  }
+  return chrome.storage.local.set({ [D(id)]: pages, [I(id)]: idb });
+}
+
+// Only the page storage, without the app data.
+async function getPages(id) {
   return (await chrome.storage.local.get(D(id)))[D(id)] || {};
 }
 
-const putData = (id, data) => chrome.storage.local.set({ [D(id)]: data });
+const putPages = (id, pages) => chrome.storage.local.set({ [D(id)]: pages });
 
-const removeProfile = (id) => chrome.storage.local.remove([P(id), D(id)]);
+const removeProfile = (id) => chrome.storage.local.remove([P(id), D(id), I(id)]);
 
 // Hues spread around the color wheel, so neighboring profiles look different.
 const HUES = [210, 25, 140, 280, 350, 180, 55, 245];
@@ -435,7 +460,8 @@ async function idbCall(tabId, op, arg) {
 // The storage of every first-party frame in these tabs, by origin. The main tab is read first, so
 // its sessionStorage is the one kept when several tabs share an origin. With idb, each origin's
 // IndexedDB is read too, from a tab where the origin is the top page; incomplete lists the origins
-// where some database couldn't be read.
+// where some database couldn't be read. Those get no idb at all: a partial list would take the
+// place of the whole saved one.
 async function readStorage(tabs, domains, mainTabId, idb) {
   const found = {}, problems = [], idbTabs = new Map(), incomplete = new Set();
   const ordered = [...tabs].sort((a, b) => (b.id === mainTabId) - (a.id === mainTabId));
@@ -451,8 +477,8 @@ async function readStorage(tabs, domains, mainTabId, idb) {
   for (const [origin, tabId] of idbTabs) {
     try {
       const { dbs, problems: skipped } = await idbCall(tabId, "dump", 25e6);
-      if (dbs) found[origin].idb = dbs;
-      if (!dbs || skipped?.length) incomplete.add(origin);
+      if (dbs && !skipped?.length) found[origin].idb = dbs;
+      else incomplete.add(origin);
       problems.push(...(skipped || []).map((p) => `${origin}: ${p}`));
     } catch (e) {
       incomplete.add(origin);
@@ -466,6 +492,31 @@ async function readStorage(tabs, domains, mainTabId, idb) {
 function mergeStorage(saved, found) {
   for (const [origin, data] of Object.entries(found)) saved[origin] = { ...saved[origin], ...data };
   return saved;
+}
+
+// App data in the browser that isn't the active profile's own, by origin (group.foreignIdb):
+//   { owner, names }  owner: the profile it came from (null: no profile's); names: the databases
+//   that are the owner's, or null for all of them.
+// A switch leaves an origin's app data in place when the outgoing profile's copy couldn't be read
+// in full (it would be lost otherwise), and a database it can't delete stays too. The profile that
+// runs on it never saves it as its own: its own saved copy of those databases is kept. All of an
+// origin's databases left in place go back to their owner as they are, its newest copy.
+const ownerLive = (group, entry) => !!entry?.owner && group.order.includes(entry.owner);
+
+// Takes out of freshly read app data what isn't this profile's (see above), keeping its saved
+// copy of it. keepIdb gets the origins whose app data must stay in place.
+function keepOwnIdb(group, profileId, found, saved, keepIdb) {
+  for (const [origin, entry] of Object.entries(group.foreignIdb || {})) {
+    if (entry.owner === profileId || !found[origin]) continue;
+    if (!entry.names) {
+      if (!ownerLive(group, entry)) continue;
+      delete found[origin].idb;
+      keepIdb.add(origin);
+    } else if (found[origin].idb) {
+      const own = (saved[origin]?.idb || []).filter((db) => entry.names.includes(db.name));
+      found[origin].idb = [...found[origin].idb.filter((db) => !entry.names.includes(db.name)), ...own];
+    }
+  }
 }
 
 // A parked tab is on about:blank#<MARK><address to go back to>. The blank page keeps the origin of
@@ -547,20 +598,23 @@ function fillStorage(local, session) {
 }
 
 // Writes a profile's storage into a parked tab. idb is the list of databases to put in place of
-// the origin's current ones, or null to leave IndexedDB alone. Returns any problems.
+// the origin's current ones, or null to leave IndexedDB alone. Returns any problems, and the names
+// of databases that couldn't be deleted (left as they were).
 async function writeParked(tabId, local, session, idb) {
-  const problems = [];
+  const problems = [], stuck = [];
   const [frame] = await exec(tabId, fillStorage, [local, session]) || [];
   if (!frame) problems.push("Storage could not be written");
   else if (frame.result) problems.push(frame.result);
   if (idb) {
     try {
-      problems.push(...((await idbCall(tabId, "load", idb)).problems || []));
+      const loaded = await idbCall(tabId, "load", idb);
+      problems.push(...(loaded.problems || []));
+      stuck.push(...(loaded.stuck || []));
     } catch (e) {
       problems.push(`App data could not be written (${e.message})`);
     }
   }
-  return problems;
+  return { problems, stuck };
 }
 
 // The address a parked tab goes back to, or '' for a tab that isn't parked.
@@ -907,48 +961,61 @@ async function swap(group, incoming, mainTab) {
   const domains = group.domains;
   const https = (mainTab.url || "").startsWith("https:");
   const problems = [];
+  // A tab still showing another site's page on its way to this one isn't parked: what runs in it is
+  // the other site's, and so would its blank page be. It sets off again once the switch is done.
   const tabs = await siteTabs(domains);
+  const arriving = tabs.filter((t) => !inScope(hostOf(t.url || ""), domains));
+  const onSite = tabs.filter((t) => !arriving.includes(t));
   const outgoing = await getProfile(group.activeId);
   const appData = await usesAppData(group);
 
   // 1. The site's frames inside its own pages can only be read while those pages run.
-  const frames = outgoing ? await readStorage(tabs, domains, mainTab.id, false) : null;
+  const frames = outgoing ? await readStorage(onSite, domains, mainTab.id, false) : null;
 
   // 2. Stop the site's pages. The switch is noted first, so that if the extension stops halfway,
   // its next start can put things back.
-  group.switching = { phase: "parking", from: outgoing?.id || null, https, mainTabId: mainTab.id, tabs: tabs.map((t) => t.id) };
+  group.switching = { phase: "parking", from: outgoing?.id || null, https, mainTabId: mainTab.id, tabs: onSite.map((t) => t.id) };
   await saveGroups();
-  const picture = await snapshot(mainTab);
-  const { parked, reload, stuck } = await park(tabs, new Map(picture ? [[mainTab.id, picture]] : []));
-  if (stuck.length) {
+  let parked = [], reload = [];
+  try {
+    const picture = await snapshot(mainTab);
+    let stuck;
+    ({ parked, reload, stuck } = await park(onSite, new Map(picture ? [[mainTab.id, picture]] : [])));
+    if (stuck.length) throw new Error("A tab of this site didn't leave its page (it may be asking whether to leave). Nothing was switched.");
+  } catch (e) {
     await unpark(parked);
     delete group.switching;
     await saveGroups();
-    throw new Error("A tab of this site didn't leave its page (it may be asking whether to leave). Nothing was switched.");
+    throw e;
   }
   await sleep(100); // responses already on their way may still set cookies
 
+  let keepIdb = new Set();
   try {
     // 3. Save the outgoing profile as it is now that nothing of the site runs: its pages have also
     // run their unload code, and the parked pages still reach each origin's storage.
-    let outData = {}, keepIdb = new Set();
+    let outData = {}, from = outgoing?.id || null;
     const live = outgoing && await readCookies(domains);
     // A login put in from outside just before the switch isn't saved over the outgoing profile.
     if (outgoing && changedOutside(group, outgoing, live)) {
       problems.push(`The login on ${domains[0]} had been changed outside Session Switch, so ${outgoing.name} kept its own login and that one was discarded.`);
       outData = await getData(outgoing.id);
+      from = null; // what the browser holds now is no profile's
     } else if (outgoing) {
       const settled = await readStorage(parked.map((p) => p.tab), domains, mainTab.id, appData);
       problems.push(...frames.problems, ...settled.problems);
       keepIdb = settled.incomplete;
+      const saved = await getData(outgoing.id);
+      keepOwnIdb(group, outgoing.id, settled.found, saved, keepIdb);
       outgoing.cookies = live;
       outgoing.syncedAt = outgoing.lastUsed = Date.now();
       remember(outgoing, group);
-      outData = mergeStorage(mergeStorage(await getData(outgoing.id), frames.found), settled.found);
+      outData = mergeStorage(mergeStorage(saved, frames.found), settled.found);
       await putProfile(outgoing);
       await putData(outgoing.id, outData);
     }
     group.switching.phase = "swapping";
+    group.switching.keepIdb = [...keepIdb];
     await saveGroups();
 
     // 4. Cookies.
@@ -958,7 +1025,12 @@ async function swap(group, incoming, mainTab) {
     if (failed.length) problems.push(`These cookies couldn't be restored: ${list(failed)}.`);
 
     // 5. Storage.
-    problems.push(...await placeStorage(group, await getData(incoming.id), parked, mainTab.id, keepIdb, Object.keys(outData), appData));
+    problems.push(...await placeStorage(group, await getData(incoming.id), parked, mainTab.id,
+      { keepIdb, also: Object.keys(outData), appData, incomingId: incoming.id, outgoingId: from }));
+    // What the site's service workers keep in their caches came with the outgoing login, so the
+    // incoming one is never shown it.
+    const origins = unique([...group.origins, ...parked.map((p) => p.origin)]).filter((o) => /^https?:/.test(o) && inScope(hostOf(o), domains));
+    if (origins.length) await chrome.browsingData.remove({ origins }, { cacheStorage: true });
 
     group.activeId = incoming.id;
     group.epoch += 1;
@@ -974,8 +1046,10 @@ async function swap(group, incoming, mainTab) {
     return { ok: true, problems, expired: expired.length, login: loginOf(incoming.cookies, group, incoming.login) };
   } catch (e) {
     // Put the outgoing profile back, so the browser is never left halfway between two profiles.
-    if (group.switching?.phase === "swapping") await putBack(group, outgoing, https, parked, mainTab.id);
-    else {
+    // If even that fails, the switch is still forgotten, so the site isn't left marked as switching.
+    if (group.switching?.phase === "swapping") {
+      await putBack(group, outgoing, https, parked, mainTab.id, keepIdb).catch((err) => console.warn("Session Switch: putting the profile back:", err));
+    } else {
       delete group.switching;
       await saveGroups();
     }
@@ -985,31 +1059,52 @@ async function swap(group, incoming, mainTab) {
     outsideRemovals.delete(group.id);
     await unpark(parked);
     for (const tab of reload) chrome.tabs.reload(tab.id).catch(() => {});
+    for (const tab of arriving) chrome.tabs.update(tab.id, { url: tab.pendingUrl || tab.url }).catch(() => {});
   }
 }
 
 // Writes a profile's storage into the parked tabs: each origin's localStorage and app data once,
 // and sessionStorage into the main tab only (the other tabs start without). Origins with no open
 // page have their localStorage cleared now and filled the next time one of their pages opens (their
-// app data stays). keepIdb lists origins whose app data is left alone; also lists origins the
-// outgoing profile used.
-async function placeStorage(group, data, parked, mainTabId, keepIdb = new Set(), also = [], appData = false) {
+// app data stays). Only the site's own origins are written, never those of a tab parked on another
+// site's page. Options:
+//   keepIdb     origins whose app data is left alone, as the outgoing profile's copy of it
+//               couldn't be read in full (see group.foreignIdb)
+//   also        origins the outgoing profile used
+//   appData     whether the site's app data is switched (see usesAppData)
+//   incomingId  the profile whose storage this is; outgoingId the one whose storage the browser
+//               held (null: none of them)
+async function placeStorage(group, data, parked, mainTabId, { keepIdb = new Set(), also = [], appData = false, incomingId = null, outgoingId = null } = {}) {
   const problems = [], written = new Set();
+  const foreign = (group.foreignIdb ||= {});
   for (const { tab, origin } of parked) {
-    if (!/^https?:/.test(origin)) continue;
+    if (!/^https?:/.test(origin) || !inScope(hostOf(origin), group.domains)) continue;
     const saved = data[origin] || {};
     const first = !written.has(origin);
     written.add(origin);
     // App data (only for sites whose login isn't in a cookie, see usesAppData): the outgoing
     // profile's was just saved, so the incoming one's replaces it (none yet: the site starts
-    // without). Left as it is when the outgoing copy couldn't be saved in full.
+    // without). Left as it is when a profile's copy of it couldn't be saved in full.
     let idb = null;
     if (first && appData) {
-      if (keepIdb.has(origin)) problems.push(`The app data on ${origin} was left as it was, because the outgoing profile's copy couldn't be saved in full (it may be too large).`);
-      else idb = saved.idb || [];
+      let entry = foreign[origin];
+      // The outgoing profile's own, and just saved in full: nothing is left in place for it.
+      if (entry && outgoingId && entry.owner === outgoingId && !keepIdb.has(origin)) entry = null;
+      if (!entry?.names && ownerLive(group, entry)) {
+        // Left in place by an earlier switch: its owner gets it back as it is, its newest copy.
+        if (entry.owner === incomingId) delete foreign[origin];
+        else problems.push(`The app data on ${origin} was left as it was, because another profile's copy of it couldn't be saved in full (it may be too large). It isn't saved into this profile.`);
+      } else if (keepIdb.has(origin)) {
+        problems.push(`The app data on ${origin} was left as it was, because the outgoing profile's copy couldn't be saved in full (it may be too large).`);
+        if (outgoingId && outgoingId !== incomingId) foreign[origin] = { owner: outgoingId, names: null };
+      } else idb = saved.idb || [];
     }
     const session = tab.id === mainTabId ? saved.session || {} : {};
-    problems.push(...await writeParked(tab.id, first ? saved.local || {} : null, session, idb));
+    const result = await writeParked(tab.id, first ? saved.local || {} : null, session, idb);
+    problems.push(...result.problems);
+    // Databases that couldn't be deleted stay the outgoing profile's.
+    if (idb && result.stuck.length) foreign[origin] = { owner: outgoingId, names: result.stuck };
+    else if (idb) delete foreign[origin];
   }
   const elsewhere = unique([...also, ...Object.keys(data), ...group.origins, ...group.pending])
     .filter((origin) => !written.has(origin) && inScope(hostOf(origin), group.domains));
@@ -1034,16 +1129,21 @@ async function usesAppData(group) {
 }
 
 // Returns the site to the profile a switch started from: its cookies, its storage in the parked
-// tabs and, for other origins, on their next visit. Then forgets the switch.
-async function putBack(group, profile, https, parked, mainTabId) {
-  if (profile) {
-    await clearCookies(group.domains, https);
-    await restoreCookies(profile.cookies.filter((c) => inScope(bare(c.domain), group.domains)), https);
-    await placeStorage(group, await getData(profile.id), parked, mainTabId, new Set(), [], await usesAppData(group));
+// tabs and, for other origins, on their next visit. Then forgets the switch, even if that failed.
+// keepIdb: the origins whose app data the switch left in place (still the profile's own).
+async function putBack(group, profile, https, parked, mainTabId, keepIdb = new Set()) {
+  try {
+    if (profile) {
+      await clearCookies(group.domains, https);
+      await restoreCookies(profile.cookies.filter((c) => inScope(bare(c.domain), group.domains)), https);
+      await placeStorage(group, await getData(profile.id), parked, mainTabId,
+        { keepIdb, appData: await usesAppData(group), incomingId: profile.id, outgoingId: profile.id });
+    }
+  } finally {
+    group.epoch += 1;
+    delete group.switching;
+    await saveGroups();
   }
-  group.epoch += 1;
-  delete group.switching;
-  await saveGroups();
 }
 
 async function rename(profileId, name) {
@@ -1204,6 +1304,7 @@ async function unlink(groupId, domain) {
   const keep = (origin) => inScope(hostOf(origin), group.domains);
   group.origins = group.origins.filter(keep);
   group.pending = group.pending.filter(keep);
+  for (const origin of Object.keys(group.foreignIdb || {})) if (!keep(origin)) delete group.foreignIdb[origin];
   for (const profile of await getProfiles(group.order)) {
     profile.cookies = profile.cookies.filter((c) => inScope(bare(c.domain), group.domains));
     const data = await getData(profile.id);
@@ -1326,7 +1427,7 @@ async function driveSeal() {
     for (const profile of await getProfiles(group.order)) {
       payload.profiles[profile.id] = profile;
       const data = {};
-      for (const [origin, d] of Object.entries(await getData(profile.id))) data[origin] = { local: d.local, session: d.session, savedAt: d.savedAt };
+      for (const [origin, d] of Object.entries(await getPages(profile.id))) data[origin] = { local: d.local, session: d.session, savedAt: d.savedAt };
       payload.data[profile.id] = data;
     }
   }
@@ -1583,11 +1684,11 @@ async function pageHello(m, sender) {
 async function applyPending(groupId, tabId, origin, url) {
   const group = groupById(groupId);
   if (!group?.activeId || !group.pending.includes(origin)) return;
-  const saved = (await getData(group.activeId))[origin];
+  const saved = (await getPages(group.activeId))[origin];
   const { parked } = await park([{ id: tabId, url }]);
   try {
     if (parked[0]?.origin !== origin) return;
-    const problems = await writeParked(tabId, saved?.local || {}, null, null);
+    const { problems } = await writeParked(tabId, saved?.local || {}, null, null);
     if (problems.length) console.warn("Session Switch:", ...problems);
     // Once only, even when something couldn't be written: the page reloads afterwards, and trying
     // again on every load would keep reloading it.
@@ -1604,9 +1705,9 @@ async function pageStorage(m, sender) {
   const group = groupFor(hostOf(origin));
   if (!group?.activeId || m.epoch !== group.epoch || group.pending.includes(origin)) return;
   if (!m.ancestors.every((a) => inScope(hostOf(a), group.domains))) return;
-  const data = await getData(group.activeId);
-  data[origin] = { ...data[origin], local: m.local, savedAt: Date.now() };
-  await putData(group.activeId, data);
+  const pages = await getPages(group.activeId);
+  pages[origin] = { ...pages[origin], local: m.local, savedAt: Date.now() };
+  await putPages(group.activeId, pages);
 }
 
 // ---- The card in the page ----
@@ -1678,19 +1779,25 @@ async function groupsChanged() {
 // A switch still marked when the background starts was cut off when it last stopped (none can be
 // running in a fresh start). This is queued before anything else, so no other change sees the site
 // half switched: tabs still parked go home, and if cookies were being swapped, the profile the
-// switch started from is put back.
+// switch started from is put back. A site that can't be put back doesn't hold up the others.
 serial(async () => {
   await getGroups();
   for (const group of allGroups()) {
     const marker = group.switching;
     if (!marker) continue;
-    const parked = await findParked(marker.tabs || []);
-    if (marker.phase === "swapping") await putBack(group, await getProfile(marker.from), marker.https, parked, marker.mainTabId);
-    else {
+    let parked = [];
+    try {
+      parked = await findParked(marker.tabs || []);
+      if (marker.phase === "swapping") {
+        await putBack(group, await getProfile(marker.from), marker.https, parked, marker.mainTabId, new Set(marker.keepIdb || []));
+      }
+    } catch (e) {
+      console.warn("Session Switch: putting back a cut-off switch:", e);
+    } finally {
       delete group.switching;
       await saveGroups();
+      await unpark(parked);
     }
-    await unpark(parked);
   }
 });
 
@@ -1708,6 +1815,12 @@ async function start() {
   await registerPageScript(allGroups().flatMap((g) => g.domains)).catch((e) => console.warn("Page script:", e));
   // Catch up on cookie changes made while the extension wasn't running.
   for (const group of allGroups()) if (group.activeId) serial(() => syncCookies(group.id));
+  // Before 264, app data copies were kept inside ssData: they move to ssIdb.
+  serial(async () => {
+    for (const group of allGroups()) {
+      for (const id of group.order) if (Object.values(await getPages(id)).some((d) => d.idb)) await putData(id, await getData(id));
+    }
+  });
 }
 
 // Every time the background starts: the routes (and what bg-proxy.js keeps in memory about them)
