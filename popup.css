@@ -357,3 +357,83 @@ main:not(.laid-out) .panel { visibility: hidden; }
 /* Nothing under it (no key yet): as tall as a one-line row, like tab volume. */
 #proxyRow:has(> #pxMore:empty) { padding-bottom: 0; }
 #proxyRow:has(> #pxMore:empty) > .row.tight { min-height: 51px; padding: 0; } /* + its 1px top line */
+
+/* Session Switch: the site's profiles, one rounded row each; the active one has a green edge.
+   Rows can be dragged into order. Up to six show at once, then the list scrolls. */
+.ss { --ss-row: 50px; } /* one profile row, padding and edge included */
+.ss .icon-btn.armed { background: color-mix(in srgb, var(--red) 16%, transparent); color: var(--red); }
+.ss .text-btn:disabled, .ss-sheet .text-btn:disabled { opacity: .5; }
+.ss .profiles { list-style: none; margin: 2px 0 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px;
+  max-height: calc(6 * var(--ss-row) + 5 * 6px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.ss .profile { position: relative; display: flex; align-items: center; gap: 8px; height: var(--ss-row); padding: 7px 6px 7px 8px; border-radius: 12px;
+  background: var(--row); border: 1px solid transparent; cursor: pointer; }
+.ss .profile:hover { background: var(--hover); }
+.ss .profile.active { border-color: color-mix(in srgb, var(--green) 45%, transparent); background: color-mix(in srgb, var(--green) 7%, transparent); cursor: default; }
+.ss .profile.dragging { opacity: .45; }
+.ss .profile.drop-before { box-shadow: 0 -2px 0 var(--green); }
+.ss .profile.drop-after { box-shadow: 0 2px 0 var(--green); }
+.ss .grip { width: 16px; height: 28px; display: grid; place-items: center; color: var(--text3); cursor: grab; border-radius: 6px; flex: none; }
+.ss .grip:hover { color: var(--text); background: var(--hover); }
+.ss .grip svg { width: 14px; height: 14px; }
+.ss .avatar { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: #fff; font-weight: 600; font-size: 11px; letter-spacing: .02em; }
+.ss .avatar:hover { box-shadow: 0 0 0 2px var(--stroke); }
+.ss .meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ss .name { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; }
+.ss .name > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ss .pill { flex: none; font-size: 10px; font-weight: 600; letter-spacing: .03em; padding: 1px 7px; border-radius: 99px;
+  color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); }
+.ss .pill.proxy { color: var(--text2); background: var(--chip); }
+.ss .pill.proxy.bad { color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); }
+.ss .meta .sub { font-size: 11px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ss .meta .sub.warn { color: var(--yellow); }
+.ss .meta .sub.bad { color: var(--red); }
+/* A row's buttons float over its right end while it is hovered or focused, so its text has the full width otherwise. */
+.ss .row-actions { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 1px;
+  padding-left: 18px; border-radius: 0 10px 10px 0; opacity: 0; pointer-events: none; transition: opacity .12s;
+  background: linear-gradient(to right, transparent, var(--bg) 18px); }
+.ss .profile:hover .row-actions, .ss .profile:focus-within .row-actions, .ss .row-actions:has(.armed) { opacity: 1; pointer-events: auto; }
+.ss .rename { flex: 1; min-width: 0; padding: 4px 8px; }
+/* A notice above the list: a login in the browser that isn't in a profile */
+.ss .notice { display: flex; align-items: center; gap: 10px; margin: 2px 0 8px; padding: 9px 8px 9px 12px; border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--yellow) 35%, transparent); background: color-mix(in srgb, var(--yellow) 8%, transparent); }
+.ss .notice p { flex: 1; margin: 0; font-size: 12px; line-height: 1.4; color: var(--text); }
+.ss .notice.stack { flex-direction: column; align-items: stretch; gap: 8px; }
+.ss .notice-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.ss .hint { margin: 2px 2px 4px; font-size: 11px; line-height: 1.45; color: var(--text3); }
+#ssSite:empty { display: none; }
+
+/* Session Switch sheets: a profile's details, its proxy, the site's settings, a question */
+.ss-sheet .sheet-head { gap: 10px; }
+.ss-sheet .sheet-head h2 { margin: 0; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ss-sheet .sheet-body { flex: 1; overflow-y: auto; padding-top: 10px; scrollbar-width: thin; }
+.ss-sheet .sheet-body h3 { margin: 14px 0 6px; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text3); }
+.ss-sheet .sheet-body h3:first-child { margin-top: 2px; }
+.ss-sheet .sheet-body p { margin: 0 0 8px; font-size: 12px; line-height: 1.45; color: var(--text2); }
+.ss-sheet .sheet-body p.bad { color: var(--red); }
+.ss-sheet .sheet-foot { display: flex; justify-content: flex-end; gap: 6px; padding-top: 10px; }
+.ss-sheet .text-btn.danger { color: var(--red); }
+.ss-sheet .text-btn.danger svg { color: var(--red); }
+.ss-sheet .options { display: grid; gap: 6px; }
+.ss-sheet .option { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 12px; border-radius: 12px; background: var(--row); text-align: left; }
+.ss-sheet .option:hover { background: var(--hover); }
+.ss-sheet .option small { color: var(--text3); font-size: 11px; }
+.ss-sheet .option-end { display: flex; align-items: center; gap: 10px; }
+.ss-sheet .option[aria-pressed="true"] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--green) 55%, transparent); background: color-mix(in srgb, var(--green) 8%, transparent); }
+.ss-sheet table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.ss-sheet th, .ss-sheet td { text-align: left; padding: 5px 4px; border-bottom: 1px solid var(--divider); vertical-align: top; }
+.ss-sheet th { color: var(--text3); font-weight: 500; }
+.ss-sheet td.name-cell { word-break: break-all; }
+.ss-sheet tr.login td { color: var(--green); }
+.ss-sheet .mini-sel { width: 100%; max-width: none; padding: 7px 26px 7px 10px; font-size: 12px; border-radius: 10px; background-position: right 10px center; }
+.ss-sheet .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; overflow: visible; -webkit-mask-image: none; }
+.ss-sheet .chip { display: inline-flex; align-items: center; gap: 2px; padding: 3px 4px 3px 10px; border-radius: 20px; font-size: 12px; background: var(--field); cursor: default; }
+.ss-sheet .chip.main { padding-right: 10px; }
+.ss-sheet .chip button { color: var(--text3); padding: 0 4px; font-size: 14px; line-height: 1; }
+.ss-sheet .chip button:hover { color: var(--red); }
+.ss-sheet .adder { display: flex; gap: 6px; }
+.ss-toast { line-height: 1.4; cursor: pointer; }
+.ss-toast.warn { background: var(--yellow); color: #111; }
+.ss-toast ul { margin: 4px 0 0; padding-left: 16px; }
+.ss-toast.busy::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; vertical-align: -1px; border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--bg) 35%, transparent); border-top-color: var(--bg); animation: ss-spin .8s linear infinite; }
+@keyframes ss-spin { to { transform: rotate(360deg); } }

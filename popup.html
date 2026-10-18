@@ -59,6 +59,11 @@
       <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10-6.5z"/></symbol>
       <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol>
       <symbol id="i-note" viewBox="0 0 24 24"><path d="M5 4.5h14v15H5z"/><path d="M8.5 9h7M8.5 12.5h7M8.5 16h4"/></symbol>
+      <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.5"/><path d="M3 19.5a6 6 0 0 1 12 0"/><path d="M15.5 5.2a3.5 3.5 0 0 1 0 6.6M17.5 14a6 6 0 0 1 3.5 5.5"/></symbol>
+      <symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" stroke-width="2.6"/></symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.4 2.4 3.5 5.2 3.5 8.5s-1.1 6.1-3.5 8.5c-2.4-2.4-3.5-5.2-3.5-8.5s1.1-6.1 3.5-8.5z"/></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8h.01"/></symbol>
+      <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/></symbol>
     </defs>
   </svg>
 
@@ -234,6 +239,17 @@
         </div>
       </div>
       <div id="pxMore"></div>
+    </section>
+
+    <section data-section="sessions" class="block ss" id="ssRow">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-users"/></svg><span class="titles">session switch<span class="sub" id="ssSite"></span></span></div>
+        <div class="actions">
+          <button class="icon-btn small" id="ssSiteBtn" title="This site's settings: linked sites and IndexedDB" hidden><svg><use href="#i-sliders"/></svg></button>
+          <button class="text-btn" id="ssNewBtn" hidden><svg><use href="#i-plus"/></svg>new profile</button>
+        </div>
+      </div>
+      <div id="ssContent"></div>
     </section>
 
     <section data-section="awake" class="block" id="awake">
@@ -568,7 +584,9 @@
     <ul class="history shot-list" id="shotList"></ul>
   </aside>
 
+  <aside class="sheet ss-sheet" id="ssSheet" hidden></aside>
   <div class="toast" id="toast" role="status" hidden></div>
+  <div class="toast ss-toast" id="ssToast" role="status" aria-live="polite" hidden></div>
 
   <script src="shared.js"></script>
   <script src="pad-store.js"></script>
@@ -576,5 +594,6 @@
   <script src="upload-thumbs.js"></script>
   <script src="beam/beam.js"></script>
   <script src="popup.js"></script>
+  <script src="popup-sessions.js"></script>
 </body>
 </html>

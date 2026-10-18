@@ -18,6 +18,7 @@ These are kept in Chrome's local extension storage, on your computer only:
 - **Removed elements, highlight word lists and redirect rules** that you set up.
 - **Recent results:** shortened links, uploaded image links, picked colors, element selectors and fonts.
 - **Proxy:** your Webshare API key, your lists of sites and countries, and what Webshare reports for your account (your plan, this month's data use, and your proxies' addresses, countries and login). The proxy logins aren't included in Drive backups.
+- **Session switch profiles:** for each site you save profiles for, each profile's copy of the site's cookies (its login), the site's page storage (localStorage, sessionStorage and, if you turn it on, IndexedDB), its name, color and proxy country. They stay on your computer, like Chrome's own cookies, and aren't part of Drive backups or the settings file. An encrypted backup file is made only when you ask, with a passphrase you choose that isn't stored.
 - **QR code history:** the newest 50 static and 50 dynamic codes you made (what each one holds, and a dynamic code's short link and destination), and the icon you chose for the middle of your codes.
 
 The following are worked out in your browser and never sent anywhere:

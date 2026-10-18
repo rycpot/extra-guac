@@ -10,6 +10,9 @@
 // moves to the next when one doesn't answer), never straight out; everything else goes
 // direct. On a paid plan, mode "full" turns it around. The script carries no logins: they're
 // given when a proxy asks (onAuthRequired). Free plans: up to 20 sites, "only these sites".
+// Session Switch profiles with a proxy (bg-sessions.js) add their sites to the same script, ahead
+// of everything here: whenever a key is set, even with the proxy switched off, and never straight
+// out. While the script is being replaced, or the setting is held elsewhere, those sites are blocked.
 
 const WS_API = "https://proxy.webshare.io/api/v2";
 const GB = 1024 ** 3; // Webshare counts a GB as 1024³ bytes
@@ -187,18 +190,27 @@ const proxySites = (cfg, st) => cfg.sites.slice(0, TT.PROXY_LIMITS[proxyFree(st)
 // This computer and its network: always direct (as in the routing script).
 const proxyLocalHost = (host) => !host.includes(".") || host === "localhost" || host.includes(":") || host.startsWith("[")
   || /^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host);
+// The domains of Session Switch profiles going through a proxy now, as last routed.
+let sessionRouted = [];
+let sessionProxyFailure = ""; // why the setting couldn't be set for them, if it couldn't
 function proxyCoversHost(cfg, st, host) {
-  if (!host || proxyLocalHost(host) || !proxyActive(cfg, st)) return false;
+  if (!host || proxyLocalHost(host)) return false;
+  if (sessionRouted.some((d) => TT.proxyCovers(host, d))) return true;
+  if (!proxyActive(cfg, st)) return false;
   if (proxyMode(cfg, st) === "full") {
     return !/(^|\.)webshare\.io$/.test(host) && !cfg.skip.some((s) => s.on && TT.proxyCovers(host, s.site));
   }
   return proxySites(cfg, st).some((s) => TT.proxyCovers(host, s.site));
 }
 
-function proxyScript(cfg, st) {
+// own: whether the proxy's own sites are routed (else only the profiles' sites); profiles: the
+// Session Switch routes, which win over the rest.
+function proxyScript(cfg, st, own = true, profiles = {}) {
   const rules = {};
   let fallback = "DIRECT";
-  if (proxyMode(cfg, st) === "full") {
+  if (!own) {
+    // Only the profiles' sites.
+  } else if (proxyMode(cfg, st) === "full") {
     fallback = proxyChain(st, cfg.country, cfg.backups);
     for (const s of cfg.skip) if (s.on) rules[s.site] = "DIRECT";
     rules["webshare.io"] = "DIRECT"; // the account and the API stay reachable, even when out of data
@@ -209,6 +221,12 @@ function proxyScript(cfg, st) {
       rules[s.site] = !c.ok && !c.use ? "PROXY 127.0.0.1:9" : proxyChain(st, c.use, c.ok ? cfg.backups : cfg.backups.filter((b) => b !== c.use));
     }
   }
+  // A profile's site is all its own: rules here for it or its subdomains (a skipped or
+  // differently routed subdomain) give way, so none of it goes out another way.
+  for (const site of Object.keys(rules)) {
+    if (Object.keys(profiles).some((d) => TT.proxyCovers(site, d))) delete rules[site];
+  }
+  Object.assign(rules, profiles);
   // Walks up the host's labels (a.b.example.com, b.example.com, example.com) to the first
   // listed one. This computer and its network always go direct.
   return `var R = ${JSON.stringify(rules)};
@@ -235,18 +253,41 @@ function applyProxy() {
 }
 async function applyProxyNow() {
   const { cfg, st } = await getProxy();
-  const { levelOfControl } = await chrome.proxy.settings.get({});
+  const { levelOfControl, value } = await chrome.proxy.settings.get({});
   const blocked = levelOfControl === "not_controllable" || levelOfControl === "controlled_by_other_extensions";
   if (!!st.blocked !== blocked && cfg.key) {
     await editLocal(["proxyState"], ({ proxyState }) => (proxyState ? { proxyState: { ...proxyState, blocked } } : null));
   }
-  if (blocked) return;
-  const routes = proxyActive(cfg, st) && (proxyMode(cfg, st) === "full" || proxySites(cfg, st).length);
-  if (routes) {
-    await chrome.proxy.settings.set({ value: { mode: "pac_script", pacScript: { data: proxyScript(cfg, st), mandatory: true } }, scope: "regular" });
-  } else if (levelOfControl === "controlled_by_this_extension") {
-    await chrome.proxy.settings.clear({ scope: "regular" });
+  const profiles = await sessionProxyRoutes(cfg, st);
+  const domains = Object.keys(profiles);
+  sessionRouted = domains;
+  sessionProxyFailure = "";
+  let usable = false;
+  if (!blocked) {
+    const own = !!(proxyActive(cfg, st) && (proxyMode(cfg, st) === "full" || proxySites(cfg, st).length));
+    if (own || domains.length) {
+      const data = proxyScript(cfg, st, own, profiles);
+      if (levelOfControl === "controlled_by_this_extension" && value?.pacScript?.data === data) {
+        usable = true;
+      } else {
+        // The profiles' sites wait until the new script is in use (the network side takes it a
+        // moment after it's saved).
+        if (domains.length) await sessionBlock(domains);
+        try {
+          await chrome.proxy.settings.set({ value: { mode: "pac_script", pacScript: { data, mandatory: true } }, scope: "regular" });
+          usable = true;
+          if (domains.length) await new Promise((r) => setTimeout(r, 500));
+        } catch (err) {
+          sessionProxyFailure = err.message || String(err);
+          if (!domains.length) throw err;
+        }
+      }
+    } else if (levelOfControl === "controlled_by_this_extension") {
+      await chrome.proxy.settings.clear({ scope: "regular" });
+    }
   }
+  await sessionBlock(domains.length && !usable ? domains : []);
+  await sessionGuard(domains);
   proxyCreds = null;
   await proxyTabIcons();
 }

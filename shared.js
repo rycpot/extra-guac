@@ -75,7 +75,7 @@
     layout: {
       tools: ["screenshot", "ocr", "blur", "scratch", "dark", "refresh", "autoRefresh", "shortener", "qr", "volume", "proxy", "awake", "highlight", "clipboard", "unlock"],
       page: ["imgzoom", "imgdl", "upload", "color", "font", "element", "remove", "newTab", "redirect", "focus"],
-      extra: [],
+      extra: ["sessions"],
     },
   };
 
@@ -85,6 +85,7 @@
     screenshot: "screenshot", blur: "privacy blur", scratch: "scratch pads", dark: "dark mode", refresh: "refresh", autoRefresh: "auto-refresh",
     shortener: "URL shorten", qr: "QR code", volume: "tab volume", proxy: "proxy", awake: "awake", color: "what color?", element: "what element?",
     font: "what font?", remove: "remove elements", highlight: "highlight words", imgzoom: "zoom & rotate images", imgdl: "save images on click", clipboard: "clipboard history", redirect: "URL auto redirect", upload: "upload images", unlock: "enable copy & right-click", ocr: "text from image", newTab: "open other site urls in new tab", focus: "refresh on focus",
+    sessions: "session switch",
   };
 
   // A saved layout with unknown sections dropped and any missing ones (new in an update)

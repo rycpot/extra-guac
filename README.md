@@ -51,6 +51,12 @@ A Chrome extension. Click its icon to open the side panel (or a popup, in settin
 | **URL auto redirect** | Rewrites addresses with your own find-and-replace rules, per domain. |
 | **Refresh on focus** | Reloads a page when you come back to it, if it's on your list. Normal or hard, until a date you choose. |
 
+**Tab 3**
+
+| Tool | What it does |
+|---|---|
+| **Session switch** | Several logins for the same site, and one click to switch between them. Each profile keeps the site's cookies and page storage (IndexedDB too, if you like) and stays up to date while you use it, with its login's expiry date shown. A profile can open its site through one of your Webshare proxies, in a country you pick. A login changed from outside never overwrites a profile: a card on the page asks once what to do with it. Encrypted backups in settings. |
+
 **Backup tab**
 
 | Tool | What it does |
@@ -59,7 +65,7 @@ A Chrome extension. Click its icon to open the side panel (or a popup, in settin
 | **Beam** | Send files between your devices with a 6-digit code or a QR code, encrypted end to end. The other device uses Extra Guac too, or just [rycpot.github.io/beam](https://rycpot.github.io/beam) in any browser. |
 | **Settings file** | Export everything as a .json file, or import one to replace it. |
 
-**Layout:** drag tools between tabs, or reorder them, in settings → general.
+**Layout:** drag tools between tabs, or reorder them, in settings → general. Tab 3 holds session switch at first, and anything you drag there.
 
 ## Install
 

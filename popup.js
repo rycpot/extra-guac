@@ -5,6 +5,8 @@ let settings = null;
 // The same page runs as the toolbar popup or in the side panel. The popup closes after
 // actions that hand over to the page; the panel stays open and follows the active tab.
 const inPopup = chrome.extension.getViews({ type: "popup" }).includes(window);
+// ?tab=<id> opens the popup for that tab as a page, which the Session Switch tests use.
+const fixedTab = Number(new URLSearchParams(location.search).get("tab")) || null;
 const closePopup = () => inPopup && window.close();
 
 TT.applyTheme();
@@ -47,10 +49,11 @@ function initForTab() {
   initFocus(isWeb);
   initOcr(isWeb);
   initProxy(isWeb);
+  globalThis.initSessions?.(tab);
 }
 
 async function init() {
-  [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  [tab] = fixedTab ? [await chrome.tabs.get(fixedTab)] : await chrome.tabs.query({ active: true, currentWindow: true });
   settings = await TT.getSettings();
   document.body.classList.toggle("side-panel", !inPopup);
   applyLayout(settings.layout);
@@ -58,7 +61,7 @@ async function init() {
     const layout = (tt) => JSON.stringify(TT.merge(TT.DEFAULTS, tt).layout);
     if (area === "local" && c.tt && layout(c.tt.oldValue) !== layout(c.tt.newValue)) applyLayout(TT.merge(TT.DEFAULTS, c.tt.newValue).layout);
   });
-  if (!inPopup) {
+  if (!inPopup && !fixedTab) {
     followActiveTab();
     // In the side panel the keyboard stays here while a picker runs on the page, so Esc
     // is passed on to close it (only Extra Guac's own overlays; see "pageEscape").

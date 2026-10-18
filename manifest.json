@@ -9,7 +9,7 @@
     "browsingData",
     "clipboardWrite",
     "contextMenus",
-    "cookies",
+    "cookies", "declarativeNetRequestWithHostAccess",
     "downloads",
     "identity",
     "notifications",
