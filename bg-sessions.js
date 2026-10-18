@@ -259,17 +259,15 @@ function score(c) {
 //   how      'picked' by the user, 'auto' (a confident guess) or 'guess'
 // remembered is the login cookie seen in this profile before, so a logout shows as 'gone'.
 function loginOf(cookies, group, remembered) {
-  let picks, how;
+  let picks, how = "auto";
   if (group.loginCookie) {
     picks = cookies.filter((c) => c.name === group.loginCookie);
     how = "picked";
-  } else if (remembered) {
-    picks = cookies.filter((c) => c.name === remembered);
-    how = "auto";
   } else {
     picks = cookies.filter((c) => score(c) >= 6);
-    how = "auto";
-    if (!picks.length) {
+    // None found with confidence: the one this profile had (gone after a logout), else a guess.
+    if (!picks.length && remembered) picks = cookies.filter((c) => c.name === remembered);
+    else if (!picks.length) {
       picks = cookies.filter((c) => c.httpOnly && !c.session && score(c) >= 4);
       how = "guess";
     }
@@ -281,15 +279,19 @@ function loginOf(cookies, group, remembered) {
   if (!picks.length) return { state: name ? "gone" : "none", name, how };
   const dated = picks.filter((c) => !c.session);
   if (!dated.length) return { state: "session", name: picks[0].name, how };
-  const first = dated.reduce((a, b) => (a.expirationDate <= b.expirationDate ? a : b));
-  const expires = Math.round(first.expirationDate * 1000);
-  return { state: expires <= Date.now() ? "expired" : "in", expires, name: first.name, how };
+  // Several cookies that look like the login: it lasts as long as the longest-lived one, which
+  // renews the others (an access token good for a day, say). One cookie on several domains: the
+  // first of them to run out.
+  const longest = new Set(dated.map((c) => c.name)).size > 1;
+  const one = dated.reduce((a, b) => ((a.expirationDate >= b.expirationDate) === longest ? a : b));
+  const expires = Math.round(one.expirationDate * 1000);
+  return { state: expires <= Date.now() ? "expired" : "in", expires, name: one.name, how };
 }
 
-// Notes the profile's login cookie the first time it is found with confidence, so that a logout
-// later shows as one instead of falling back to some other cookie.
+// Notes the profile's login cookie whenever it's found with confidence, so that a logout later
+// shows as one instead of falling back to some other cookie.
 function remember(profile, group) {
-  if (group.loginCookie || profile.login) return;
+  if (group.loginCookie) return;
   const found = loginOf(profile.cookies, group, null);
   if (found.how === "auto" && found.state === "in") profile.login = found.name;
 }
