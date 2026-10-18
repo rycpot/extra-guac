@@ -94,6 +94,12 @@
     $("ssDriveOnForm").hidden = info.on;
     $("ssDriveOffRow").hidden = !info.on;
     $("ssDriveOpenForm").hidden = !info.pending;
+    // The same question at the top of Settings → Backup, where a restore happens (it reloads the page).
+    $("ssRestorePanel").hidden = !info.pending || restoreLater;
+    if (info.pending) {
+      const n = info.pending.profiles;
+      $("ssRestoreText").textContent = `The restored backup also holds ${n} session switch profile${n === 1 ? "" : "s"}, sealed with the passphrase chosen when they were backed up. Enter it to add them next to the ones here.`;
+    }
     if (info.pending) {
       const n = info.pending.profiles;
       $("ssDrivePending").textContent = `The restored Drive backup holds ${n} profile${n === 1 ? "" : "s"} sealed with another passphrase. Enter it to add them next to the ones here.`;
@@ -141,6 +147,26 @@
       sayDrive(added(result));
     } catch (err) {
       sayDrive(err.message, true);
+    }
+  });
+  let restoreLater = false; // "later": not asked again on this page until it's opened again
+  $("ssRestoreLater").addEventListener("click", () => {
+    restoreLater = true;
+    $("ssRestorePanel").hidden = true;
+  });
+  $("ssRestoreForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const status = $("ssRestoreStatus");
+    status.classList.remove("bad");
+    status.textContent = "Opening the profiles…";
+    try {
+      const result = await call("drive-open", { passphrase: $("ssRestorePass").value });
+      e.target.reset();
+      status.textContent = added(result);
+      setTimeout(() => drive(), 2500);
+    } catch (err) {
+      status.classList.add("bad");
+      status.textContent = err.message;
     }
   });
   drive();

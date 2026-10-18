@@ -802,7 +802,7 @@ async function describe(tabId) {
   const profiles = group ? await getProfiles(group.order) : [];
   const proxies = await proxyStatuses(profiles);
   return {
-    supported: true, host, domains, proxy: await proxyInfo(), drive: (await driveInfo()).on,
+    supported: true, host, domains, proxy: await proxyInfo(), ...((d) => ({ drive: d.on, drivePending: d.pending?.profiles || 0 }))(await driveInfo()),
     group: group && { id: group.id, loginCookie: group.loginCookie, activeId: group.activeId },
     paused: ((paused) => paused && { id: paused.id, name: paused.name })(group?.paused && profiles.find((p) => p.id === group.paused)),
     unsaved: !group?.activeId && holdsLogin(jar),

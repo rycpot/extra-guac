@@ -1162,7 +1162,9 @@
             b.disabled = true;
             try {
               const res = await send("backupRestore", { id: snap.id, what: b.dataset.what });
-              alert(settingsToo ? `Settings restored. ${savedNote(res)}` : `Bookmarks restored to “${res.folder}” in Other bookmarks.`);
+              const profiles = res.profiles?.pending ? " This backup also holds session switch profiles: enter their passphrase next, at the top of this page."
+                : res.profiles?.added ? ` ${res.profiles.added} session switch profile${res.profiles.added === 1 ? "" : "s"} added.` : "";
+              alert(settingsToo ? `Settings restored.${profiles} ${savedNote(res)}` : `Bookmarks restored to “${res.folder}” in Other bookmarks.`);
               if (settingsToo) location.reload();
             } catch (err) { alert(err.message); }
             b.disabled = false;

@@ -459,3 +459,6 @@ dialog.ask .ask-opt + .ask-btns { margin-top: 12px; }
 .ss-site h3 .hint { font-weight: 400; }
 .ss-site .rm-pills.wrap:empty::after { content: "no linked sites"; }
 .px-name small.px-note { color: var(--muted); }
+
+/* Settings → Backup: restored session switch profiles waiting for their passphrase */
+.ss-waiting { border: 1px solid color-mix(in srgb, #ffd60a 40%, transparent); background: color-mix(in srgb, #ffd60a 8%, transparent); border-radius: 12px; padding: 12px 14px; }

@@ -157,6 +157,12 @@ function drawList() {
   if (!state) return null;
   if (!state.supported) return h("p", { class: "hint" }, state.reason || "Profiles work on http and https pages only.");
   const out = [];
+  // Profiles from a restored Drive backup that wait for their passphrase (asked in Settings → Backup).
+  if (state.drivePending) {
+    out.push(h("div", { class: "notice", id: "ssDrivePendingNote" },
+      h("p", {}, `${state.drivePending} restored profile${state.drivePending === 1 ? "" : "s"} wait for their passphrase.`),
+      h("button", { class: "text-btn primary", type: "button", onclick: () => openSettings("backup") }, "enter it")));
+  }
   if (state.paused) {
     // The login was swapped or cleared from outside; the profile that was active kept its login.
     const paused = state.profiles.find((p) => p.id === state.paused.id);

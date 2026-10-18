@@ -647,6 +647,15 @@ Card 4111 1111 1111 1111</textarea>
 
   <div class="pane" id="backup">
     <header class="pane-head"><h1>backup</h1></header>
+    <section class="ss-waiting" id="ssRestorePanel" hidden>
+      <h2>Session switch profiles</h2>
+      <p class="hint" id="ssRestoreText"></p>
+      <form id="ssRestoreForm">
+        <div class="row"><input class="text" id="ssRestorePass" type="password" autocomplete="current-password" required placeholder="passphrase" aria-label="Passphrase of the restored profiles">
+          <button class="btn" type="submit">add them</button><button class="btn ghost" type="button" id="ssRestoreLater">later</button></div>
+      </form>
+      <p class="hint" id="ssRestoreStatus" role="status" aria-live="polite"></p>
+    </section>
     <section>
       <h2>Google Drive <span class="hint" id="driveState"></span></h2>
       <div class="row">

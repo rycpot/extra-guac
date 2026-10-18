@@ -81,11 +81,11 @@ const backupHandlers = {
     return locked(async () => {
       const saved = await savePreRestore();
       await keepPadsBefore(snap.data);
-      await applyData(snap.data);
+      const applied = await applyData(snap.data);
       await setBackupState({ awaitingChoice: false, chosenAt: Date.now() });
       await fetchAttachments(snap.data).catch(() => {});
       await tidyShots().catch(() => {});
-      return saved;
+      return { ...saved, profiles: applied?.profiles };
     });
   },
   backupBookmarksHtml: async ({ id }) => {
@@ -470,7 +470,7 @@ async function applyDataNow(data) {
   if (Array.isArray(data.clips)) await clipImport(data.clips); // older backups have none: keep what's there
   // Saved logins sealed in the snapshot: added next to the ones here, now if this browser has
   // their key, else once their passphrase is given in settings (bg-sessions.js).
-  if (data.ssProfiles) await sessionDriveRestore(data.ssProfiles).catch((err) => console.error("[backup] profiles", err));
+  if (data.ssProfiles) return { profiles: await sessionDriveRestore(data.ssProfiles).catch((err) => console.error("[backup] profiles", err)) };
   // Backups from 191 have a single QR icon ("qrIcon"): it becomes the first of yours.
   if (typeof data.qrIcon === "string" && data.qrIcons === undefined) await chrome.storage.local.set({ qrIcon: data.qrIcon });
 }
