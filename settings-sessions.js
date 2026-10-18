@@ -104,7 +104,19 @@
     if ($("ssDrivePass1").value !== $("ssDrivePass2").value) return sayDrive("The passphrases don't match.", true);
     sayDrive("Turning it on…");
     try {
-      await drive(await call("drive-on", { passphrase: $("ssDrivePass1").value }));
+      const passphrase = $("ssDrivePass1").value;
+      await drive(await call("drive-on", { passphrase }));
+      // Asked for: the passphrase as a text file in the downloads folder, to keep somewhere safe.
+      if ($("ssDriveSave").checked) {
+        const text = `Extra Guac · Session Switch\n\nPassphrase for the profiles in your Google Drive backups:\n\n${passphrase}\n\n`
+          + `Saved ${new Date().toLocaleString()}. You need it to restore your profiles on another browser. Keep this file somewhere safe:\n`
+          + `with it and access to your Google Drive, someone could sign in to the sites your profiles are for.\n`;
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+        link.download = "Extra Guac - Session Switch - Passphrase.txt";
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+      }
       e.target.reset();
       sayDrive("Profiles go into the next Drive backups, sealed. Keep the passphrase somewhere safe: without it they can't be restored elsewhere.");
     } catch (err) {

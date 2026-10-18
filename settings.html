@@ -116,7 +116,8 @@
       <form id="ssDriveOnForm">
         <div class="row"><input class="text" id="ssDrivePass1" type="password" autocomplete="new-password" minlength="10" required placeholder="passphrase, at least 10 characters" aria-label="Passphrase for Drive backups"></div>
         <div class="row"><input class="text" id="ssDrivePass2" type="password" autocomplete="new-password" minlength="10" required placeholder="passphrase again" aria-label="Passphrase again"></div>
-        <div class="row"><button class="btn" type="submit">include profiles in Drive backups</button></div>
+        <div class="row"><button class="btn" type="submit">include profiles in Drive backups</button>
+          <label><input type="checkbox" id="ssDriveSave"> download passphrase to local folder</label></div>
       </form>
       <div class="row" id="ssDriveOffRow" hidden><button class="btn ghost" type="button" id="ssDriveOff">stop including profiles</button></div>
       <form id="ssDriveOpenForm" hidden>

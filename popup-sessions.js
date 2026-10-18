@@ -589,6 +589,7 @@ function openSettings(section) {
 // ---- Start ----
 
 $("ssNewBtn").addEventListener("click", newProfile);
+$("ssSettings").addEventListener("click", () => openSettings("sessions"));
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && sheetView) {

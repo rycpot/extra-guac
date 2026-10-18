@@ -817,13 +817,9 @@
       };
       const head = el("div", { className: "px-lhead" }, el("span", { textContent: full() ? "Sites that skip the proxy" : "Sites that use the proxy" }), el("span", { textContent: `${slots().used} / ${total()}` }));
       // Sites whose session switch profiles use a proxy: a group of their own above the sites
-      // here, counted with them, changed in the popup's session switch section (each profile's
+      // here (who and which country), counted with them, changed in the popup's session switch section (each profile's
       // proxy), which "change in popup" opens on the site.
       if (!full() && ss.length) {
-        const initials = (name) => {
-          const w = name.split(/\s+/).filter(Boolean);
-          return (w.length > 1 ? Array.from(w[0])[0] + Array.from(w[1])[0] : Array.from(name).slice(0, 2).join("")).toUpperCase();
-        };
         const group = (title, n) => el("div", { className: "px-group" }, el("span", { textContent: title }), el("span", { textContent: String(n) }));
         const profileRows = ss.map((e) => {
           const countries = [...new Set(e.profiles.map((p) => (p.country ? TT.countryName(p.country) : "any country")))].join(", ");
@@ -834,11 +830,6 @@
           };
           return el("div", { className: "px-site px-session" }, tile(e.site),
             el("span", { className: "px-name" }, el("span", { textContent: e.domains.join(" + ") })),
-            el("span", { className: "px-avs" }, ...e.profiles.map((p) => {
-              const a = el("span", { className: "px-av", textContent: initials(p.name), title: p.name });
-              a.style.background = `hsl(${p.hue ?? 210} 55% 42%)`;
-              return a;
-            })),
             el("span", { className: "px-who", textContent: `${e.profiles.map((p) => p.name).join(", ")} · ${countries}` }),
             open);
         });

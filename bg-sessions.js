@@ -829,7 +829,8 @@ async function saveCurrent(tabId, name) {
   const profile = makeProfile(group, cleanName(name, group));
   profile.cookies = await readCookies(group.domains);
   remember(profile, group);
-  const { found: storage, problems } = await readStorage(await siteTabs(group.domains), group.domains, tab.id, true);
+  const cookieLogin = ((l) => l.name && l.how !== "guess")(loginOf(profile.cookies, group, profile.login));
+  const { found: storage, problems } = await readStorage(await siteTabs(group.domains), group.domains, tab.id, !cookieLogin && await usesAppData(group));
   group.activeId = profile.id;
   group.pending = [];
   delete group.paused;
@@ -897,6 +898,7 @@ async function swap(group, incoming, mainTab) {
   const problems = [];
   const tabs = await siteTabs(domains);
   const outgoing = await getProfile(group.activeId);
+  const appData = await usesAppData(group);
 
   // 1. The site's frames inside its own pages can only be read while those pages run.
   const frames = outgoing ? await readStorage(tabs, domains, mainTab.id, false) : null;
@@ -925,7 +927,7 @@ async function swap(group, incoming, mainTab) {
       problems.push(`The login on ${domains[0]} had been changed outside Session Switch, so ${outgoing.name} kept its own login and that one was discarded.`);
       outData = await getData(outgoing.id);
     } else if (outgoing) {
-      const settled = await readStorage(parked.map((p) => p.tab), domains, mainTab.id, true);
+      const settled = await readStorage(parked.map((p) => p.tab), domains, mainTab.id, appData);
       problems.push(...frames.problems, ...settled.problems);
       keepIdb = settled.incomplete;
       outgoing.cookies = live;
@@ -945,7 +947,7 @@ async function swap(group, incoming, mainTab) {
     if (failed.length) problems.push(`These cookies couldn't be restored: ${list(failed)}.`);
 
     // 5. Storage.
-    problems.push(...await placeStorage(group, await getData(incoming.id), parked, mainTab.id, keepIdb, Object.keys(outData)));
+    problems.push(...await placeStorage(group, await getData(incoming.id), parked, mainTab.id, keepIdb, Object.keys(outData), appData));
 
     group.activeId = incoming.id;
     group.epoch += 1;
@@ -980,18 +982,18 @@ async function swap(group, incoming, mainTab) {
 // page have their localStorage cleared now and filled the next time one of their pages opens (their
 // app data stays). keepIdb lists origins whose app data is left alone; also lists origins the
 // outgoing profile used.
-async function placeStorage(group, data, parked, mainTabId, keepIdb = new Set(), also = []) {
+async function placeStorage(group, data, parked, mainTabId, keepIdb = new Set(), also = [], appData = false) {
   const problems = [], written = new Set();
   for (const { tab, origin } of parked) {
     if (!/^https?:/.test(origin)) continue;
     const saved = data[origin] || {};
     const first = !written.has(origin);
     written.add(origin);
-    // App data (IndexedDB) is always part of a profile: the outgoing profile's was just saved, so the
-    // incoming one's replaces it (none yet: the site starts without). Left as it is only when the
-    // outgoing copy couldn't be saved in full.
+    // App data (only for sites whose login isn't in a cookie, see usesAppData): the outgoing
+    // profile's was just saved, so the incoming one's replaces it (none yet: the site starts
+    // without). Left as it is when the outgoing copy couldn't be saved in full.
     let idb = null;
-    if (first) {
+    if (first && appData) {
       if (keepIdb.has(origin)) problems.push(`The app data on ${origin} was left as it was, because the outgoing profile's copy couldn't be saved in full (it may be too large).`);
       else idb = saved.idb || [];
     }
@@ -1009,13 +1011,24 @@ async function placeStorage(group, data, parked, mainTabId, keepIdb = new Set(),
   return problems;
 }
 
+// App data (IndexedDB) is copied only for sites whose login isn't in a cookie: when none of the
+// site's profiles has a login cookie found with confidence (or picked). Most sites keep the login in
+// cookies, and copying their app data at every switch would only slow it down (it can be large, and
+// busy elsewhere on the site).
+async function usesAppData(group) {
+  return !(await getProfiles(group.order)).some((p) => {
+    const login = loginOf(p.cookies, group, p.login);
+    return login.name && login.how !== "guess";
+  });
+}
+
 // Returns the site to the profile a switch started from: its cookies, its storage in the parked
 // tabs and, for other origins, on their next visit. Then forgets the switch.
 async function putBack(group, profile, https, parked, mainTabId) {
   if (profile) {
     await clearCookies(group.domains, https);
     await restoreCookies(profile.cookies.filter((c) => inScope(bare(c.domain), group.domains)), https);
-    await placeStorage(group, await getData(profile.id), parked, mainTabId);
+    await placeStorage(group, await getData(profile.id), parked, mainTabId, new Set(), [], await usesAppData(group));
   }
   group.epoch += 1;
   delete group.switching;
@@ -1052,7 +1065,7 @@ async function adopt(tabId) {
   delete group.paused;
   await saveGroups();
   await syncCookies(group.id, true);
-  const { found } = await readStorage(await siteTabs(group.domains), group.domains, tab.id, true);
+  const { found } = await readStorage(await siteTabs(group.domains), group.domains, tab.id, await usesAppData(group));
   await putData(profile.id, mergeStorage({}, found));
   group.pending = [];
   await saveGroups();
