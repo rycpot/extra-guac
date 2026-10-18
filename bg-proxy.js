@@ -184,9 +184,10 @@ const proxyFree = (st) => st.plan?.free !== false;
 const proxyActive = (cfg, st) => !!(cfg.key && cfg.on && st.plan && (st.proxies?.length || proxyOut(st)) && !st.badKey
   && !(proxyOut(st) && cfg.whenOut === "direct"));
 const proxyMode = (cfg, st) => (proxyFree(st) ? "sites" : cfg.mode);
-// Session Switch profiles with a proxy take some of the plan's sites (sessionTaken, one per site).
-let sessionTaken = 0;
-const proxySites = (cfg, st) => cfg.sites.slice(0, Math.max(0, TT.PROXY_LIMITS[proxyFree(st) ? "free" : "paid"] - sessionTaken)).filter((s) => s.on);
+// Session Switch profiles with a proxy take some of the plan's sites (TT.proxySlots): how many of
+// the list's entries are left for it, as last worked out (null: not yet, the plan's limit).
+let sessionOwnLimit = null;
+const proxySites = (cfg, st) => cfg.sites.slice(0, sessionOwnLimit ?? TT.PROXY_LIMITS[proxyFree(st) ? "free" : "paid"]).filter((s) => s.on);
 
 // Whether a page's host goes through a proxy now (for the toolbar icon and the panel).
 // This computer and its network: always direct (as in the routing script).
@@ -260,7 +261,7 @@ async function applyProxyNow() {
   if (!!st.blocked !== blocked && cfg.key) {
     await editLocal(["proxyState"], ({ proxyState }) => (proxyState ? { proxyState: { ...proxyState, blocked } } : null));
   }
-  sessionTaken = proxyMode(cfg, st) === "full" ? 0 : ((await chrome.storage.local.get("ssProxySites")).ssProxySites || []).length;
+  sessionOwnLimit = TT.proxySlots(cfg, st, (await chrome.storage.local.get("ssProxySites")).ssProxySites).own;
   const profiles = await sessionProxyRoutes(cfg, st);
   const domains = Object.keys(profiles);
   sessionRouted = domains;

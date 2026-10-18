@@ -858,7 +858,7 @@ async function addProfile(tabId, name, discard, proxy) {
   const { tab, group: found, domains } = await locate(tabId);
   await pauseIfChangedOutside(found);
   if (!discard && await unsaved(found, domains)) return { confirm: true };
-  if (proxy) await assertProxyRoom(domains[0]);
+  if (proxy) await assertProxyRoom(domains[0], proxy.country);
   const group = found || makeGroup(domains[0]);
   const profile = makeProfile(group, cleanName(name, group));
   if (proxy) profile.proxy = { country: /^[A-Z]{2}$/.test(proxy.country) ? proxy.country : "" };
@@ -1197,7 +1197,7 @@ async function unlink(groupId, domain) {
 // inactive; a profile that is already here is left alone.
 async function importBackup(payload) {
   let added = 0, skipped = 0, noRoom = 0;
-  const proxied = new Set(); // sites given a proxy by this import, not yet in ssProxySites
+  const proxied = new Set(); // "site|country" given a proxy by this import, not yet in ssProxySites
   const text = (value, fallback) => (typeof value === "string" ? value : fallback);
   for (const saved of Object.values(payload?.groups || {})) {
     // Only domains the browser accepts as a site: never a public suffix like com.
@@ -1226,9 +1226,10 @@ async function importBackup(payload) {
         if (inScope(hostOf(origin), group.domains) && d && typeof d === "object") data[origin] = d;
       }
       let proxy = source.proxy && typeof source.proxy === "object" ? { country: /^[A-Z]{2}$/.test(source.proxy.country) ? source.proxy.country : "" } : null;
-      // A proxy takes one of the plan's sites: kept only while there's room for it.
-      if (proxy && !proxied.has(group.domains[0])) {
-        if (await proxyRoom(group.domains[0], proxied.size)) proxied.add(group.domains[0]);
+      // A proxy takes one of the plan's sites (one per site and country): kept only while there's room.
+      const slot = proxy && `${group.domains[0]}|${proxy.country}`;
+      if (proxy && !proxied.has(slot)) {
+        if (await proxyRoom(group.domains[0], proxy.country, proxied.size)) proxied.add(slot);
         else {
           proxy = null;
           noRoom++;
@@ -1472,17 +1473,17 @@ async function saveProxySites() {
 }
 
 // A profile's proxy takes one of the plan's sites (the free plan has 20), shared with the proxy's
-// own list; a site whose profiles already use one doesn't take another.
-// (On a paid plan sending every site through the proxy, the list is of skipped sites, and profiles
-// take none of it.) extra: sites about to be added that ssProxySites doesn't have yet.
-async function proxyRoom(site, extra = 0) {
+// own list, one per site and country (TT.proxySlots): a site already going through that country,
+// in the list or on another profile, takes no more. extra: places about to be added that
+// ssProxySites doesn't have yet.
+async function proxyRoom(site, country, extra = 0) {
+  country = /^[A-Z]{2}$/.test(country || "") ? country : "";
   const [{ cfg, st }, { ssProxySites = [] }] = await Promise.all([getProxy(), chrome.storage.local.get("ssProxySites")]);
-  const free = st.plan?.free !== false;
-  if (ssProxySites.some((s) => s.site === site) || (!free && cfg.mode === "full")) return true;
-  return cfg.sites.length + ssProxySites.length + extra < TT.PROXY_LIMITS[free ? "free" : "paid"];
+  const slots = TT.proxySlots(cfg, st, ssProxySites);
+  return slots.has(site, country || "") || slots.used + extra < slots.max;
 }
-async function assertProxyRoom(site) {
-  if (await proxyRoom(site)) return;
+async function assertProxyRoom(site, country) {
+  if (await proxyRoom(site, country)) return;
   const { st } = await getProxy();
   const free = st.plan?.free !== false;
   throw new Error(`All ${TT.PROXY_LIMITS[free ? "free" : "paid"]} proxy sites of the ${free ? "free plan" : "plan"} are in use. Remove one in the proxy settings to give this site a proxy.`);
@@ -1528,7 +1529,7 @@ chrome.proxy.settings.onChange.addListener((details) => {
 async function setProfileProxy(profileId, proxy) {
   const profile = await getProfile(profileId);
   if (!profile) return { ok: false };
-  if (proxy) await assertProxyRoom(groupById(profile.groupId)?.domains[0]);
+  if (proxy) await assertProxyRoom(groupById(profile.groupId)?.domains[0], proxy.country);
   profile.proxy = proxy ? { country: /^[A-Z]{2}$/.test(proxy.country) ? proxy.country : "" } : null;
   await putProfile(profile);
   await saveProxySites();

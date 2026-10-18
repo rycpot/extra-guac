@@ -1170,9 +1170,11 @@ function initProxy(isWeb) {
   let ss = []; // sites whose session switch profiles use a proxy: they take some of the plan's sites
   const free = () => st.plan?.free !== false;
   const full = () => !free() && cfg.mode === "full";
-  const total = () => TT.PROXY_LIMITS[free() ? "free" : "paid"];
-  const taken = () => (full() ? 0 : ss.length);
-  const max = () => Math.max(0, total() - taken()); // what's left for the proxy's own list
+  const slots = () => TT.proxySlots(cfg, st, ss); // one per site and country, with session switch profiles
+  const total = () => slots().max;
+  const max = () => slots().own; // how many of the proxy's own list can be used
+  // Room to add this site: a place left, or this site already going through that country.
+  const roomFor = (site) => slots().used < total() || slots().has(site, TT.proxyCountry(cfg, [], { country: "" }).want);
   async function save(fn) {
     const { proxy } = await chrome.storage.local.get("proxy");
     const next = TT.proxyOf(proxy);
@@ -1230,7 +1232,7 @@ function initProxy(isWeb) {
     if (!entry) {
       const add = el("button", { className: "text-btn", innerHTML: '<svg><use href="#i-plus"/></svg>add this site' });
       add.onclick = () => {
-        if (cfg.sites.length >= max()) { making = true; return render(); }
+        if (!roomFor(host)) { making = true; return render(); }
         save((p) => p.sites.push({ site: host, on: true, country: "" }));
       };
       return subRow(el("span", { className: "px-site" }, el("span", { textContent: host })), add);
@@ -1271,7 +1273,7 @@ function initProxy(isWeb) {
     }
     const cancel = el("button", { className: "px-cancel", textContent: "not now" });
     cancel.onclick = () => { making = false; render(); };
-    return el("div", { className: "px-full" }, el("p", {}, "All ", el("b", { textContent: String(total()) }), ` sites are used${taken() ? ` (${taken()} by session switch profiles)` : ""}. Remove one to add `, el("b", { textContent: host }), ":"), pills, cancel);
+    return el("div", { className: "px-full" }, el("p", {}, "All ", el("b", { textContent: String(total()) }), ` sites are used (one per site and country, session switch profiles included). Remove one to add `, el("b", { textContent: host }), ":"), pills, cancel);
   }
 
   function render() {
@@ -1280,8 +1282,8 @@ function initProxy(isWeb) {
     setSwitch($("pxToggle"), cfg.on);
     $("pxMode").hidden = !keyed || free();
     for (const b of $("pxMode").querySelectorAll("button")) b.setAttribute("aria-checked", String(b.dataset.mode === cfg.mode));
-    $("pxStatus").textContent = !keyed ? "set up" : free() ? `${cfg.sites.length + taken()} / ${total()}` : "";
-    const more = keyed ? [usage(), cfg.sites.length >= max() && making && host && !full() ? makeRoom() : thisSite()].filter(Boolean) : [];
+    $("pxStatus").textContent = !keyed ? "set up" : free() ? `${slots().used} / ${total()}` : "";
+    const more = keyed ? [usage(), !roomFor(host) && making && host && !full() ? makeRoom() : thisSite()].filter(Boolean) : [];
     $("pxMore").replaceChildren(...more);
   }
 

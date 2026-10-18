@@ -597,10 +597,10 @@
     const size = (b) => (b >= GB ? `${+(b / GB).toFixed(b >= 10 * GB ? 0 : 1)} GB` : `${Math.max(0, Math.round(b / 1024 ** 2))} MB`);
     const day = (t) => new Date(t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
     const free = () => st.plan?.free !== false;
-    const total = () => TT.PROXY_LIMITS[free() ? "free" : "paid"];
     const full = () => !free() && cfg.mode === "full";
-    const taken = () => (full() ? 0 : ss.length);
-    const max = () => Math.max(0, total() - taken()); // what's left for the list here
+    const slots = () => TT.proxySlots(cfg, st, ss); // one per site and country, with session switch profiles
+    const total = () => slots().max;
+    const max = () => slots().own; // how many of the list here can be used
     const out = () => !!(st.plan?.limit && st.used >= st.plan.limit);
     const countries = () => [...new Set((st.proxies || []).map((p) => p.c).filter(Boolean))].sort((a, b) => TT.countryName(a).localeCompare(TT.countryName(b)));
     async function save(fn) {
@@ -789,6 +789,7 @@
           const c = TT.proxyCountry(cfg, st.proxies, s);
           if (!c.ok && st.proxies) name.append(el("small", { textContent: c.use ? `${TT.countryName(c.want)} unavailable · using ${TT.countryName(c.use)}` : `${TT.countryName(c.want)} unavailable · waiting for it` }));
           else if (i >= max() && s.on) name.append(el("small", { textContent: `over the ${max()}-site limit of this plan: not used` }));
+          else if (ss.some((e) => e.domains.includes(s.site))) name.append(el("small", { className: "px-note", textContent: "while a session switch profile with a proxy is in use, its country goes first" }));
         }
         const x = el("button", { type: "button", className: "px-x", textContent: "×", title: `Remove ${s.site}` });
         x.onclick = () => save((p) => (p[key] = p[key].filter((e) => e.site !== s.site)));
@@ -806,13 +807,15 @@
         const site = TT.proxySite(add.value);
         if (!site) return void (add.value.trim() && alert("That doesn't look like a site, e.g. example.com"));
         if (list.some((e) => e.site === site)) return void (add.value = "");
-        if (list.length >= max()) return void alert(free()
-          ? `The free plan takes up to ${total()} sites${taken() ? `, ${taken()} of them through session switch profiles` : ""}. Remove one to add ${site}.`
-          : `Up to ${total()} sites${taken() ? `, ${taken()} of them through session switch profiles` : ""}. Remove one to add ${site}.`);
+        // Already going through that country for a session switch profile: no new place taken.
+        const country = full() ? "" : TT.proxyCountry(cfg, [], { country: "" }).want;
+        if (slots().used >= total() && !slots().has(site, country)) return void alert(free()
+          ? `The free plan takes up to ${total()} sites (one per site and country, session switch profiles included). Remove one to add ${site}.`
+          : `Up to ${total()} sites (one per site and country, session switch profiles included). Remove one to add ${site}.`);
         refocus = "add";
         save((p) => p[key].push({ site, on: true, country: "" }));
       };
-      const head = el("div", { className: "px-lhead" }, el("span", { textContent: full() ? "Sites that skip the proxy" : "Sites that use the proxy" }), el("span", { textContent: `${list.length + taken()} / ${total()}` }));
+      const head = el("div", { className: "px-lhead" }, el("span", { textContent: full() ? "Sites that skip the proxy" : "Sites that use the proxy" }), el("span", { textContent: `${slots().used} / ${total()}` }));
       // Sites whose session switch profiles use a proxy: a group of their own above the sites
       // here, counted with them, changed in the popup's session switch section (each profile's
       // proxy), which "change in popup" opens on the site.

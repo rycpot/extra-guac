@@ -191,6 +191,25 @@
     const b = cfg.backups.find((x) => x === "*" || have.includes(x));
     return { want, use: b === "*" ? have.find((c) => c !== want) || "" : b || "", ok: false };
   }
+  // The plan's proxy sites in use: one per site and country, over the list here and the proxies of
+  // Session Switch profiles (ssSites, see bg-sessions.js). A site in the list and on a profile
+  // through the same country takes one; through different countries, one each (a profile's always
+  // wins for its site while it's in use). On a paid plan sending every site through, the list is of
+  // skipped sites and profiles take none.
+  //   used, max   sites in use and the plan's limit
+  //   own         how many of the list's entries can be used (the rest wait, past the limit)
+  //   has(site, country)   whether that site and country already have their place
+  function proxySlots(cfg, st, ssSites = []) {
+    const free = st?.plan?.free !== false;
+    const max = PROXY_LIMITS[free ? "free" : "paid"];
+    if (!free && cfg.mode === "full") return { used: cfg.skip.length, max, own: max, has: () => true };
+    const key = (site, country) => `${site}|${country || ""}`;
+    const own = new Set(cfg.sites.map((s) => key(s.site, proxyCountry(cfg, [], s).want)));
+    const profiles = new Set((ssSites || []).flatMap((e) => e.profiles.map((p) => key(e.site, p.country))));
+    const all = new Set([...own, ...profiles]);
+    const profilesOnly = [...profiles].filter((k) => !own.has(k)).length;
+    return { used: all.size, max, own: Math.max(0, max - profilesOnly), has: (site, country) => all.has(key(site, country)) };
+  }
   let regionNames = null;
   function countryName(code) {
     if (code === "*") return "any other";
@@ -348,5 +367,5 @@
   const hostName = (h) => (h === "x02" ? "X02" : h);
   const uploadChoices = (u) => { const on = uploadHosts(u); return on.includes(u.menu) ? [u.menu] : on; };
 
-  globalThis.TT = { when, settingsTask, uploadHosts, uploadChoices, hostName, focusNew, focusPattern, focusMatches, focusAddress, focusExpiresAt, focusState, focusThresholdMs, DEFAULTS, MAX_KEYWORDS, HL_LIMITS, HL_COLORS, HL_LOOKS, hlLookRule, hlOf, hlSiteKey, PROXY_LIMITS, proxyOf, proxySite, proxyCovers, proxyCountry, countryName, SHORTENERS, SHORTENER_LABEL, shortQuota, shortDay, keyTag, PANELS, SECTIONS, layoutOf, merge, getSettings, updateSettings, monthKey, cleanFolder, applyTheme };
+  globalThis.TT = { when, settingsTask, uploadHosts, uploadChoices, hostName, focusNew, focusPattern, focusMatches, focusAddress, focusExpiresAt, focusState, focusThresholdMs, DEFAULTS, MAX_KEYWORDS, HL_LIMITS, HL_COLORS, HL_LOOKS, hlLookRule, hlOf, hlSiteKey, PROXY_LIMITS, proxyOf, proxySite, proxyCovers, proxyCountry, proxySlots, countryName, SHORTENERS, SHORTENER_LABEL, shortQuota, shortDay, keyTag, PANELS, SECTIONS, layoutOf, merge, getSettings, updateSettings, monthKey, cleanFolder, applyTheme };
 })();
