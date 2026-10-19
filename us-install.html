@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Install userscript · Extra Guac</title>
+  <link rel="stylesheet" href="settings.css">
+  <link rel="stylesheet" href="us-pages.css">
+</head>
+<body class="install">
+  <div class="card">
+    <div class="brand" id="kicker">extra guac · install userscript</div>
+    <p class="mut" id="loading">Loading the script…</p>
+    <div id="notice" hidden></div>
+    <div id="view" hidden>
+      <div class="head"><div class="ico" id="ico"></div>
+        <div><h1><span id="name"></span> <span class="ver" id="version"></span></h1>
+          <div class="mut" id="from"></div></div></div>
+      <p class="mut" id="desc"></p>
+      <p id="change" hidden></p>
+      <section><h2>Runs on</h2><div class="pills" id="runs"></div></section>
+      <section><h2 id="canHead">It will be able to</h2><div class="acc" id="can"></div></section>
+      <section><details id="srcBox"><summary id="srcSum">view source</summary><pre class="code-font" id="code"></pre></details></section>
+      <div class="actions">
+        <span class="note" id="note">Only install scripts from authors you trust.</span>
+        <button type="button" class="btn ghost" id="cancel">cancel</button>
+        <button type="button" class="btn blue" id="install">install</button>
+      </div>
+    </div>
+  </div>
+  <script src="shared.js"></script>
+  <script src="us-meta.js"></script>
+  <script src="us-install.js"></script>
+</body>
+</html>

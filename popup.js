@@ -50,6 +50,7 @@ function initForTab() {
   initOcr(isWeb);
   initProxy(isWeb);
   globalThis.initSessions?.(tab);
+  globalThis.initUserscripts?.(tab);
 }
 
 async function init() {

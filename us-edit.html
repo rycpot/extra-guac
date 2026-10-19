@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Userscript · Extra Guac</title>
+  <link rel="stylesheet" href="settings.css">
+  <link rel="stylesheet" href="us-pages.css">
+</head>
+<body>
+  <div class="bar">
+    <a class="ib" href="settings.html#userscripts" title="All userscripts"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></a>
+    <span class="brand">userscripts</span>
+    <span class="title" id="title">new script</span><span class="ver" id="ver"></span>
+    <span class="grow"></span>
+    <span class="mut" id="status" role="status" aria-live="polite"></span>
+    <label class="toggle" id="enabledWrap" hidden>on <input type="checkbox" id="enabled"></label>
+    <button type="button" class="btn ghost" id="revert" disabled>revert</button>
+    <button type="button" class="btn blue" id="save">save <span class="mut" style="color:inherit;opacity:.7">Ctrl+S</span></button>
+  </div>
+  <div class="ed">
+    <div class="code code-font">
+      <div class="gutter" id="gutter">1</div>
+      <div class="stack"><pre id="hl" aria-hidden="true"></pre><textarea id="src" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Script code"></textarea></div>
+    </div>
+    <aside class="side2" id="side"></aside>
+  </div>
+  <script src="shared.js"></script>
+  <script src="us-meta.js"></script>
+  <script src="us-edit.js"></script>
+</body>
+</html>

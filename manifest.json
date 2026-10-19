@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Extra Guac",
-  "version": "264",
+  "version": "265",
   "description": "Page tools in a side panel: screenshots, privacy blur, dark mode, auto-refresh, highlights, clipboard history, image saving & more.",
   "permissions": [
     "alarms",
@@ -26,6 +26,9 @@
     "webRequest",
     "webRequestAuthProvider"
   ],
+  "optional_permissions": [
+    "userScripts"
+  ],
   "host_permissions": [
     "<all_urls>"
   ],
@@ -49,6 +52,12 @@
     "128": "icons/icon128.png"
   },
   "options_page": "settings.html",
+  "web_accessible_resources": [
+    {
+      "resources": ["us-install.html"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "short_name": "Extra Guac",
   "side_panel": {
     "default_path": "popup.html"

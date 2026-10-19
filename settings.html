@@ -27,6 +27,7 @@
     <a href="#newtab">other sites in new tab</a>
     <a href="#focus">refresh on focus</a>
     <a href="#sessions">session switch</a>
+    <a href="#userscripts">userscripts</a>
     <a href="#backup">backup</a>
   </nav>
 
@@ -639,6 +640,78 @@ Card 4111 1111 1111 1111</textarea>
     </section>
   </div>
 
+  <div class="pane us-pane" id="userscripts">
+    <header class="pane-head"><h1>userscripts</h1><label class="toggle" title="Run userscripts">on <input type="checkbox" data-path="us.enabled"></label></header>
+    <section id="usSetup" hidden>
+      <h2>Getting started</h2>
+      <div class="us-notice" id="usNeedPermission" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.2v.1"/></svg>
+        <div><h3>Allow Extra Guac to run userscripts</h3>
+          <p>Userscripts are small programs you add yourself that change how sites look or work. Chrome asks you once before Extra Guac can run them.</p>
+          <button type="button" class="btn blue" id="usGrant">allow userscripts</button></div>
+      </div>
+      <div class="us-notice" id="usNeedSwitch" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.2v.1"/></svg>
+        <div><h3>Chrome needs one more switch</h3>
+          <p>Chrome only lets an extension run scripts you add when you allow it on the extension's own page.</p>
+          <ol><li>Click <b>open extension details</b> below.</li><li>Turn on <b>Allow User Scripts</b> (in older Chrome versions: <b>Developer mode</b>, at the top right of the extensions page).</li><li>Come back here. This message goes away by itself.</li></ol>
+          <button type="button" class="btn blue" id="usDetails">open extension details</button></div>
+      </div>
+      <div class="us-notice" id="usOldChrome" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.2v.1"/></svg>
+        <div><h3>Chrome 131 or later is needed</h3><p>Update Chrome (menu → Help → About Google Chrome), then come back here.</p></div>
+      </div>
+    </section>
+    <section>
+      <div class="us-tools">
+        <button type="button" class="btn blue" id="usNew"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>new</button>
+        <button type="button" class="btn" id="usFromUrl">from URL</button>
+        <span class="grow"></span>
+        <input class="text us-filter" id="usFilter" type="search" placeholder="filter scripts" aria-label="Filter scripts">
+      </div>
+      <table class="us-table" id="usTable" hidden>
+        <thead><tr><th></th><th>name</th><th>version</th><th>sites</th><th>access</th><th>updated</th><th></th></tr></thead>
+        <tbody id="usRows"></tbody>
+      </table>
+      <p class="rm-empty" id="usEmpty">No userscripts yet. Open a .user.js link to install one, write one with <b>new</b>, or import some below.</p>
+      <div class="us-legend" id="usLegend" hidden></div>
+    </section>
+    <section>
+      <h2>Updates <span class="hint" id="usChecked"></span></h2>
+      <div class="row"><label>check for updates</label>
+        <div class="seg radios" role="radiogroup" aria-label="Check for updates">
+          <label><input type="radio" name="usInterval" value="0" data-path="us.interval" data-number><span>never</span></label>
+          <label><input type="radio" name="usInterval" value="1" data-path="us.interval" data-number><span>every hour</span></label>
+          <label><input type="radio" name="usInterval" value="6" data-path="us.interval" data-number><span>every 6 hours</span></label>
+          <label><input type="radio" name="usInterval" value="24" data-path="us.interval" data-number><span>daily</span></label>
+          <label><input type="radio" name="usInterval" value="168" data-path="us.interval" data-number><span>weekly</span></label>
+        </div>
+        <button type="button" class="btn" id="usCheckNow">check now</button></div>
+      <div class="row"><label>when a script asks for new access</label>
+        <div class="seg radios" role="radiogroup" aria-label="When an update asks for new access">
+          <label><input type="radio" name="usAsk" value="true" id="usAskYes"><span>ask me first</span></label>
+          <label><input type="radio" name="usAsk" value="false" id="usAskNo"><span>update anyway</span></label>
+        </div></div>
+      <p class="hint" id="usCheckStatus" role="status" aria-live="polite"></p>
+    </section>
+    <section>
+      <h2>Backup</h2>
+      <div class="row">
+        <button type="button" class="btn" id="usExport">export all as .zip</button>
+        <button type="button" class="btn" id="usImport">import</button>
+        <input type="file" id="usImportFile" multiple accept=".zip,.txt,.json,.js" hidden>
+      </div>
+      <p class="hint">Import takes a .zip export, a userscript backup text file (.txt or .json) or .user.js files, with what the scripts saved
+        when the file has it. A script with the same name and namespace as one here takes its place; anything else is added.</p>
+      <div class="row"><label>restore from Drive</label>
+        <select id="usSnap" aria-label="Drive snapshot"><option value="">connect Google Drive in backup first</option></select>
+        <button type="button" class="btn" id="usRestore" disabled>restore userscripts only</button></div>
+      <p class="hint">Only the scripts and what they saved change; every other setting stays as it is. Scripts are also part of every
+        Drive backup and full restore, and <a href="#backup">undo last restore</a> puts back what was here before.</p>
+      <p class="hint" id="usBackupStatus" role="status" aria-live="polite"></p>
+    </section>
+  </div>
+
   <div class="pane" id="backup">
     <header class="pane-head"><h1>backup</h1></header>
     <section class="ss-waiting" id="ssRestorePanel" hidden>
@@ -733,5 +806,8 @@ Card 4111 1111 1111 1111</textarea>
   <script src="color-menu.js"></script>
 <script src="settings.js"></script>
   <script src="settings-sessions.js"></script>
+  <script src="us-meta.js"></script>
+  <script src="us-zip.js"></script>
+  <script src="settings-userscripts.js"></script>
 </body>
 </html>

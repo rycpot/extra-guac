@@ -70,10 +70,13 @@
     // apipro1/apipro2.ocr.space, or endpoint if the welcome email names another; 5 MB per
     // image). The key itself doesn't say which plan it's on, and there's no way to ask.
     ocr: { key: "", engine: "2", plan: "free", endpoint: "" },
+    // Userscripts (bg-userscripts.js): on for all, how often to look for updates (hours, 0 =
+    // never), and whether an update that asks for more access waits for an OK.
+    us: { enabled: true, interval: 24, ask: true },
     // Which of the first three popup tabs each section is in, top to bottom (settings →
     // general → tools layout). The fourth tab (backup) is fixed.
     layout: {
-      tools: ["screenshot", "ocr", "blur", "scratch", "dark", "refresh", "autoRefresh", "shortener", "qr", "volume", "proxy", "awake", "highlight", "clipboard", "unlock"],
+      tools: ["screenshot", "ocr", "blur", "scratch", "dark", "refresh", "autoRefresh", "shortener", "qr", "volume", "proxy", "awake", "highlight", "clipboard", "unlock", "userscripts"],
       page: ["imgzoom", "imgdl", "upload", "color", "font", "element", "remove", "newTab", "redirect", "focus"],
       extra: ["sessions"],
     },
@@ -85,7 +88,7 @@
     screenshot: "screenshot", blur: "privacy blur", scratch: "scratch pads", dark: "dark mode", refresh: "refresh", autoRefresh: "auto-refresh",
     shortener: "URL shorten", qr: "QR code", volume: "tab volume", proxy: "proxy", awake: "awake", color: "what color?", element: "what element?",
     font: "what font?", remove: "remove elements", highlight: "highlight words", imgzoom: "zoom & rotate images", imgdl: "save images on click", clipboard: "clipboard history", redirect: "URL auto redirect", upload: "upload images", unlock: "enable copy & right-click", ocr: "text from image", newTab: "open other site urls in new tab", focus: "refresh on focus",
-    sessions: "session switch",
+    sessions: "session switch", userscripts: "userscripts",
   };
 
   // A saved layout with unknown sections dropped and any missing ones (new in an update)

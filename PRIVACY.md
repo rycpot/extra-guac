@@ -1,6 +1,6 @@
 # Extra Guac privacy policy
 
-_Last updated: October 18, 2026_
+_Last updated: October 19, 2026_
 
 Extra Guac is a browser extension with tools for the page you're on: screenshots, privacy blur, dark mode, auto-refresh, word highlighting, clipboard history, image saving, sending files between your devices (Beam) and similar tools. This policy covers what it handles and where that goes.
 
@@ -19,6 +19,7 @@ These are kept in Chrome's local extension storage, on your computer only:
 - **Recent results:** shortened links, uploaded image links, picked colors, element selectors and fonts.
 - **Proxy:** your Webshare API key, your lists of sites and countries, and what Webshare reports for your account (your plan, this month's data use, and your proxies' addresses, countries, cities and login). The proxy logins aren't included in Drive backups.
 - **Session switch profiles:** for each site you save profiles for, each profile's copy of the site's cookies (its login), the site's page storage (localStorage, sessionStorage and IndexedDB, up to 25 MB), its name, color and proxy country. They stay on your computer, like Chrome's own cookies, and aren't part of the settings file. An encrypted backup file is made only when you ask, with a passphrase you choose that isn't stored. Drive backups leave them out unless you turn that on in settings → session switch: then they go in encrypted with a passphrase you choose (without IndexedDB copies), so your Drive only holds ciphertext; this browser keeps the key, not the passphrase.
+- **Userscripts:** the scripts you install or write (their code, the files they load, where each came from and when it was updated) and the values each script saves for itself. They're part of Drive backups and the userscripts .zip export.
 - **QR code history:** the newest 50 static and 50 dynamic codes you made (what each one holds, and a dynamic code's short link and destination), and the icon you chose for the middle of your codes.
 
 The following are worked out in your browser and never sent anywhere:
@@ -43,6 +44,7 @@ The following are worked out in your browser and never sent anywhere:
 | Save images on click | The site the image comes from | A normal request for the image, like your browser makes when showing it |
 | Upload history thumbnails (uploads without a saved thumbnail, such as ones made before thumbnails or restored from a backup) | The image host the link points to | One normal request for that uploaded image, like opening the link, to make its thumbnail. Thumbnails stay on this computer and aren't backed up. |
 | Beam: sending files between your devices (only while you use it, in its own tab or the side panel) | PeerJS's public connection server (0.peerjs.com) and Google's and Cloudflare's STUN servers (stun.l.google.com, stun.cloudflare.com), to put the devices in touch; public TURN servers (ExpressTURN's at free.expressturn.com, and turn.evan-brass.net) when a network blocks a direct path, to pass the direct link along; when a direct link isn't possible, public Piping Server relays (piping.onrender.com or ppng.io); the files themselves go to the devices you pair with | The connection server gets a room name made from the 6-digit code and your network address, as any connection does; the STUN servers tell the device its public address (either one is enough; both are asked). Each device shows the other its type and browser (such as "Mac · Chrome"), and the device that shows the code must accept each one that joins: one device, or with Broadcast on up to 5. Files go straight between the devices over an encrypted WebRTC link (passed along by a TURN server when a network blocks a direct path; it sees only encrypted data). Through a relay they're encrypted end to end with a key only the sending and receiving device have (made fresh for each pairing), so the relay sees only encrypted data and its size, and keeps nothing. To pick the faster relay, a device about to send a file through one first sends 1 MB of empty test data through each relay to itself; the measured speeds (just the two relays' speeds and when they were measured) are kept in the browser, as is this month's data usage (how many bytes of files this device sent and received, and how many went through each relay), which Beam shows from the arrows at the bottom of the page. Beam stores nothing else: a received file is saved only when you click Save file. |
+| Userscripts (only the scripts you install) | The address you install a script from, when you install it and when it's checked for updates (on the schedule you pick, or never); and the sites a script itself sends requests to, which it must list (by @connect) unless it lists none | Normal requests for the script and the files it names. A script's own requests go with your cookies for that site, like the site's own pages would. What a script does in a page is up to its code: install scripts only from authors you trust. |
 | HTML preview in a scratch pad (only after "Load them for this pad") | The sites the HTML file's images, styles and fonts come from | Normal requests for those files, like your browser makes when showing the page. Until you allow it for that pad, nothing is requested. |
 
 These services have their own privacy policies. Extra Guac sends nothing else to them, and nothing at all to anyone else.
@@ -52,7 +54,7 @@ These services have their own privacy policies. Extra Guac sends nothing else to
 - It doesn't sell, rent or share your data.
 - It doesn't track your browsing, keep a browsing history or build a profile of you.
 - It doesn't use your data for advertising or credit decisions, or for any purpose other than the tools described above.
-- It doesn't load or run code from the internet.
+- It doesn't load or run code from the internet, apart from userscripts you choose to install, which run only through Chrome's user script feature after you allow it.
 
 ## Your control
 

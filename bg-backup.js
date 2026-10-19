@@ -26,7 +26,7 @@
 // any more.
 
 // "backup" is the Drive setup (auto-sync interval); the sign-in itself isn't saved.
-const BACKUP_KEYS = ["tt", "pii", "removed", "shortHistory", "shortCounts", "uploadHistory", "colorHistory", "selectorHistory", "fontHistory", "hl", "proxy", ...PADS.PAD_KEYS, "shotHistory", "qrHistory", "qrIcons", "myColors", "backup"];
+const BACKUP_KEYS = ["tt", "pii", "removed", "shortHistory", "shortCounts", "uploadHistory", "colorHistory", "selectorHistory", "fontHistory", "hl", "proxy", ...PADS.PAD_KEYS, "shotHistory", "qrHistory", "qrIcons", "myColors", "usScripts", "usValues", "backup"];
 const BACKUP_FOLDER = "Extra Guac backups";
 const FOLDER_TYPE = "application/vnd.google-apps.folder";
 const BACKUP_ALARM = "tt-backup";
@@ -77,6 +77,7 @@ const backupHandlers = {
   backupRestore: async ({ id, what }) => {
     const snap = await readSnapshot(id);
     if (what === "bookmarks") return { folder: await restoreBookmarks(snap) };
+    if (what === "userscripts") return restoreUserscripts(snap);
     assertHasData(snap.data);
     return locked(async () => {
       const saved = await savePreRestore();
@@ -291,6 +292,7 @@ async function listSnapshots() {
       kind: f.appProperties?.kind || "auto",
       keepUntil: Number(f.appProperties?.keepUntil) || 0,
       hash: f.appProperties?.hash || "", // what's in it (older snapshots don't say)
+      scripts: f.appProperties?.scripts ? Number(f.appProperties.scripts) : null, // userscripts in it (older ones don't say)
     }))
     .sort((a, b) => b.at - a.at);
 }
@@ -339,7 +341,7 @@ async function uploadSnapshot(snap, props = {}) {
     name: `${prefix}-${stamp(new Date(at))}.json.gz`,
     parents: [folder],
     mimeType: "application/gzip",
-    appProperties: { at: String(at), tt: "1", device: await deviceId(), ...props },
+    appProperties: { at: String(at), tt: "1", device: await deviceId(), ...(Array.isArray(snap.data.usScripts) ? { scripts: String(snap.data.usScripts.length) } : {}), ...props },
   };
   const b = `tt${crypto.randomUUID()}`;
   const gz = await gzip(JSON.stringify(snap));
@@ -452,8 +454,8 @@ async function applyDataNow(data) {
   for (const k of BACKUP_KEYS) {
     if (k === "backup") continue;
     if (!hasPads && PADS.PAD_KEYS.includes(k)) continue; // older backups have no pads: keep them
-    // nor a screenshot history, QR codes, My colors or the proxy (backed up since later versions)
-    if (["shotHistory", "qrHistory", "qrIcons", "myColors", "proxy"].includes(k) && data[k] === undefined) continue;
+    // nor a screenshot history, QR codes, My colors, the proxy or userscripts (backed up since later versions)
+    if (["shotHistory", "qrHistory", "qrIcons", "myColors", "proxy", "usScripts", "usValues"].includes(k) && data[k] === undefined) continue;
     if (data[k] !== undefined) set[k] = data[k];
     else remove.push(k);
   }
@@ -473,6 +475,18 @@ async function applyDataNow(data) {
   if (data.ssProfiles) return { profiles: await sessionDriveRestore(data.ssProfiles).catch((err) => console.error("[backup] profiles", err)) };
   // Backups from 191 have a single QR icon ("qrIcon"): it becomes the first of yours.
   if (typeof data.qrIcon === "string" && data.qrIcons === undefined) await chrome.storage.local.set({ qrIcon: data.qrIcon });
+}
+
+// Userscripts only: the snapshot's scripts and what they saved take the place of the ones here;
+// every other setting stays. The copy taken first (savePreRestore) undoes it, like a full restore.
+function restoreUserscripts(snap) {
+  if (!Array.isArray(snap.data?.usScripts)) throw new Error("This snapshot has no userscripts");
+  return locked(async () => {
+    const saved = await savePreRestore();
+    const usValues = snap.data.usValues && typeof snap.data.usValues === "object" ? snap.data.usValues : {};
+    await editLocal([], () => ({ usScripts: snap.data.usScripts, usValues }));
+    return { ...saved, scripts: snap.data.usScripts.length };
+  });
 }
 
 // Bookmarks come back next to the current ones, in a new folder under "Other bookmarks".

@@ -1,0 +1,58 @@
+/* Userscripts editor and install page, on top of settings.css (its colors, buttons and switch).
+   Code colors as in the scratch pads. */
+:root { --k-kwd: #ff7b72; --k-str: #7ee787; --k-cmnt: rgba(255,255,255,.42); --k-num: #79c0ff; --k-func: #d2a8ff; --k-class: #ffa657; --k-oper: rgba(255,255,255,.55); --k-var: #79c0ff; }
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] { --k-kwd: #cf222e; --k-str: #0a7f3f; --k-cmnt: rgba(0,0,0,.45); --k-num: #0550ae; --k-func: #8250df; --k-class: #953800; --k-oper: rgba(0,0,0,.55); --k-var: #0550ae; }
+}
+:root[data-theme="light"] { --k-kwd: #cf222e; --k-str: #0a7f3f; --k-cmnt: rgba(0,0,0,.45); --k-num: #0550ae; --k-func: #8250df; --k-class: #953800; --k-oper: rgba(0,0,0,.55); --k-var: #0550ae; }
+.t-kwd, .t-err { color: var(--k-kwd); } .t-str { color: var(--k-str); } .t-cmnt, .t-jsdoc { color: var(--k-cmnt); }
+.t-num, .t-bool { color: var(--k-num); } .t-func { color: var(--k-func); } .t-class { color: var(--k-class); }
+.t-oper { color: var(--k-oper); } .t-var, .t-type { color: var(--k-var); }
+
+.brand { color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.mut { color: var(--muted); }
+.bad { color: var(--error); }
+.pill { display: inline-block; padding: 1px 8px; border-radius: 20px; background: var(--chip); font-size: 11.5px; white-space: nowrap; }
+.pill.mono { font: 11px ui-monospace, "SF Mono", Menlo, monospace; padding: 2px 8px; }
+.pill.warn { background: color-mix(in srgb, #ff9f0a 18%, transparent); color: #ff9f0a; }
+.pill.ok { background: color-mix(in srgb, var(--green) 16%, transparent); color: var(--green); }
+.pills { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.ib { width: 30px; height: 30px; border-radius: 8px; border: 0; background: none; color: var(--muted); display: grid; place-items: center; cursor: pointer; }
+.ib:hover { background: var(--hover); color: var(--fg); }
+.ib svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.code-font { font: 12.5px/20px ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; letter-spacing: 0; font-variant-ligatures: none; tab-size: 2; }
+
+/* Editor: a bar, the code (a highlighted copy under a see-through textarea), the side panel. */
+.bar { display: flex; align-items: center; gap: 10px; padding: 9px 16px; border-bottom: 1px solid var(--line); }
+.bar .title { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar .grow { flex: 1; }
+.ed { flex: 1; min-height: 0; display: flex; }
+.code { position: relative; flex: 1; min-width: 0; display: flex; overflow: hidden; }
+.gutter { flex: none; padding: 14px 10px 14px 16px; text-align: right; color: var(--muted); opacity: .7; white-space: pre; overflow: hidden; user-select: none; }
+.stack { position: relative; flex: 1; min-width: 0; }
+.stack pre, .stack textarea { position: absolute; inset: 0; margin: 0; padding: 14px 16px; border: 0; white-space: pre; overflow: auto; }
+.stack pre { color: var(--fg); pointer-events: none; overflow: hidden; }
+.stack textarea { resize: none; outline: none; background: transparent; color: transparent; caret-color: var(--fg); }
+.stack textarea::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); color: transparent; }
+.side2 { width: 300px; flex: none; border-left: 1px solid var(--line); padding: 14px 16px; overflow-y: auto; }
+.side2 h2 { margin: 14px 0 6px; } .side2 h2:first-child { margin-top: 0; }
+.kv { display: grid; grid-template-columns: 82px 1fr; gap: 4px 10px; margin: 0; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; overflow-wrap: anywhere; }
+.acc { display: flex; flex-direction: column; gap: 7px; }
+.acc div { display: flex; gap: 8px; align-items: baseline; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex: none; transform: translateY(-1px); }
+
+/* Install page */
+body.install { align-items: center; overflow-y: auto; }
+.card { width: min(640px, calc(100vw - 32px)); margin: 40px 0; }
+.head { display: flex; gap: 14px; align-items: center; margin: 10px 0 4px; }
+.ico { width: 44px; height: 44px; border-radius: 11px; flex: none; background: var(--chip); display: grid; place-items: center; overflow: hidden; font-weight: 700; font-size: 18px; }
+.ico img { width: 100%; height: 100%; object-fit: contain; }
+.head h1 { font-size: 18px; }
+.ver { color: var(--muted); font-weight: 400; font-size: 13px; }
+.actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; padding-top: 16px; }
+.actions .note { margin-right: auto; color: var(--muted); }
+details pre { max-height: 420px; overflow: auto; margin: 10px 0 0; padding: 12px 14px; border-radius: 10px; background: var(--field); white-space: pre; }
+details summary { cursor: pointer; color: var(--accent); }
+.us-notice { display: flex; gap: 14px; padding: 14px 16px; margin: 10px 0; border-radius: 12px; background: color-mix(in srgb, #ff9f0a 10%, transparent); border: 1px solid color-mix(in srgb, #ff9f0a 35%, transparent); }
+.side2 .pill.mono { max-width: 100%; overflow-wrap: anywhere; white-space: normal; }

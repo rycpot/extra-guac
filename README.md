@@ -34,6 +34,7 @@ A Chrome extension. Click its icon to open the side panel (or a popup, in settin
 | **Highlight words** | Neon marks for your words, on every site or per site. Several sites can share one list. |
 | **Clipboard history** | Once on, keeps text you copy on web pages to search, pin and paste again. Password and card fields are never saved. |
 | **Enable copy & right-click** | Unlocks selecting, copying and right-clicking on sites that block them, one site at a time. |
+| **Userscripts** | Runs your own userscripts (.user.js) on the sites they name. Open a .user.js link to install one, or write one in the built-in editor. Scripts get the GM\_\* and GM.\* functions (saved values, requests to other sites, styles, menu commands, notifications, downloads and more) and update themselves on the schedule you pick, asking first when an update wants more access. Import a .zip, a userscript backup text file or .user.js files; export all as a .zip. Part of Drive backups, and can be restored from one on their own. Needs Chrome 120 or later, and Chrome's "Allow User Scripts" switch for Extra Guac (settings → userscripts shows how). |
 
 **Tab 2**
 
