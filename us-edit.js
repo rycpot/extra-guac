@@ -3,7 +3,8 @@
 // script's metadata says, kept up to date while typing.
 // usEditor(root, { id, site, onChange }) fills root (a copy of the page's editor template) and
 // returns { id(), name(), dirty(), focus(), save(), jump(), dispose() }. onChange() runs when the name,
-// the saved state or the script's id changes, so the page can update the tab.
+// the saved state or the script's id changes, so the page can update the tab. The editor stays
+// see-through (class "loading") until the code is in and colored, so it appears in one go.
 (() => {
   const send = async (type, payload = {}) => {
     const res = await chrome.runtime.sendMessage({ type, ...payload });
@@ -28,6 +29,10 @@
   const LINE = 20, PAD = 14; // .code-font line height and the code's top padding, in px
   const esc = (s) => s.replace(/[&<>]/g, (c) => (c === "&" ? "&amp;" : c === "<" ? "&lt;" : "&gt;"));
   let shj = null;
+  const highlighter = () => (shj ??= import("./vendor/speed-highlight/index.js"));
+  // Shortcut names as this computer writes them.
+  const MAC = /mac|iphone|ipad/i.test(navigator.userAgentData?.platform || navigator.platform || "");
+  const key = (k, shift = false) => (MAC ? `⌘${shift ? "⇧" : ""}${k}` : `Ctrl+${shift ? "Shift+" : ""}${k}`);
 
   globalThis.usEditor = function usEditor(root, { id = "", site = "", onChange = () => {} } = {}) {
     const q = (sel) => root.querySelector(sel);
@@ -35,16 +40,24 @@
     let saved = "", stored = "", changedElsewhere = false, name = "";
 
     // ---- Highlighting (speed-highlight, as in the scratch pads) ----
-    let hlTimer = 0, hlSeq = 0;
-    async function paint() {
+    // The colored copy is redone on each change and normally lands before the next frame, so
+    // the code keeps its colors while typing. Only when that's too slow (very long scripts) is
+    // the plain text shown in between, so the copy never lags behind what's typed.
+    // One pass at a time: changes made during a pass get one more pass when it ends.
+    let hlTimer = 0, hlSeq = 0, painted = "", painting = null, again = false;
+    function paint() {
+      if (painting) { again = true; return painting; }
+      painting = paintOnce().finally(() => { painting = null; if (again) { again = false; if (ta.value !== painted) paint(); } });
+      return painting;
+    }
+    async function paintOnce() {
       const seq = ++hlSeq, v = ta.value;
-      if (v.length > 400000) { hl.textContent = `${v}\n`; return; }
-      shj ??= import("./vendor/speed-highlight/index.js");
+      if (v.length > 400000) { hl.textContent = `${v}\n`; painted = v; return; }
       let out = "";
       try {
-        await (await shj).tokenize(v, "js", (str, type) => { out += type ? `<span class="t-${type}">${esc(str)}</span>` : esc(str); });
+        await (await highlighter()).tokenize(v, "js", (str, type) => { out += type ? `<span class="t-${type}">${esc(str)}</span>` : esc(str); });
       } catch { out = esc(v); }
-      if (seq === hlSeq) { hl.innerHTML = `${out}\n`; sync(); }
+      if (seq === hlSeq) { hl.innerHTML = `${out}\n`; painted = v; sync(); }
     }
     function sync() {
       hl.scrollTop = ta.scrollTop;
@@ -53,10 +66,17 @@
     }
     let lines = 0, sideTimer = 0;
     function onText() {
-      hl.textContent = `${ta.value}\n`; // right away, so what's shown always matches what's typed
-      sync();
       clearTimeout(hlTimer);
-      hlTimer = setTimeout(paint, ta.value.length > 60000 ? 250 : 40);
+      if (ta.value.length > 60000) {
+        ++hlSeq;
+        hl.textContent = `${ta.value}\n`;
+        hlTimer = setTimeout(paint, 250);
+      } else {
+        paint();
+        const v = ta.value;
+        requestAnimationFrame(() => { if (painted !== v && ta.value === v) hl.textContent = `${v}\n`; sync(); });
+      }
+      sync();
       const n = ta.value.split("\n").length;
       if (n !== lines) { lines = n; gutter.textContent = Array.from({ length: n }, (_, i) => i + 1).join("\n") + "\n\n"; }
       const dirty = ta.value !== saved;
@@ -72,6 +92,16 @@
     ta.addEventListener("keydown", (e) => {
       const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
       if (mod && !e.altKey && (k === "z" || k === "y")) { e.preventDefault(); return step(k === "y" || e.shiftKey ? 1 : -1); }
+      // A new line starts as indented as the one it breaks, one step more after an opening bracket.
+      if (e.key === "Enter" && !mod && !e.altKey && !e.shiftKey && !e.isComposing) {
+        const { selectionStart: a, value } = ta;
+        const lineStart = value.lastIndexOf("\n", a - 1) + 1;
+        let indent = /^[ \t]*/.exec(value.slice(lineStart, a))[0];
+        if (/[{[(]\s*$/.test(value.slice(lineStart, a))) indent += "  ";
+        if (!indent) return;
+        e.preventDefault();
+        return void document.execCommand("insertText", false, `\n${indent}`);
+      }
       if (e.key === "Tab" && !mod && !e.altKey) {
         e.preventDefault();
         const { selectionStart: a, selectionEnd: b, value } = ta;
@@ -144,6 +174,22 @@
       setTimeout(() => flash.remove(), 1700);
       say(n > total ? `Only ${total.toLocaleString()} rows, so it went to the last one` : "", n > total);
     }
+    // A click on a row number selects that row (Shift+click: from the caret's row to there).
+    gutter.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      const n = Math.floor((e.clientY - gutter.getBoundingClientRect().top + gutter.scrollTop - PAD) / LINE) + 1;
+      const v = ta.value, rows = v.split("\n");
+      if (n < 1 || n > rows.length) return;
+      const startOf = (r) => rows.slice(0, r - 1).reduce((t, l) => t + l.length + 1, 0);
+      let from = startOf(n), to = from + rows[n - 1].length + (n < rows.length ? 1 : 0);
+      if (e.shiftKey) {
+        const caretRow = v.slice(0, ta.selectionStart).split("\n").length;
+        if (caretRow < n) from = startOf(caretRow);
+        else to = startOf(caretRow) + rows[caretRow - 1].length + (caretRow < rows.length ? 1 : 0);
+      }
+      ta.focus({ preventScroll: true });
+      ta.setSelectionRange(from, to);
+    });
     q(".jump").onsubmit = (e) => {
       e.preventDefault();
       const raw = jumpInput.value.trim().replace(/[,\s_]/g, "");
@@ -219,7 +265,6 @@
     const onStorage = (c, area) => {
       if (area !== "local" || !c.usScripts || !id) return;
       const now = (c.usScripts.newValue || []).find((x) => x.id === id);
-      if (now) q(".enabled").checked = now.enabled !== false;
       if (now && now.code !== stored) {
         stored = now.code;
         changedElsewhere = true;
@@ -233,22 +278,25 @@
         try {
           const { script } = await send("usGet", { id });
           saved = stored = script.code;
-          q(".enabledWrap").hidden = false;
-          q(".enabled").checked = script.enabled !== false;
         } catch (err) {
           loadError = err.message;
           id = "";
         }
       }
-      if (!id) saved = template(site);
-      ta.value = saved;
-      ta.setSelectionRange(0, 0);
-      record();
-      onText();
-      side();
-      if (loadError) say(loadError, true);
-      paint();
-      ta.focus();
+      try {
+        if (!id) saved = template(site);
+        ta.value = saved;
+        ta.setSelectionRange(0, 0);
+        record();
+        onText();
+        side();
+        if (loadError) say(loadError, true);
+        clearTimeout(hlTimer);
+        await paint();
+      } finally {
+        root.classList.remove("loading");
+      }
+      ta.focus({ preventScroll: true });
       ta.setSelectionRange(0, 0);
     }
     async function save() {
@@ -260,11 +308,7 @@
         const code = ta.value;
         const r = await send("usInstall", { code, id: id || undefined, fresh: !id });
         // A new script, or one deleted meanwhile (saved again as new): from now on, this id.
-        if (r.id !== id) {
-          id = r.id;
-          q(".enabledWrap").hidden = false;
-          q(".enabled").checked = true;
-        }
+        if (r.id !== id) id = r.id;
         saved = stored = code;
         changedElsewhere = false;
         status.classList.remove("keep");
@@ -286,7 +330,11 @@
       record();
       onText();
     };
-    q(".enabled").onchange = () => send("usToggle", { id, enabled: q(".enabled").checked }).catch((err) => say(err.message, true));
+    q(".undo").title = `Undo (${key("Z")})`;
+    q(".redo").title = `Redo (${MAC ? key("Z", true) : key("Y")})`;
+    jumpInput.title = `Type a row number and press Enter (${key("G")})`;
+    q(".save").title = `Save (${key("S")})`;
+    root.classList.add("loading");
     load();
 
     return {

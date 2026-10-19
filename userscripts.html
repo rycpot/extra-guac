@@ -112,13 +112,12 @@
         <span class="mut status" role="status" aria-live="polite"></span>
         <span class="grow"></span>
         <span class="tools">
-          <button type="button" class="ib undo" title="Undo (Ctrl/⌘+Z)" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
-          <button type="button" class="ib redo" title="Redo (Ctrl/⌘+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
-          <form class="jump" autocomplete="off"><input type="text" inputmode="numeric" placeholder="Jump to row" aria-label="Jump to row number" title="Type a row number and press Enter (Ctrl/⌘+G)"></form>
+          <form class="jump" autocomplete="off"><input type="text" inputmode="numeric" placeholder="Jump to row" aria-label="Jump to row number"></form>
+          <button type="button" class="ib undo" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+          <button type="button" class="ib redo" aria-label="Redo"><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
+          <button type="button" class="btn ghost revert" disabled title="Throw away the changes since the last save">revert</button>
         </span>
-        <label class="toggle enabledWrap" hidden>on <input type="checkbox" class="enabled"></label>
-        <button type="button" class="btn ghost revert" disabled title="Throw away the changes since the last save">revert</button>
-        <button type="button" class="btn blue save">save <span class="key">Ctrl+S</span></button>
+        <button type="button" class="btn blue save">save</button>
       </div>
       <div class="ed">
         <div class="code code-font">

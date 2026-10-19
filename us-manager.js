@@ -25,12 +25,17 @@
     styles: '<path d="M14 4l6 6-8 8H6v-6z"/>',
     menu: '<path d="M5 7h14M5 12h14M5 17h14"/>',
     edit: '<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
+    update: '<path d="M20 11a8 8 0 0 0-14.6-4.5L4 8"/><path d="M4 3.5V8h4.5"/><path d="M4 13a8 8 0 0 0 14.6 4.5L20 16"/><path d="M20 20.5V16h-4.5"/>',
+    download: '<path d="M12 4v11"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M5 19h14"/>',
+    trash: '<path d="M4.5 7h15"/><path d="M9.5 7V4.5h5V7"/><path d="M6.5 7l1 13h9l1-13"/>',
   };
   const SHOWN = ["storage", "requests", "styles", "menu"];
   const RUN_AT = { document_start: "before the page loads", document_end: "once the page is there, before its images", document_idle: "after the page has loaded" };
 
   let scripts = [];
   const open = new Set(); // rows showing their details
+  const note = new Map(); // id → { text, bad }: a row's last update check, shown for a while
+  const checking = new Set(); // ids whose update check is running
 
   // ---- Tabs ----
   // The list and settings are always there; each open script has an editor tab before them.
@@ -59,13 +64,14 @@
   }
   function title() {
     const what = active === "list" ? "installed scripts" : active === "settings" ? "settings" : active.api.name() || "new script";
-    document.title = `${what} · Userscripts · Extra Guac`;
+    // A dot in front while any open script has unsaved changes.
+    document.title = `${editors.some((e) => e.api?.dirty()) ? "● " : ""}${what} · Userscripts · Extra Guac`;
   }
   $("tabList").onclick = () => show("list");
   $("tabSettings").onclick = () => show("settings");
   $("tabNew").onclick = () => openEditor({});
 
-  function openEditor({ id = "", site = "" }) {
+  function openEditor({ id = "", site = "", name = "" }) {
     const have = id && editors.find((e) => e.api.id() === id);
     if (have) return show(have);
     const el = $("edTpl").content.firstElementChild.cloneNode(true);
@@ -86,10 +92,11 @@
       tab.title = name;
       wrap.querySelector(".x").setAttribute("aria-label", `Close ${name}`);
       tab.querySelector(".dot").hidden = !entry.api.dirty();
-      if (active === entry) { title(); const h = entry.api.id() ? `#edit=${encodeURIComponent(entry.api.id())}` : "#new"; if (location.hash !== h) history.replaceState(null, "", h); }
+      title();
+      if (active === entry) { const h = entry.api.id() ? `#edit=${encodeURIComponent(entry.api.id())}` : "#new"; if (location.hash !== h) history.replaceState(null, "", h); }
     };
     entry.api = usEditor(el, { id, site, onChange: update });
-    tab.querySelector(".lab").textContent = "edit · …";
+    tab.querySelector(".lab").textContent = `edit · ${name || scripts.find((s) => s.id === id)?.meta.name || "…"}`;
     tab.onclick = () => show(entry);
     wrap.querySelector(".x").onclick = () => close(entry);
     wrap.onauxclick = (e) => { if (e.button === 1) close(entry); };
@@ -110,6 +117,7 @@
     entry.el.remove();
     entry.wrap.remove();
     if (active === entry) show(editors[Math.min(i, editors.length - 1)] || "list");
+    else title();
   }
   // Ctrl/⌘+G: go to row in the open editor; Ctrl/⌘+S saves it even when focus is elsewhere.
   document.addEventListener("keydown", (e) => {
@@ -178,16 +186,44 @@
 
   function render() {
     const q = $("usFilter").value.trim().toLowerCase();
-    const shown = scripts.filter((s) => !q || [s.meta.name, s.meta.description, ...USM.sitesOf(s.meta)].join(" ").toLowerCase().includes(q));
+    // Newest first: the script installed, edited or updated last on top.
+    const shown = scripts.filter((s) => !q || [s.meta.name, s.meta.description, ...USM.sitesOf(s.meta)].join(" ").toLowerCase().includes(q))
+      .sort((a, b) => (b.updatedAt || b.installedAt || 0) - (a.updatedAt || a.installedAt || 0));
     $("usTable").hidden = !scripts.length;
     $("usLegend").hidden = !scripts.length;
     $("usEmpty").hidden = !!scripts.length;
     $("usFilter").placeholder = `filter ${scripts.length || ""} script${scripts.length === 1 ? "" : "s"}`.replace("  ", " ");
+    // Rows that would look the same are kept as they are (no flicker, focus and an armed
+    // delete stay put); only changed ones are built again.
     const body = $("usRows");
-    body.replaceChildren();
+    const old = new Map([...body.children].map((tr) => [tr.dataset.key, tr]));
+    const next = [];
     for (const s of shown) {
-      body.append(row(s));
-      if (open.has(s.id)) body.append(details(s));
+      const k = JSON.stringify([s, open.has(s.id), note.get(s.id), checking.has(s.id)]);
+      next.push(old.get(`r${k}`) || row(s));
+      next.at(-1).dataset.key = `r${k}`;
+      if (open.has(s.id)) {
+        const d = old.get(`d${k}`) || details(s);
+        d.dataset.key = `d${k}`;
+        next.push(d);
+      }
+    }
+    // "3 h ago" moves on by itself.
+    for (const tr of next) {
+      const s = tr.classList.contains("us-row") && !note.has(tr.dataset.id) && scripts.find((x) => x.id === tr.dataset.id);
+      if (s) tr.querySelector(".up").textContent = age(s.updatedAt);
+    }
+    if (next.length !== body.children.length || next.some((tr, i) => body.children[i] !== tr)) {
+      // Keyboard focus stays on the same control of a row that was built again.
+      const f = document.activeElement, fr = f?.closest?.("#usRows tr");
+      const cls = f && f !== fr ? [...f.classList].filter((c) => c !== "ib" && c !== "armed" && c !== "spin") : [];
+      const where = fr && { id: fr.dataset.id, detail: fr.classList.contains("us-detail"), sel: f === fr ? null : f.matches("input") ? "input" : cls.length ? `.${cls.map(CSS.escape).join(".")}` : null };
+      body.replaceChildren(...next);
+      if (where && !body.contains(f)) {
+        const tr = [...body.children].find((r) => r.dataset.id === where.id && r.classList.contains("us-detail") === where.detail);
+        const el = !tr ? null : where.sel ? tr.querySelector(where.sel) : tr;
+        (el && !el.disabled ? el : tr)?.focus();
+      }
     }
   }
 
@@ -202,7 +238,11 @@
     tr.innerHTML = `<td><label class="toggle"><input type="checkbox"></label></td>
       <td class="nm"><span class="n"></span></td><td class="mut v"></td><td class="mut st"></td>
       <td><span class="us-icons">${SHOWN.map((k) => `<span class="us-ic${kinds.includes(k) ? " on" : ""}" title="${k}">${SVG(ICONS[k])}</span>`).join("")}</span></td>
-      <td class="mut up"></td><td><button type="button" class="ib" title="Edit code">${SVG(ICONS.edit)}</button></td>`;
+      <td class="mut up"></td><td class="acts"><span class="row-acts">
+        <button type="button" class="ib edit" title="Edit">${SVG(ICONS.edit)}</button>
+        <button type="button" class="ib check" title="Check for an update">${SVG(ICONS.update)}</button>
+        <button type="button" class="ib dl" title="Download as .user.js">${SVG(ICONS.download)}</button>
+        <button type="button" class="ib del" title="Delete">${SVG(ICONS.trash)}</button></span></td>`;
     const n = tr.querySelector(".n");
     n.textContent = m.name;
     tr.querySelector(".nm").title = m.description || m.name;
@@ -217,8 +257,10 @@
     tr.querySelector(".v").textContent = m.version || "–";
     tr.querySelector(".st").textContent = sites.length > 2 ? `${sites.slice(0, 2).join(", ")} +${sites.length - 2}` : sites.join(", ");
     tr.querySelector(".st").title = sites.join(", ");
-    tr.querySelector(".up").textContent = age(s.updatedAt);
-    tr.querySelector(".up").title = s.updatedAt ? TT.when(s.updatedAt) : "";
+    const up = tr.querySelector(".up"), said = note.get(s.id);
+    up.textContent = said ? said.text : age(s.updatedAt);
+    up.classList.toggle("bad", !!said?.bad);
+    up.title = said ? said.text : s.updatedAt ? TT.when(s.updatedAt) : "";
     const box = tr.querySelector("input");
     box.setAttribute("aria-label", `${m.name}, on or off`);
     tr.tabIndex = 0;
@@ -232,7 +274,34 @@
     };
     box.checked = s.enabled !== false;
     box.onchange = () => send("usToggle", { id: s.id, enabled: box.checked }).catch((err) => alert(err.message));
-    tr.querySelector(".ib").onclick = () => edit(s.id);
+    const named = (b, what) => b.setAttribute("aria-label", `${what} ${m.name}`);
+    named(tr.querySelector(".edit"), "Edit");
+    tr.querySelector(".edit").onclick = () => edit(s.id);
+    const check = tr.querySelector(".check");
+    named(check, "Check for an update to");
+    if (!updateHost(s)) { check.disabled = true; check.title = "No update address (written or changed here)"; }
+    if (checking.has(s.id)) { check.disabled = true; check.classList.add("spin"); }
+    check.onclick = () => checkOne(s);
+    named(tr.querySelector(".dl"), "Download");
+    tr.querySelector(".dl").onclick = () => download(s).catch((err) => alert(err.message));
+    const del = tr.querySelector(".del");
+    named(del, "Delete");
+    // Delete asks twice: the first click turns the button red, the second asks to be sure.
+    let disarm = 0;
+    const reset = () => { clearTimeout(disarm); del.classList.remove("armed"); del.title = "Delete"; };
+    del.onclick = async () => {
+      if (!del.classList.contains("armed")) {
+        del.classList.add("armed");
+        del.title = "Click again to delete";
+        disarm = setTimeout(reset, 4000);
+        return;
+      }
+      reset();
+      if (!confirm(`Delete “${m.name}” and what it saved? This can't be undone.`)) return;
+      open.delete(s.id);
+      await send("usRemove", { id: s.id }).catch((err) => alert(err.message));
+    };
+    del.onblur = reset;
     tr.onclick = (e) => {
       if (e.target.closest("button, label, input, a")) return;
       open.has(s.id) ? open.delete(s.id) : open.add(s.id);
@@ -245,6 +314,7 @@
     const m = s.meta;
     const tr = document.createElement("tr");
     tr.className = "us-detail";
+    tr.dataset.id = s.id;
     tr.innerHTML = `<td colspan="7"><dl class="us-dl"></dl><div class="us-acts"></div></td>`;
     const dl = tr.querySelector("dl");
     const item = (label, ...nodes) => {
@@ -264,15 +334,21 @@
     item("can", ...(kinds.length ? kinds.map((k) => pill(USM.KIND_TEXT[k], "grant")) : [text(USM.inPage(m) ? "nothing extra: runs as part of the page" : "nothing extra")]));
     if (kinds.includes("requests")) item("send requests to", ...(m.connects.length ? m.connects.map((c) => pill(c)) : [text("any site")]));
     if (s.limits?.length) item("limits", ...s.limits.map((l) => { const p = text(l, "bad"); p.style.display = "block"; return p; }));
-    const from = m.updateURL || m.downloadURL || s.source;
-    let host = "";
-    try { host = from ? new URL(from).host : ""; } catch {}
+    const host = updateHost(s);
     item("updates", host ? text(`from ${host}${s.autoUpdate === false ? " · automatic updates off for this script" : ""}${s.checkedAt ? ` · checked ${age(s.checkedAt)}` : ""}`) : text("no update address (written or changed here)"));
     if (s.checkError) item("last check", text(s.checkError, "bad"));
     if (s.pending) {
       const pm = s.pending.meta;
       item("update waiting", text(`${pm?.version ? `version ${pm.version}` : "A newer version"} asks for more access, so it waits for your OK.`, ""));
     }
+    const link = (href, label) => {
+      const a = document.createElement("a");
+      a.href = href; a.textContent = label; a.target = "_blank"; a.rel = "noopener noreferrer";
+      return a;
+    };
+    const web = (u) => { try { return /^https?:$/.test(new URL(u).protocol) ? u : ""; } catch { return ""; } };
+    const links = [web(m.homepage) && link(web(m.homepage), "homepage"), web(m.supportURL) && link(web(m.supportURL), "support")].filter(Boolean);
+    if (links.length) item("links", ...links.flatMap((a, i) => (i ? [text("·"), a] : [a])));
     item("installed", text(TT.when(s.installedAt)));
     const acts = tr.querySelector(".us-acts");
     const btn = (label, fn, cls = "btn") => {
@@ -288,23 +364,42 @@
       btn("review the update", () => window.open(`us-install.html#pending=${encodeURIComponent(s.id)}`, "_blank"), "btn blue");
       btn("skip it", () => send("usPending", { id: s.id, install: false }));
     }
-    btn("edit code", () => edit(s.id));
-    if (host) {
-      btn("check for update", async () => {
-        const r = await send("usCheckUpdates", { ids: [s.id] });
-        alert(r.updated.length ? `Updated to ${r.updated[0]}.` : r.waiting.length ? "A newer version asks for more access: review it here." : r.failed.length ? r.failed[0] : "It's up to date.");
-      });
-      btn(s.autoUpdate === false ? "turn automatic updates on" : "turn automatic updates off", () => send("usAutoUpdate", { id: s.id, on: s.autoUpdate === false }), "btn ghost");
-    }
-    btn("delete", async () => {
-      if (!confirm(`Delete “${m.name}” and what it saved?`)) return;
-      open.delete(s.id);
-      await send("usRemove", { id: s.id });
-    }, "btn ghost");
+    if (host) btn(s.autoUpdate === false ? "turn automatic updates on" : "turn automatic updates off", () => send("usAutoUpdate", { id: s.id, on: s.autoUpdate === false }), "btn ghost");
+    acts.hidden = !acts.children.length;
     return tr;
   }
 
+  function updateHost(s) {
+    try { return new URL(s.meta.updateURL || s.meta.downloadURL || s.source).host; } catch { return ""; }
+  }
+  // One script's update check: the answer shows in its "updated" cell for a while.
+  async function checkOne(s) {
+    if (checking.has(s.id)) return;
+    checking.add(s.id);
+    render();
+    let said;
+    try {
+      const r = await send("usCheckUpdates", { ids: [s.id] });
+      said = r.updated.length ? { text: `updated to ${r.updated[0]}` } : r.waiting.length ? { text: "update waits for your OK" }
+        : r.failed.length ? { text: r.failed[0], bad: true } : { text: "up to date" };
+    } catch (err) { said = { text: err.message, bad: true }; }
+    note.set(s.id, said);
+    setTimeout(() => { if (note.get(s.id) === said) { note.delete(s.id); render(); } }, 6000);
+    checking.delete(s.id);
+    render();
+  }
+  async function download(s) {
+    const { script } = await send("usGet", { id: s.id });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([script.code], { type: "text/javascript" }));
+    a.download = `${safeName(s.meta.name)}.user.js`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60e3);
+  }
+
   const edit = (id) => openEditor({ id });
+  // Opening an editor gets the highlighter ready beforehand, so the code shows up colored.
+  setTimeout(() => import("./vendor/speed-highlight/index.js").then((m) => m.tokenize("", "js", () => {})).catch(() => {}), 300);
   $("usNew").onclick = () => openEditor({});
   $("usFromUrl").onclick = () => {
     const url = prompt("Address of the .user.js file to install");
@@ -315,7 +410,7 @@
   $("usFilter").oninput = render;
 
   $("usLegend").innerHTML = SHOWN.map((k) => `<span><span class="us-ic on">${SVG(ICONS[k])}</span>${k}</span>`).join("")
-    + "<span>Click a row for details; the pencil opens the script in a tab of its own.</span>";
+    + "<span>Newest first. Click a row for details; the pencil opens the script in a tab of its own.</span>";
 
   // ---- Updates ----
 

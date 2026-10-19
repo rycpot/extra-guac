@@ -72,6 +72,12 @@
     let host = "";
     try { host = url ? new URL(url).host : ""; } catch {}
     $("from").textContent = [meta.author && `by ${meta.author}`, host && `from ${host}`].filter(Boolean).join(" · ");
+    // Its homepage and support page, when it names them (web addresses only).
+    for (const [href, label] of [[meta.homepage, "homepage"], [meta.supportURL, "support"]]) {
+      try { if (!/^https?:$/.test(new URL(href).protocol)) continue; } catch { continue; }
+      const a = Object.assign(document.createElement("a"), { href, textContent: label, target: "_blank", rel: "noopener noreferrer" });
+      $("from").append($("from").textContent ? " · " : "", a);
+    }
     $("desc").textContent = meta.description;
     if (/^data:image\//.test(meta.icon)) { const img = new Image(); img.alt = ""; img.src = meta.icon; img.onerror = () => img.remove(); $("ico").append(img); }
     else $("ico").textContent = (meta.name.trim()[0] || "?").toUpperCase();
@@ -137,7 +143,10 @@
       $("note").textContent = "Installed. Pages it runs on pick it up the next time they load.";
       $("install").textContent = "edit";
       $("install").disabled = false;
-      $("install").onclick = () => send("usOpen", { hash: `edit=${encodeURIComponent(installedId || pendingId)}` }).then(() => window.close(), (err) => ($("note").textContent = err.message));
+      // The editor opens in the userscripts tab. This tab goes back to the page the script came
+      // from when it was opened over it, and closes only when it was opened on its own.
+      $("install").onclick = () => send("usOpen", { hash: `edit=${encodeURIComponent(installedId || pendingId)}` })
+        .then(() => (history.length > 1 ? history.back() : window.close()), (err) => ($("note").textContent = err.message));
       $("cancel").textContent = "close";
     } catch (err) {
       $("note").textContent = err.message;
