@@ -56,8 +56,8 @@ const ocrHandlers = {
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["ocr-card.js"] });
     await chrome.tabs.sendMessage(tab.id, msg, { frameId: 0 });
   },
-  // Settings → check key: read a tiny test image with the key typed in.
-  ocrTest: async ({ key, image, plan, endpoint }) => ({ text: await ocrRead(image, "2", { key, plan, endpoint }) }),
+  // Settings → check key: read a tiny test image with the key typed in, and find its plan.
+  ocrTest: ({ key, image, endpoint }) => ocrKeyPlan(key, image, endpoint),
   // ocr-card.js: read this image with this engine; the text is copied too.
   ocrRead: async ({ image, engine }, sender) => {
     const text = await ocrRead(image, engine === "3" ? "3" : "2");
@@ -111,6 +111,20 @@ async function ocrRead(image, engine, test) {
     catch (err) { if (!err.retry) throw err; last = err; }
   }
   throw last;
+}
+
+// Which plan a key is on. A key doesn't say, and OCR.space has no way to ask, but PRO keys are
+// taken only by the PRO servers and free keys only by the free one: the test image is read on
+// the PRO servers first, then on the free one. { text, plan }: plan is null when the free
+// server took the key but the PRO ones couldn't be asked (unreachable, timed out).
+async function ocrKeyPlan(key, image, endpoint) {
+  let proErr;
+  try { return { text: await ocrRead(image, "2", { key, plan: "pro", endpoint }), plan: "pro" }; } catch (err) { proErr = err; }
+  const notPro = /refused the key/.test(proErr.message);
+  try { return { text: await ocrRead(image, "2", { key, plan: "free" }), plan: notPro ? "free" : null }; } catch (err) {
+    // Refused by the free server after the PRO ones failed some other way: it may be a PRO key.
+    throw /refused the key/.test(err.message) && !notPro ? proErr : err;
+  }
 }
 
 // With the shared keys: the first one not used up; one that hits a limit is set aside until

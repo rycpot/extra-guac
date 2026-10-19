@@ -671,9 +671,14 @@
       say("checking…");
       $("ocrCheck").disabled = true;
       try {
-        const res = await chrome.runtime.sendMessage({ type: "ocrTest", key, plan: settings.ocr.plan, endpoint: settings.ocr.endpoint, image: c.toDataURL("image/png") });
+        const res = await chrome.runtime.sendMessage({ type: "ocrTest", key, endpoint: settings.ocr.endpoint, image: c.toDataURL("image/png") });
         if (!res?.ok) throw new Error(res?.error || "Something went wrong");
-        if (run === typed) say(`✓ key accepted · text is read with your key${/guac/i.test(res.text) ? "" : ` (the test read "${res.text || "nothing"}")`}`, "ok");
+        if (run !== typed) return;
+        // The plan the key turned out to be on is picked below (it can still be changed there).
+        const switched = res.plan && res.plan !== settings.ocr.plan;
+        if (switched) setPath("ocr.plan", res.plan, true);
+        const plan = res.plan ? `${res.plan === "pro" ? "PRO" : "free"} plan${switched ? ", picked below" : ""}` : "text is read with your key";
+        say(`✓ key accepted · ${plan}${/guac/i.test(res.text) ? "" : ` (the test read "${res.text || "nothing"}")`}`, "ok");
       } catch (err) {
         const refused = /refused the key/.test(err.message);
         if (run === typed) say(refused ? "✕ key not accepted · text can't be read until it's fixed or removed"
