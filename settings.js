@@ -52,6 +52,11 @@
     showPane();
     // Userscripts have a page of their own, in one tab.
     $("usPageLink").onclick = (e) => { e.preventDefault(); chrome.runtime.sendMessage({ type: "usOpen" }).catch(() => {}); };
+    // So do the QR page and the scratch pads (each brought to the front if it's open), and image
+    // annotate (the screenshot editor with no image yet, in a new tab).
+    $("qrPageLink").onclick = (e) => { e.preventDefault(); openPageTab("qr.html").catch(() => {}); };
+    $("scratchPageLink").onclick = (e) => { e.preventDefault(); openPageTab("scratch.html").catch(() => {}); };
+    $("annotatePageLink").onclick = (e) => { e.preventDefault(); openPageTab("shot-view.html#annotate", true).catch(() => {}); };
     addEventListener("hashchange", showPane);
     // Footer: buttons rather than links, so hovering doesn't show the address bubble.
     document.querySelectorAll(".site-foot [data-open]").forEach((b) => (b.onclick = () => window.open(b.dataset.open, "_blank", "noopener")));
@@ -68,6 +73,20 @@
       }
       if (area === "local" && (c.shortCounts || c.shortUsage)) fillCounts();
     });
+  }
+
+  // One of the extension's pages in a browser window (not this settings window): the tab already
+  // showing it is brought to the front, unless fresh asks for a new one every time.
+  async function openPageTab(path, fresh = false) {
+    const base = chrome.runtime.getURL(path.split("#")[0]);
+    const tab = fresh ? null : (await chrome.tabs.query({})).find((t) => (t.url || t.pendingUrl || "").startsWith(base));
+    if (tab) {
+      await chrome.tabs.update(tab.id, { active: true });
+      return void (await chrome.windows.update(tab.windowId, { focused: true }));
+    }
+    const win = await chrome.windows.getLastFocused({ windowTypes: ["normal"] }).catch(() => null);
+    await chrome.tabs.create({ url: chrome.runtime.getURL(path), ...(win ? { windowId: win.id } : {}) });
+    if (win) await chrome.windows.update(win.id, { focused: true });
   }
 
   function showPane() {
