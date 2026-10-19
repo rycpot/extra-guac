@@ -64,12 +64,12 @@
     // Refresh on focus: entries of { id, pattern, on, hard, enabledAt, expire: { n, unit:
     // "d" | "mo" } (n 0 = never), threshold: { n, unit: "s" | "m" } }, the time away before it refreshes. See bg-focus.js.
     focus: { entries: [] },
-    // Text from image (OCR.space, your free key): engine "3" (default: slower, better on
-    // handwriting, tables and many languages; its own smaller quota) or "2" (fast).
+    // Text from image (OCR.space, your free key): engine "2" (default, fast) or "3"
+    // (slower, better on handwriting, tables and many languages; its own smaller quota).
     // plan: "free" (api.ocr.space, 1 MB per image) or "pro" (PRO / PRO PDF / Enterprise:
     // apipro1/apipro2.ocr.space, or endpoint if the welcome email names another; 5 MB per
     // image). Checking the key in settings finds its plan (ocrKeyPlan in bg-ocr.js).
-    ocr: { key: "", engine: "3", plan: "free", endpoint: "" },
+    ocr: { key: "", engine: "2", plan: "free", endpoint: "" },
     // Userscripts (bg-userscripts.js): on for all, how often to look for updates (hours, 0 =
     // never), and whether an update that asks for more access waits for an OK.
     us: { enabled: false, interval: 24, ask: true },

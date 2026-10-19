@@ -3,8 +3,8 @@
 // Extra Guac's two shared ones while they last; see sharedOcrRead), and the
 // text is copied and shown in a card on the page (ocr-card.js). The card keeps the image,
 // so it can read it again with the other engine without a new selection.
-// Engine 3 (default): slower, better on handwriting, tables and 200+ languages, with its own
-// smaller monthly quota. Engine 2: fast, detects the language.
+// Engine 2 (default): fast, detects the language. Engine 3: slower, better on handwriting,
+// tables and 200+ languages, with its own smaller monthly quota.
 
 const OCR_FREE_URL = "https://api.ocr.space/parse/image";
 const OCR_MAX_BYTES = { free: 1000 * 1000, pro: 5000 * 1000 }; // per image
@@ -189,11 +189,3 @@ async function ocrPost(url, key, image, engine, pro, shared = false) {
   }
   return (body.ParsedResults || []).map((r) => r.ParsedText || "").join("\n").replace(/\r\n?/g, "\n").replace(/[ \t]+$/gm, "").trim();
 }
-
-// Engine 3 became the default in 276 (it was engine 2): settings from before then move to it
-// once. It can be changed back in settings.
-chrome.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
-  if (reason !== "update" || !(Number(previousVersion) < 276 || !/^\d+$/.test(previousVersion || ""))) return;
-  const { ocr } = await TT.getSettings();
-  if (ocr.engine !== "3") await TT.updateSettings({ ocr: { engine: "3" } });
-});
