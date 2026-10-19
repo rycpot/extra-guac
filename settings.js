@@ -300,7 +300,7 @@
       };
     }
     $("imglinkKey").addEventListener("input", () => {
-      $("imglinkState").textContent = $("imglinkKey").value.trim() === settings.upload.imglinkKey ? imglinkStateText() : "not saved";
+      $("imglinkState").textContent = $("imglinkKey").value.trim() === settings.upload.imglinkKey ? imglinkStateText() : "key not saved · save to check it";
       $("imglinkState").className = "hint";
       $("imglinkKey").classList.toggle("key-bad", $("imglinkKey").value.trim() === settings.upload.imglinkKey && imglinkBad());
     });
@@ -313,12 +313,12 @@
       settings = await TT.getSettings();
       fill();
       if (res?.ok && !res.verified && res.error) {
-        $("imglinkState").textContent = `${res.error} · uploads stay anonymous`;
+        $("imglinkState").textContent = uploadKeyError(res.error, "uploads are anonymous");
         $("imglinkState").className = "hint x02-bad";
       }
     };
     $("x02Key").addEventListener("input", () => {
-      $("x02State").textContent = $("x02Key").value.trim() === settings.upload.x02Key ? x02StateText() : "not saved";
+      $("x02State").textContent = $("x02Key").value.trim() === settings.upload.x02Key ? x02StateText() : "key not saved · save to check it";
       $("x02State").className = "hint";
       $("x02Key").classList.toggle("key-bad", $("x02Key").value.trim() === settings.upload.x02Key && x02Bad());
     });
@@ -331,18 +331,22 @@
       settings = await TT.getSettings();
       fill();
       if (res?.ok && !res.verified) {
-        $("x02State").textContent = res.error;
+        $("x02State").textContent = uploadKeyError(res.error, "X02 can't be used until it's fixed");
         $("x02State").className = "hint x02-bad";
       }
     };
   }
 
-  const imglinkStateText = () => (settings.upload.imglinkVerified ? "✓ key verified · uploads go to your account"
-    : settings.upload.imglinkKey ? "key not verified · uploads are anonymous" : "no key · uploads are anonymous");
+  const imglinkStateText = () => (settings.upload.imglinkVerified ? "✓ key accepted · uploads go to your account"
+    : settings.upload.imglinkKey ? "✕ key not accepted · uploads are anonymous" : "no key · uploads are anonymous");
   // A saved key the host didn't accept: the field turns red.
   const imglinkBad = () => !!settings.upload.imglinkKey && !settings.upload.imglinkVerified;
   const x02Bad = () => !!settings.upload.x02Key && !settings.upload.x02Verified;
-  const x02StateText = () => (settings.upload.x02Verified ? "✓ key verified" : settings.upload.x02Key ? "key not verified" : "no key yet");
+  const x02StateText = () => (settings.upload.x02Verified ? "✓ key accepted · uploads go to your account"
+    : settings.upload.x02Key ? "✕ key not accepted · X02 can't be used until it's fixed" : "no key · X02 needs one to upload");
+  // Just after saving: why the key didn't verify, said the way the other key fields say it.
+  const uploadKeyError = (error, meaning) => (/^Couldn't reach/.test(error || "") ? `couldn't check the key · ${error}`
+    : error === "Enter an API key" ? x02StateText() : `✕ key not accepted · ${meaning}`);
 
   function fillUpload() {
     if (document.activeElement !== $("imglinkKey")) $("imglinkKey").value = settings.upload.imglinkKey || "";
@@ -453,24 +457,21 @@
 
   // Each key is checked with its service as it's pasted or typed, and once when settings open:
   // a key that isn't accepted turns the field red and says what happens instead.
+  // Every key field in settings says where its key stands the same way: "✓ key accepted",
+  // "✕ key not accepted", "no key", "key not saved", "couldn't check the key" or "checking…",
+  // then " · " and what that means for the feature (KEY_SAYS).
   const keyTimers = {};
   const keyChecked = {}; // service → { key, res }: the key last checked and its answer
-  const KEY_NONE = { xgd: "no key · Extra Guac's own is used", spoo: "no key · links are anonymous", dub: "no key · dub.sh needs one to make links" };
-  const KEY_BAD = {
-    xgd: "x.gd didn't accept this key · links aren't made until it's fixed or removed",
-    spoo: "spoo.me doesn't accept this key · links are made anonymously, not in your account",
-    dub: "dub.sh doesn't accept this key · links can't be made with it",
-  };
-  const KEY_LIMITED = {
-    spoo: "✓ key accepted · links go to your account (it can only make links: dynamic QR codes can't be changed later)",
-    dub: "✓ key accepted",
-  };
+  const SHORT_NONE = { xgd: "Extra Guac's own key is used", spoo: "links are anonymous", dub: "dub.sh needs one to make links" };
+  const SHORT_BAD = { xgd: "no links are made until it's fixed or removed", spoo: "links are anonymous, not in your account", dub: "no links are made until it's fixed" };
   function showKeyState(section, res) {
     const id = section.dataset.service;
     const text = !res ? "checking…"
-      : { none: KEY_NONE[id], ok: id === "spoo" ? "✓ key accepted · links go to your account" : "✓ key accepted",
-          limited: KEY_LIMITED[id], bad: KEY_BAD[id], unchecked: "checked when the first link is made with it",
-          unknown: `couldn't check the key${res.error ? ` (${res.error})` : ""}` }[res.state] || "";
+      : { none: `no key · ${SHORT_NONE[id]}`, ok: "✓ key accepted · links go to your account",
+          limited: `✓ key accepted · links go to your account${id === "spoo" ? ", but dynamic QR codes can't be changed later (the key can only make links)" : ""}`,
+          bad: `✕ key not accepted · ${SHORT_BAD[id]}`,
+          unchecked: "key not checked yet · it's checked when the first link is made with it",
+          unknown: `couldn't check the key · ${res.error || "try again later"}` }[res.state] || "";
     const state = section.querySelector(".key-state");
     state.textContent = text;
     state.className = `hint key-state ${res?.state === "bad" ? "x02-bad" : res?.state === "ok" || res?.state === "limited" ? "x02-ok" : ""}`;
@@ -643,24 +644,26 @@
   // Also checked by itself a moment after a key is pasted or typed; a key OCR.space refuses
   // turns the field red.
   function initOcr() {
-    const say = (text, bad = false, refused = false) => {
+    const say = (text, look = "", refused = false) => {
       $("ocrState").textContent = text;
-      $("ocrState").classList.toggle("bad", bad);
+      $("ocrState").className = `hint ${look === "ok" ? "x02-ok" : look}`;
       $("ocrKey").classList.toggle("key-bad", refused);
     };
     let timer = 0, typed = 0;
     $("ocrKey").addEventListener("input", () => {
       clearTimeout(timer);
       typed++;
-      if (!$("ocrKey").value.trim()) return say("");
+      if (!$("ocrKey").value.trim()) return say(ocrNoKey());
       timer = setTimeout(check, 900);
     });
     $("ocrCheck").onclick = check;
+    const ocrNoKey = () => (settings.ocr.plan === "pro" ? "no key · the PRO plan needs yours" : "no key · Extra Guac's shared keys are used");
+    if (!$("ocrKey").value.trim()) say(ocrNoKey());
     async function check() {
       clearTimeout(timer);
       const run = typed;
       const key = $("ocrKey").value.trim();
-      if (!key) return say("paste a key first", true);
+      if (!key) return say(ocrNoKey(), "bad");
       const c = Object.assign(document.createElement("canvas"), { width: 160, height: 48 });
       const g = c.getContext("2d");
       g.fillStyle = "#fff"; g.fillRect(0, 0, 160, 48);
@@ -670,9 +673,11 @@
       try {
         const res = await chrome.runtime.sendMessage({ type: "ocrTest", key, plan: settings.ocr.plan, endpoint: settings.ocr.endpoint, image: c.toDataURL("image/png") });
         if (!res?.ok) throw new Error(res?.error || "Something went wrong");
-        if (run === typed) say(/guac/i.test(res.text) ? "key works" : `key works (read "${res.text || "nothing"}")`);
+        if (run === typed) say(`✓ key accepted · text is read with your key${/guac/i.test(res.text) ? "" : ` (the test read "${res.text || "nothing"}")`}`, "ok");
       } catch (err) {
-        if (run === typed) say(err.message.replace(/\. Check it in settings.*$/, ""), true, /refused the key/.test(err.message));
+        const refused = /refused the key/.test(err.message);
+        if (run === typed) say(refused ? "✕ key not accepted · text can't be read until it's fixed or removed"
+          : `couldn't check the key · ${err.message.replace(/\. Check it in settings.*$/, "")}`, "bad", refused);
       } finally {
         $("ocrCheck").disabled = false;
       }
