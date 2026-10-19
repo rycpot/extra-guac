@@ -17,6 +17,7 @@
 const shortenerHandlers = {
   shorten: ({ service, url }) => shorten(service, url),
   shortUsage: ({ services, force }) => shortUsageRefresh(services, force),
+  checkShortKey: ({ service, key }) => checkShortKey(service, key),
   clearShortHistory: () => editLocal("shortHistory", () => ({ shortHistory: [] })),
 };
 
@@ -70,9 +71,13 @@ const SHORTEN = {
     const res = await fetch(`https://xgd.io/V1/shorten?${q}`, { headers: { Accept: "application/json" } });
     const data = await res.json().catch(() => null);
     // x.gd answers HTTP 200 with the real status in the body.
-    if (Number(data?.status) === 200 && /^https?:\/\//i.test(data.shorturl || "")) return { short: data.shorturl };
+    if (Number(data?.status) === 200 && /^https?:\/\//i.test(data.shorturl || "")) {
+      if (key) xgdKeySeen(key, true).catch(() => {});
+      return { short: data.shorturl };
+    }
     const status = Number(data?.status) || res.status;
     if (status === 401 || status === 403) {
+      if (key) xgdKeySeen(key, false).catch(() => {});
       throw new Error(key ? "x.gd didn't accept your API key" : "x.gd turned down Extra Guac's key: add your own in settings → URL shortener");
     }
     if (status === 429) throw new Error("x.gd's limit is reached for now: try again later, or use spoo.me");
@@ -101,6 +106,42 @@ function spooError(res, data, needs) {
     return `spoo.me's limit is reached for now${wait ? `: try again in ${wait < 120 ? `${wait} s` : `${Math.ceil(wait / 60)} min`}` : ""}`;
   }
   return data?.error ? `spoo.me: ${data.error}` : `spoo.me error (${res.status})`;
+}
+
+// ---- Is a key accepted? (settings, as a key is pasted) -------------------------
+// spoo.me makes links with a key it doesn't take too, anonymously, so a wrong key would go
+// unnoticed: it's checked by reading one of your links (401: not accepted; 403: accepted, but
+// only allowed to make links). dub.sh the same way. x.gd has nothing to check a key with short
+// of making a link, so its answer is how the last link made with that key went ("shortKeyState").
+// { state: "none" | "ok" | "limited" | "bad" | "unchecked" | "unknown", error? }
+async function checkShortKey(service, key) {
+  key = (key || "").trim();
+  if (!key) return { state: "none" };
+  // Keys are one run of printable ASCII: spaces or other characters mean something else was pasted.
+  if (/[^\x21-\x7e]/.test(key)) return { state: "bad" };
+  if (service === "xgd") {
+    const { shortKeyState = {} } = await chrome.storage.local.get("shortKeyState");
+    const seen = shortKeyState.xgd;
+    return { state: seen?.keyTag === TT.keyTag(key) ? (seen.ok ? "ok" : "bad") : "unchecked" };
+  }
+  const url = { spoo: "https://spoo.me/api/v1/urls?pageSize=1", dub: "https://api.dub.co/links?pageSize=1" }[service];
+  if (!url) return { state: "unknown" };
+  let res;
+  try {
+    res = await fetch(url, { headers: { Authorization: `Bearer ${key}`, Accept: "application/json" } });
+  } catch (err) {
+    return { state: "unknown", error: err.message };
+  }
+  if (res.ok) return { state: "ok" };
+  if (res.status === 401) return { state: "bad" };
+  if (res.status === 403) return { state: "limited" };
+  return { state: "unknown", error: res.status === 429 ? "rate limited, try again later" : `HTTP ${res.status}` };
+}
+async function xgdKeySeen(key, ok) {
+  await editLocal(["shortKeyState"], ({ shortKeyState: cur = {} }) => {
+    const had = cur.xgd;
+    return had?.keyTag === TT.keyTag(key) && had.ok === ok ? null : { shortKeyState: { ...cur, xgd: { keyTag: TT.keyTag(key), ok } } };
+  });
 }
 
 // ---- Dynamic links (for dynamic QR codes, bg-qr.js) -----------------------------

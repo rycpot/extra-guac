@@ -65,11 +65,15 @@ a { color: var(--accent); }
 input.text { flex: 1; min-width: 0; padding: 7px 9px; border: 1px solid transparent; border-radius: 9px; background: var(--field);
   color: var(--fg); font: inherit; }
 input.text:focus { outline: none; border-color: var(--muted); }
+/* A key the service doesn't accept. */
+input.text.key-bad, input.text.key-bad:focus { border-color: var(--error); box-shadow: 0 0 0 1px var(--error); }
 .folder .prefix { color: var(--muted); }
 .btn { padding: 7px 12px; border: 0; border-radius: 9px; background: var(--chip); color: var(--fg); font: inherit; cursor: pointer; }
 .btn:hover { background: var(--hover); }
 .btn.ghost { background: none; color: var(--muted); }
 .service h2 .count { margin-left: 6px; }
+.service .key-state { margin: 6px 0 0; }
+.service .key-state:empty { display: none; }
 [hidden] { display: none !important; }
 h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
 h2 .hint { text-transform: none; letter-spacing: 0; font-weight: normal; }

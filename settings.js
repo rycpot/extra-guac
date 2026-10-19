@@ -72,6 +72,12 @@
         if (!saveTimer) fill();
       }
       if (area === "local" && (c.shortCounts || c.shortUsage)) fillCounts();
+      // A link made with your x.gd key says whether x.gd took it.
+      if (area === "local" && c.shortKeyState) {
+        delete keyChecked.xgd;
+        const xgd = document.querySelector('.service[data-service="xgd"]');
+        if (xgd) checkShortKey(xgd);
+      }
     });
   }
 
@@ -296,6 +302,7 @@
     $("imglinkKey").addEventListener("input", () => {
       $("imglinkState").textContent = $("imglinkKey").value.trim() === settings.upload.imglinkKey ? imglinkStateText() : "not saved";
       $("imglinkState").className = "hint";
+      $("imglinkKey").classList.toggle("key-bad", $("imglinkKey").value.trim() === settings.upload.imglinkKey && imglinkBad());
     });
     $("imglinkSave").onclick = async () => {
       const btn = $("imglinkSave");
@@ -313,6 +320,7 @@
     $("x02Key").addEventListener("input", () => {
       $("x02State").textContent = $("x02Key").value.trim() === settings.upload.x02Key ? x02StateText() : "not saved";
       $("x02State").className = "hint";
+      $("x02Key").classList.toggle("key-bad", $("x02Key").value.trim() === settings.upload.x02Key && x02Bad());
     });
     $("x02Save").onclick = async () => {
       const btn = $("x02Save");
@@ -331,15 +339,20 @@
 
   const imglinkStateText = () => (settings.upload.imglinkVerified ? "✓ key verified · uploads go to your account"
     : settings.upload.imglinkKey ? "key not verified · uploads are anonymous" : "no key · uploads are anonymous");
+  // A saved key the host didn't accept: the field turns red.
+  const imglinkBad = () => !!settings.upload.imglinkKey && !settings.upload.imglinkVerified;
+  const x02Bad = () => !!settings.upload.x02Key && !settings.upload.x02Verified;
   const x02StateText = () => (settings.upload.x02Verified ? "✓ key verified" : settings.upload.x02Key ? "key not verified" : "no key yet");
 
   function fillUpload() {
     if (document.activeElement !== $("imglinkKey")) $("imglinkKey").value = settings.upload.imglinkKey || "";
     $("imglinkState").textContent = imglinkStateText();
-    $("imglinkState").className = `hint ${settings.upload.imglinkVerified ? "x02-ok" : ""}`;
+    $("imglinkState").className = `hint ${settings.upload.imglinkVerified ? "x02-ok" : imglinkBad() ? "x02-bad" : ""}`;
+    if (document.activeElement !== $("imglinkKey") || $("imglinkKey").value.trim() === settings.upload.imglinkKey) $("imglinkKey").classList.toggle("key-bad", imglinkBad());
     if (document.activeElement !== $("x02Key")) $("x02Key").value = settings.upload.x02Key || "";
     $("x02State").textContent = x02StateText();
-    $("x02State").className = `hint ${settings.upload.x02Verified ? "x02-ok" : ""}`;
+    $("x02State").className = `hint ${settings.upload.x02Verified ? "x02-ok" : x02Bad() ? "x02-bad" : ""}`;
+    if (document.activeElement !== $("x02Key") || $("x02Key").value.trim() === settings.upload.x02Key) $("x02Key").classList.toggle("key-bad", x02Bad());
     $("x02UseRow").querySelector("input").disabled = !settings.upload.x02Verified;
     if (settings.upload.x02Verified && settings.upload.x02Key !== usageFor.x02) loadX02Usage();
     if (!settings.upload.x02Verified) { usageFor.x02 = null; $("x02Usage").hidden = true; }
@@ -424,6 +437,8 @@
       key.addEventListener("input", () => {
         setPath(`shortener.keys.${id}`, key.value.trim());
         if (id === "xgd") section.querySelector(".analytics-row").hidden = !key.value.trim();
+        clearTimeout(keyTimers[id]);
+        keyTimers[id] = setTimeout(() => checkShortKey(section), 700);
       });
       section.querySelector(".reveal").onclick = (e) => {
         key.type = key.type === "password" ? "text" : "password";
@@ -436,11 +451,49 @@
     }
   }
 
+  // Each key is checked with its service as it's pasted or typed, and once when settings open:
+  // a key that isn't accepted turns the field red and says what happens instead.
+  const keyTimers = {};
+  const keyChecked = {}; // service → { key, res }: the key last checked and its answer
+  const KEY_NONE = { xgd: "no key · Extra Guac's own is used", spoo: "no key · links are anonymous", dub: "no key · dub.sh needs one to make links" };
+  const KEY_BAD = {
+    xgd: "x.gd didn't accept this key · links aren't made until it's fixed or removed",
+    spoo: "spoo.me doesn't accept this key · links are made anonymously, not in your account",
+    dub: "dub.sh doesn't accept this key · links can't be made with it",
+  };
+  const KEY_LIMITED = {
+    spoo: "✓ key accepted · links go to your account (it can only make links: dynamic QR codes can't be changed later)",
+    dub: "✓ key accepted",
+  };
+  function showKeyState(section, res) {
+    const id = section.dataset.service;
+    const text = !res ? "checking…"
+      : { none: KEY_NONE[id], ok: id === "spoo" ? "✓ key accepted · links go to your account" : "✓ key accepted",
+          limited: KEY_LIMITED[id], bad: KEY_BAD[id], unchecked: "checked when the first link is made with it",
+          unknown: `couldn't check the key${res.error ? ` (${res.error})` : ""}` }[res.state] || "";
+    const state = section.querySelector(".key-state");
+    state.textContent = text;
+    state.className = `hint key-state ${res?.state === "bad" ? "x02-bad" : res?.state === "ok" || res?.state === "limited" ? "x02-ok" : ""}`;
+    section.querySelector(".key").classList.toggle("key-bad", res?.state === "bad");
+  }
+  async function checkShortKey(section) {
+    const id = section.dataset.service;
+    const key = section.querySelector(".key").value.trim();
+    if (keyChecked[id]?.key === key && keyChecked[id].res?.state !== "unknown") return showKeyState(section, keyChecked[id].res);
+    keyChecked[id] = { key, res: null };
+    showKeyState(section, null);
+    const res = await chrome.runtime.sendMessage({ type: "checkShortKey", service: id, key }).catch((err) => ({ state: "unknown", error: err.message }));
+    if (keyChecked[id]?.key !== key) return; // typed on meanwhile
+    keyChecked[id].res = res?.state ? res : { state: "unknown", error: res?.error };
+    showKeyState(section, keyChecked[id].res);
+  }
+
   function fillServices() {
     for (const section of document.querySelectorAll(".service")) {
       const id = section.dataset.service;
       const key = section.querySelector(".key");
       if (document.activeElement !== key) key.value = settings.shortener.keys[id] || "";
+      if (document.activeElement !== key && keyChecked[id]?.key !== key.value.trim()) checkShortKey(section);
       if (id === "dub") section.querySelector(".paid").checked = !!settings.shortener.paid?.dub;
       // x.gd's analytics switch: only with a key of your own (Extra Guac's always has them off).
       if (id === "xgd") {
@@ -587,9 +640,25 @@
   }
   // ---- Text from image: check the key with a tiny test image ----
 
+  // Also checked by itself a moment after a key is pasted or typed; a key OCR.space refuses
+  // turns the field red.
   function initOcr() {
-    const say = (text, bad = false) => { $("ocrState").textContent = text; $("ocrState").classList.toggle("bad", bad); };
-    $("ocrCheck").onclick = async () => {
+    const say = (text, bad = false, refused = false) => {
+      $("ocrState").textContent = text;
+      $("ocrState").classList.toggle("bad", bad);
+      $("ocrKey").classList.toggle("key-bad", refused);
+    };
+    let timer = 0, typed = 0;
+    $("ocrKey").addEventListener("input", () => {
+      clearTimeout(timer);
+      typed++;
+      if (!$("ocrKey").value.trim()) return say("");
+      timer = setTimeout(check, 900);
+    });
+    $("ocrCheck").onclick = check;
+    async function check() {
+      clearTimeout(timer);
+      const run = typed;
       const key = $("ocrKey").value.trim();
       if (!key) return say("paste a key first", true);
       const c = Object.assign(document.createElement("canvas"), { width: 160, height: 48 });
@@ -601,13 +670,13 @@
       try {
         const res = await chrome.runtime.sendMessage({ type: "ocrTest", key, plan: settings.ocr.plan, endpoint: settings.ocr.endpoint, image: c.toDataURL("image/png") });
         if (!res?.ok) throw new Error(res?.error || "Something went wrong");
-        say(/guac/i.test(res.text) ? "key works" : `key works (read "${res.text || "nothing"}")`);
+        if (run === typed) say(/guac/i.test(res.text) ? "key works" : `key works (read "${res.text || "nothing"}")`);
       } catch (err) {
-        say(err.message.replace(/\. Check it in settings.*$/, ""), true);
+        if (run === typed) say(err.message.replace(/\. Check it in settings.*$/, ""), true, /refused the key/.test(err.message));
       } finally {
         $("ocrCheck").disabled = false;
       }
-    };
+    }
   }
 
   // ---- Proxy: the Webshare key, the plan and its data, countries, the site lists ----
