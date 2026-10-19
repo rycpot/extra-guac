@@ -1,4 +1,4 @@
-// Userscripts: .zip files for export and import (settings → userscripts). Written uncompressed
+// Userscripts: .zip files for export and import (the userscripts page → settings). Written uncompressed
 // (scripts are small); read when stored or deflated, the two ways .zip files hold files.
 (() => {
   const CRC = new Uint32Array(256).map((_, n) => {

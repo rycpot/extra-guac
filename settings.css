@@ -465,7 +465,6 @@ dialog.ask .ask-opt + .ask-btns { margin-top: 12px; }
 
 /* Userscripts: getting started, the scripts table (a row opens its details), the radios
    drawn as a segmented choice. */
-#userscripts.pane { max-width: 920px; }
 .us-notice { display: flex; gap: 14px; padding: 14px 16px; margin: 6px 0; border-radius: 12px;
   background: color-mix(in srgb, #ff9f0a 10%, transparent); border: 1px solid color-mix(in srgb, #ff9f0a 35%, transparent); }
 .us-notice > svg { width: 22px; height: 22px; flex: none; fill: none; stroke: #ff9f0a; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
@@ -517,3 +516,4 @@ input.text.us-filter { flex: none; width: 220px; }
 .seg.radios label:hover span { color: var(--fg); }
 .seg.radios input:checked + span { background: var(--chip); color: var(--fg); }
 .seg.radios input:focus-visible + span { outline: 2px solid var(--accent); }
+.seg.radios label { min-width: 0; } /* not the 100px of a row's own label: the choices sit evenly */

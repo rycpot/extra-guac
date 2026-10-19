@@ -1,4 +1,4 @@
-/* Userscripts editor and install page, on top of settings.css (its colors, buttons and switch).
+/* Userscripts page (list, settings, editor tabs) and install page, on top of settings.css (its colors, buttons and switch).
    Code colors as in the scratch pads. */
 :root { --k-kwd: #ff7b72; --k-str: #7ee787; --k-cmnt: rgba(255,255,255,.42); --k-num: #79c0ff; --k-func: #d2a8ff; --k-class: #ffa657; --k-oper: rgba(255,255,255,.55); --k-var: #79c0ff; }
 @media (prefers-color-scheme: light) {
@@ -56,3 +56,51 @@ details pre { max-height: 420px; overflow: auto; margin: 10px 0 0; padding: 12px
 details summary { cursor: pointer; color: var(--accent); }
 .us-notice { display: flex; gap: 14px; padding: 14px 16px; margin: 10px 0; border-radius: 12px; background: color-mix(in srgb, #ff9f0a 10%, transparent); border: 1px solid color-mix(in srgb, #ff9f0a 35%, transparent); }
 .side2 .pill.mono { max-width: 100%; overflow-wrap: anywhere; white-space: normal; }
+
+/* Userscripts page: a tab bar on top (editor tabs, +, installed scripts, settings), and the
+   shown tab below it. */
+body.usm { overflow: hidden; }
+.tabbar { flex: none; display: flex; align-items: flex-end; gap: 16px; padding: 8px 16px 0; border-bottom: 1px solid var(--line); }
+.tabbar .kicker { align-self: center; padding-bottom: 6px; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+.tabs { flex: 1; min-width: 0; display: flex; align-items: flex-end; justify-content: flex-end; gap: 4px; }
+.edit-tabs { display: flex; gap: 4px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.tab { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 14px; border: 1px solid transparent; border-bottom: 0;
+  border-radius: 9px 9px 0 0; background: var(--field); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+.tab:hover { color: var(--fg); }
+.tab[aria-selected="true"], .tab.edit.on { background: var(--bg); border-color: var(--line); color: var(--fg); margin-bottom: -1px; height: 33px; }
+.tab.plus { padding: 0 9px; }
+.tab.plus svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.fixed-tabs { display: flex; gap: 4px; }
+.tab.edit { max-width: 260px; padding: 0 6px 0 0; gap: 2px; cursor: default; }
+.tab.edit .pick { all: unset; display: inline-flex; align-items: center; gap: 8px; min-width: 0; height: 100%; padding: 0 4px 0 14px; cursor: pointer; }
+.tab.edit .pick:focus-visible, .tab.edit .x:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 6px; }
+.tab.edit .lab { overflow: hidden; text-overflow: ellipsis; }
+.tab.edit .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
+.tab.edit .x { all: unset; width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; font-size: 15px; line-height: 1; color: var(--muted); cursor: pointer; }
+.tab.edit .x:hover { background: var(--hover); color: var(--fg); }
+.panel { flex: 1; min-height: 0; }
+main.panel { overflow-y: auto; padding: 18px 26px 40px; }
+main.panel > * { max-width: 920px; }
+.us-notice.off { background: var(--field); border-color: var(--line); }
+.us-notice.off > svg { stroke: var(--muted); }
+
+/* An editor tab: its bar, then the code and the side panel. */
+.panel.editor { display: flex; flex-direction: column; }
+.panel.editor[hidden] { display: none; }
+.editor .bar { flex-wrap: wrap; row-gap: 6px; }
+.editor .bar .name { display: inline-flex; align-items: baseline; gap: 8px; min-width: 0; }
+.editor .bar .name .title { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.editor .bar .name .ver { color: var(--muted); font-size: 12px; }
+.editor .bar .status { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.editor .bar .tools { display: inline-flex; align-items: center; gap: 2px; }
+.editor .bar .key { opacity: .7; }
+.editor .jump input { width: 104px; height: 30px; padding: 0 10px; border: 1px solid transparent; border-radius: 9px; background: var(--field); color: var(--fg);
+  font: inherit; outline: none; font-variant-numeric: tabular-nums; }
+.editor .jump input::placeholder { color: var(--muted); }
+.editor .jump input:focus { border-color: var(--accent); }
+.editor .jump input.invalid { border-color: var(--error); animation: us-shake .28s; }
+@keyframes us-shake { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+.stack .jump-flash { position: absolute; left: 0; right: 0; z-index: 0; background: color-mix(in srgb, var(--accent) 22%, transparent); pointer-events: none;
+  animation: us-jump-flash 1.6s ease-out forwards; }
+@keyframes us-jump-flash { 0%, 35% { opacity: 1; } 100% { opacity: 0; } }
+.us-pane .row > label.toggle { min-width: 0; }

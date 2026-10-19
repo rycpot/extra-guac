@@ -34,7 +34,6 @@ A Chrome extension. Click its icon to open the side panel (or a popup, in settin
 | **Highlight words** | Neon marks for your words, on every site or per site. Several sites can share one list. |
 | **Clipboard history** | Once on, keeps text you copy on web pages to search, pin and paste again. Password and card fields are never saved. |
 | **Enable copy & right-click** | Unlocks selecting, copying and right-clicking on sites that block them, one site at a time. |
-| **Userscripts** | Runs your own userscripts (.user.js) on the sites they name. Open a .user.js link to install one, or write one in the built-in editor. Scripts get the GM\_\* and GM.\* functions (saved values, requests to other sites, styles, menu commands, notifications, downloads and more) and update themselves on the schedule you pick, asking first when an update wants more access. Import a .zip, a userscript backup text file or .user.js files; export all as a .zip. Part of Drive backups, and can be restored from one on their own. Needs Chrome 120 or later, and Chrome's "Allow User Scripts" switch for Extra Guac (settings → userscripts shows how). |
 
 **Tab 2**
 
@@ -57,6 +56,7 @@ A Chrome extension. Click its icon to open the side panel (or a popup, in settin
 | Tool | What it does |
 |---|---|
 | **Session switch** | Several logins for the same site, and one click to switch between them. Each profile keeps the site's cookies, page storage and app data and stays up to date while you use it, with its login's expiry date shown. A profile can open its site through one of your Webshare proxies, in a country you pick. A login already saved in a profile is recognized by itself. A login changed from outside never overwrites a profile: a card on the page asks once what to do with it. Encrypted backups to a file, or into Drive backups if you turn that on. |
+| **Userscripts** | Runs your own userscripts (.user.js) on the sites they name. Off until you turn it on. Everything is on one page with tabs: your scripts, settings, and an editor tab for each open script (with undo, redo and go to row). Open a .user.js link to install a script, or write one in the editor. Scripts get the GM\_\* and GM.\* functions (saved values, requests to other sites, styles, menu commands, notifications, downloads and more) and update themselves on the schedule you pick, asking first when an update wants more access. Import a .zip, a userscript backup text file or .user.js files; export all as a .zip. Part of Drive backups, and can be restored from one on their own. Needs Chrome 131 or later, and Chrome's "Allow User Scripts" switch for Extra Guac (the userscripts page shows how). |
 
 **Backup tab**
 
@@ -66,7 +66,7 @@ A Chrome extension. Click its icon to open the side panel (or a popup, in settin
 | **Beam** | Send files between your devices with a 6-digit code or a QR code, encrypted end to end. The other device uses Extra Guac too, or just [rycpot.github.io/beam](https://rycpot.github.io/beam) in any browser. |
 | **Settings file** | Export everything as a .json file, or import one to replace it. |
 
-**Layout:** drag tools between tabs, or reorder them, in settings → general. Tab 3 holds session switch at first, and anything you drag there.
+**Layout:** drag tools between tabs, or reorder them, in settings → general. Tab 3 holds session switch and userscripts at first, and anything you drag there.
 
 ## Install
 

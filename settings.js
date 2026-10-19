@@ -50,6 +50,8 @@
     initHighlight();
     initClipboard();
     showPane();
+    // Userscripts have a page of their own, in one tab.
+    $("usPageLink").onclick = (e) => { e.preventDefault(); chrome.runtime.sendMessage({ type: "usOpen" }).catch(() => {}); };
     addEventListener("hashchange", showPane);
     // Footer: buttons rather than links, so hovering doesn't show the address bubble.
     document.querySelectorAll(".site-foot [data-open]").forEach((b) => (b.onclick = () => window.open(b.dataset.open, "_blank", "noopener")));

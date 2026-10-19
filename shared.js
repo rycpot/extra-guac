@@ -72,13 +72,13 @@
     ocr: { key: "", engine: "2", plan: "free", endpoint: "" },
     // Userscripts (bg-userscripts.js): on for all, how often to look for updates (hours, 0 =
     // never), and whether an update that asks for more access waits for an OK.
-    us: { enabled: true, interval: 24, ask: true },
+    us: { enabled: false, interval: 24, ask: true },
     // Which of the first three popup tabs each section is in, top to bottom (settings →
     // general → tools layout). The fourth tab (backup) is fixed.
     layout: {
-      tools: ["screenshot", "ocr", "blur", "scratch", "dark", "refresh", "autoRefresh", "shortener", "qr", "volume", "proxy", "awake", "highlight", "clipboard", "unlock", "userscripts"],
+      tools: ["screenshot", "ocr", "blur", "scratch", "dark", "refresh", "autoRefresh", "shortener", "qr", "volume", "proxy", "awake", "highlight", "clipboard", "unlock"],
       page: ["imgzoom", "imgdl", "upload", "color", "font", "element", "remove", "newTab", "redirect", "focus"],
-      extra: ["sessions"],
+      extra: ["sessions", "userscripts"],
     },
   };
 

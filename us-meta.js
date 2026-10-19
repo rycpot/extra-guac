@@ -1,5 +1,5 @@
 // Userscripts: reading a script's metadata block, which pages it runs on, and what it asks
-// for. Shared by the background worker (bg-userscripts.js), the settings window, the editor,
+// for. Shared by the background worker (bg-userscripts.js), the userscripts page and its editor,
 // the install page and the popup.
 (() => {
   // The keys that can appear more than once; the rest keep their first value.

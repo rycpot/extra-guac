@@ -1,5 +1,7 @@
-// Settings → userscripts: getting started (the permission and Chrome's switch), the scripts as
-// a table (a row opens its details), updates, and export / import / restore from Drive.
+// The userscripts page (userscripts.html): tabs for the installed scripts (a table where a row
+// opens its details), settings (on/off, updates, export / import / restore from Drive), and an
+// editor tab per open script (us-edit.js). The address says which tab is shown: #settings,
+// #edit=<script id>, #new or #new=<site>; nothing for the list.
 // The scripts themselves are kept and run by bg-userscripts.js.
 (() => {
   const $ = (id) => document.getElementById(id);
@@ -8,6 +10,7 @@
     if (!res?.ok) throw new Error(res?.error || "Something went wrong");
     return res;
   };
+  TT.applyTheme();
   const say = (id, text, bad = false) => { $(id).textContent = text; $(id).classList.toggle("bad", bad); };
   const age = (t) => {
     if (!t) return "";
@@ -28,6 +31,115 @@
 
   let scripts = [];
   const open = new Set(); // rows showing their details
+
+  // ---- Tabs ----
+  // The list and settings are always there; each open script has an editor tab before them.
+  const editors = []; // { el, api, tab, wrap }
+  let tabCount = 0;
+  let active = "list"; // "list", "settings" or an editor entry
+
+  function show(which, { push = true } = {}) {
+    active = which;
+    $("pList").hidden = which !== "list";
+    $("pSettings").hidden = which !== "settings";
+    $("tabList").setAttribute("aria-selected", String(which === "list"));
+    $("tabSettings").setAttribute("aria-selected", String(which === "settings"));
+    for (const e of editors) {
+      e.el.hidden = e !== which;
+      e.tab.setAttribute("aria-selected", String(e === which));
+      e.wrap.classList.toggle("on", e === which);
+      e.tab.tabIndex = e === which ? 0 : -1;
+    }
+    if (which === "settings") onSettings();
+    if (which === "list") setup();
+    if (typeof which === "object") which.api.focus();
+    const hash = which === "list" ? "" : which === "settings" ? "#settings" : which.api.id() ? `#edit=${encodeURIComponent(which.api.id())}` : "#new";
+    if (push && location.hash !== hash) history.replaceState(null, "", hash || location.pathname);
+    title();
+  }
+  function title() {
+    const what = active === "list" ? "installed scripts" : active === "settings" ? "settings" : active.api.name() || "new script";
+    document.title = `${what} · Userscripts · Extra Guac`;
+  }
+  $("tabList").onclick = () => show("list");
+  $("tabSettings").onclick = () => show("settings");
+  $("tabNew").onclick = () => openEditor({});
+
+  function openEditor({ id = "", site = "" }) {
+    const have = id && editors.find((e) => e.api.id() === id);
+    if (have) return show(have);
+    const el = $("edTpl").content.firstElementChild.cloneNode(true);
+    // A tab, with its close button beside it (not inside it). Delete or Ctrl/⌘+W on a
+    // focused tab closes it; arrow keys move between tabs.
+    const n = ++tabCount;
+    const wrap = document.createElement("span");
+    wrap.className = "tab edit";
+    wrap.innerHTML = `<button type="button" class="pick" role="tab" id="edTab${n}" aria-controls="edPanel${n}"><span class="lab"></span><span class="dot" hidden title="unsaved changes"></span></button><button type="button" class="x" title="Close" aria-label="Close">×</button>`;
+    const tab = wrap.querySelector(".pick");
+    el.id = `edPanel${n}`;
+    el.setAttribute("aria-labelledby", tab.id);
+    const entry = { el, tab, wrap, api: null };
+    const update = () => {
+      if (!entry.api) return;
+      const name = entry.api.name() || "new script";
+      tab.querySelector(".lab").textContent = `edit · ${name}`;
+      tab.title = name;
+      wrap.querySelector(".x").setAttribute("aria-label", `Close ${name}`);
+      tab.querySelector(".dot").hidden = !entry.api.dirty();
+      if (active === entry) { title(); const h = entry.api.id() ? `#edit=${encodeURIComponent(entry.api.id())}` : "#new"; if (location.hash !== h) history.replaceState(null, "", h); }
+    };
+    entry.api = usEditor(el, { id, site, onChange: update });
+    tab.querySelector(".lab").textContent = "edit · …";
+    tab.onclick = () => show(entry);
+    wrap.querySelector(".x").onclick = () => close(entry);
+    wrap.onauxclick = (e) => { if (e.button === 1) close(entry); };
+    tab.onkeydown = (e) => {
+      if (e.key === "Delete" || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "w")) { e.preventDefault(); close(entry); }
+    };
+    $("editTabs").append(wrap);
+    document.body.append(el);
+    editors.push(entry);
+    show(entry);
+    update();
+  }
+  function close(entry) {
+    if (entry.api.dirty() && !confirm(`Close “${entry.api.name() || "new script"}” without saving the changes?`)) return;
+    const i = editors.indexOf(entry);
+    editors.splice(i, 1);
+    entry.api.dispose();
+    entry.el.remove();
+    entry.wrap.remove();
+    if (active === entry) show(editors[Math.min(i, editors.length - 1)] || "list");
+  }
+  // Ctrl/⌘+G: go to row in the open editor; Ctrl/⌘+S saves it even when focus is elsewhere.
+  document.addEventListener("keydown", (e) => {
+    if (typeof active !== "object" || !(e.ctrlKey || e.metaKey) || e.altKey) return;
+    const k = e.key.toLowerCase();
+    if (k === "g" && !e.shiftKey) { e.preventDefault(); active.api.jump(); }
+    else if (k === "s" && !e.shiftKey) { e.preventDefault(); active.api.save(); }
+  });
+  // Left / right arrows move between all the tabs, as in any tab bar.
+  $("tabs").addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    const all = [...document.querySelectorAll('#tabs [role="tab"]')];
+    const i = all.indexOf(document.activeElement);
+    if (i === -1) return;
+    e.preventDefault();
+    const next = all[(i + (e.key === "ArrowRight" ? 1 : -1) + all.length) % all.length];
+    next.focus();
+    next.click();
+  });
+  addEventListener("beforeunload", (e) => { if (editors.some((x) => x.api.dirty())) e.preventDefault(); });
+
+  function route() {
+    let h = location.hash.slice(1);
+    try { h = decodeURIComponent(h); } catch {}
+    const edit = /^edit=(.+)$/.exec(h), fresh = /^new(?:=(.*))?$/.exec(h);
+    if (edit) openEditor({ id: edit[1] });
+    else if (fresh) openEditor({ site: fresh[1] || "" });
+    else show(h === "settings" ? "settings" : "list", { push: false });
+  }
+  addEventListener("hashchange", route);
 
   // ---- Getting started ----
 
@@ -192,8 +304,8 @@
     return tr;
   }
 
-  const edit = (id) => window.open(id ? `us-edit.html?id=${encodeURIComponent(id)}` : "us-edit.html?new=1", "_blank");
-  $("usNew").onclick = () => edit("");
+  const edit = (id) => openEditor({ id });
+  $("usNew").onclick = () => openEditor({});
   $("usFromUrl").onclick = () => {
     const url = prompt("Address of the .user.js file to install");
     if (!url) return;
@@ -203,15 +315,10 @@
   $("usFilter").oninput = render;
 
   $("usLegend").innerHTML = SHOWN.map((k) => `<span><span class="us-ic on">${SVG(ICONS[k])}</span>${k}</span>`).join("")
-    + "<span>Click a row for details; the pencil opens the editor.</span>";
+    + "<span>Click a row for details; the pencil opens the script in a tab of its own.</span>";
 
   // ---- Updates ----
 
-  async function fillAsk() {
-    const { us } = await TT.getSettings();
-    $("usAskYes").checked = us.ask !== false;
-    $("usAskNo").checked = us.ask === false;
-  }
   for (const r of [$("usAskYes"), $("usAskNo")]) r.onchange = () => r.checked && TT.updateSettings({ us: { ask: r.value === "true" } }).catch((err) => alert(err.message));
   $("usCheckNow").onclick = async () => {
     $("usCheckNow").disabled = true;
@@ -375,23 +482,36 @@
     $("usRestore").disabled = false;
   };
 
+  // ---- On / off ----
+
+  async function fillSettings() {
+    const { us } = await TT.getSettings();
+    $("usEnabled").checked = !!us.enabled;
+    $("usOff").hidden = !!us.enabled;
+    for (const r of document.querySelectorAll('input[name="usInterval"]')) r.checked = Number(r.value) === Number(us.interval);
+    $("usAskYes").checked = us.ask !== false;
+    $("usAskNo").checked = us.ask === false;
+  }
+  const setOn = (on) => TT.updateSettings({ us: { enabled: on } }).catch((err) => alert(err.message));
+  $("usEnabled").onchange = () => setOn($("usEnabled").checked);
+  $("usTurnOn").onclick = () => setOn(true);
+  for (const r of document.querySelectorAll('input[name="usInterval"]')) {
+    r.onchange = () => r.checked && TT.updateSettings({ us: { interval: Number(r.value) } }).catch((err) => alert(err.message));
+  }
+
   // ---- Start, and keep up ----
 
   let snapsListed = false;
-  const shown = () => location.hash === "#userscripts";
-  function onShow() {
-    if (!shown()) return;
-    setup();
+  function onSettings() {
     if (!snapsListed) { snapsListed = true; fillSnaps(); }
   }
-  addEventListener("hashchange", onShow);
   load();
-  fillAsk();
-  onShow();
+  fillSettings();
+  route();
   chrome.storage.onChanged.addListener((c, area) => {
     if (area !== "local") return;
     if (c.usScripts || c.usLastCheck) load();
-    if (c.tt) fillAsk();
-    if (c.backupState) { snapsListed = false; onShow(); }
+    if (c.tt) fillSettings();
+    if (c.backupState) { snapsListed = false; if (active === "settings") onSettings(); }
   });
 })();

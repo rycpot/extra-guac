@@ -53,7 +53,7 @@
     if (!st.available) {
       $("notice").hidden = false;
       $("notice").className = "us-notice";
-      $("notice").innerHTML = `<div>Userscripts aren't set up yet, so this can't run until they are. <a href="settings.html#userscripts" target="_blank">Set them up in settings</a>, then come back and install.</div>`;
+      $("notice").innerHTML = `<div>Userscripts aren't set up yet, so this can't run until they are. <a href="userscripts.html" target="_blank">Set them up on the userscripts page</a>, then come back and install.</div>`;
     }
     if (!old) {
       const { scripts } = await send("usList").catch(() => ({ scripts: [] }));
@@ -137,7 +137,7 @@
       $("note").textContent = "Installed. Pages it runs on pick it up the next time they load.";
       $("install").textContent = "edit";
       $("install").disabled = false;
-      $("install").onclick = () => { location.href = `us-edit.html?id=${encodeURIComponent(installedId || pendingId)}`; };
+      $("install").onclick = () => send("usOpen", { hash: `edit=${encodeURIComponent(installedId || pendingId)}` }).then(() => window.close(), (err) => ($("note").textContent = err.message));
       $("cancel").textContent = "close";
     } catch (err) {
       $("note").textContent = err.message;

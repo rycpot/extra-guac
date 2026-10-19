@@ -1,4 +1,4 @@
-// Userscripts in the popup (the "userscripts" section, tab 1 unless moved): the scripts for the
+// Userscripts in the popup (the "userscripts" section, tab 3 unless moved): the scripts for the
 // current page, each with its switch and the commands it added. The background side is
 // bg-userscripts.js; popup.js calls initUserscripts for each tab the popup shows.
 (() => {
@@ -21,15 +21,18 @@ globalThis.initUserscripts = function (tab) {
   const live = scope.signal;
   const url = tab?.url || "";
   const isWeb = /^(https?|file):/i.test(url);
-  let state = null, scripts = [], menus = [], on = true;
+  let state = null, scripts = [], menus = [], on = false;
 
   function render() {
     setSwitch(master, on);
-    master.hidden = !state?.available;
-    $("usNewBtn").hidden = !state?.available || !/^https?:/i.test(url);
+    $("usNewBtn").hidden = !on || !state?.available || !/^https?:/i.test(url);
     const hint = $("usHint");
     hint.onclick = null;
     hint.classList.remove("link");
+    if (!on) {
+      hint.textContent = "off";
+      return list.replaceChildren();
+    }
     if (!state?.available) {
       hint.textContent = state?.oldChrome ? "needs a newer Chrome" : "set up";
       hint.classList.add("link");
@@ -49,7 +52,7 @@ globalThis.initUserscripts = function (tab) {
           h("span", { class: `us-name${s.enabled === false || !on ? " off" : ""}`, title: s.meta.description || s.meta.name }, s.meta.name,
             s.meta.version ? h("span", { class: "us-ver" }, ` ${s.meta.version}`) : null),
           h("span", { class: "actions" },
-            h("button", { class: "icon-btn small", title: "Edit", "aria-label": `Edit ${s.meta.name}`, onclick: () => edit(`id=${encodeURIComponent(s.id)}`) }, icon("edit")),
+            h("button", { class: "icon-btn small", title: "Edit", "aria-label": `Edit ${s.meta.name}`, onclick: () => edit(`edit=${encodeURIComponent(s.id)}`) }, icon("edit")),
             sw)),
         cmds.length ? h("div", { class: "us-cmds" }, cmds.map((m) => h("button", {
           class: "text-btn", title: m.title || m.name,
@@ -66,9 +69,9 @@ globalThis.initUserscripts = function (tab) {
     return svg;
   }
 
-  function edit(query) {
-    chrome.tabs.create({ url: chrome.runtime.getURL(`us-edit.html?${query}`) }).then(() => closePopup(), fail);
-  }
+  // The userscripts page, on the tab the hash names.
+  const page = (hash = "") => send("usOpen", { hash }).then(() => closePopup(), fail);
+  const edit = (hash) => page(hash);
 
   async function load() {
     const key = `usMenus:${tab?.id}`;
@@ -78,7 +81,7 @@ globalThis.initUserscripts = function (tab) {
     if (live.aborted) return;
     state = st;
     scripts = got.scripts || [];
-    on = settings.us?.enabled !== false;
+    on = !!settings.us?.enabled;
     menus = sess[key] || [];
     render();
   }
@@ -88,12 +91,16 @@ globalThis.initUserscripts = function (tab) {
     if (area === "local" && (c.usScripts || c.tt)) load().catch(() => {});
     if (area === "session" && c[`usMenus:${tab?.id}`]) { menus = c[`usMenus:${tab?.id}`].newValue || []; render(); }
   }, live);
-  master.onclick = () => TT.updateSettings({ us: { enabled: !on } }).catch(fail);
-  $("usSettings").onclick = () => send("openSettings", { section: "userscripts" }).then(() => closePopup(), fail);
+  // Turned on before Chrome lets Extra Guac run scripts: the page shows what's still needed.
+  master.onclick = () => {
+    const turningOn = !on;
+    TT.updateSettings({ us: { enabled: turningOn } }).then(() => { if (turningOn && !state?.available) page(); }, fail);
+  };
+  $("usSettings").onclick = () => page();
   $("usNewBtn").onclick = () => {
     let site = "";
     try { site = new URL(url).hostname; } catch {}
-    edit(`new=1&site=${encodeURIComponent(site)}`);
+    edit(`new=${encodeURIComponent(site)}`);
   };
 };
 })();

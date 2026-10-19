@@ -1,6 +1,6 @@
 // Userscripts: scripts you add (installed from a .user.js link, written in the editor or
 // imported) run on the pages they name, through Chrome's userScripts API. That needs the
-// optional "userScripts" permission (asked for in settings → userscripts) and Chrome's
+// optional "userScripts" permission (asked for on the userscripts page) and Chrome's
 // "Allow User Scripts" switch on Extra Guac's details page.
 //
 // Kept in storage.local: "usScripts" (each script's code, parsed metadata, the @require and
@@ -229,7 +229,28 @@ chrome.storage.onChanged.addListener((c, area) => {
     if (pick(c.tt.oldValue) !== pick(c.tt.newValue)) usSync();
   }
 });
-chrome.runtime.onInstalled.addListener(() => usSync());
+chrome.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
+  // Version 265 had userscripts on at first and in tab 1. From 266 they're off until turned on
+  // (kept on where scripts are already installed) and sit in tab 3, below session switch.
+  if (reason === "update" && previousVersion === "265") {
+    const { scripts } = await usLoad().catch(() => ({ scripts: [] }));
+    await TT.settingsTask(async () => {
+      const { tt = {} } = await chrome.storage.local.get("tt");
+      const next = structuredClone(tt);
+      if (!scripts.length) { if (next.us) next.us.enabled = false; }
+      else if (next.us?.enabled === undefined) next.us = { ...next.us, enabled: true };
+      const lay = next.layout;
+      if (lay && Array.isArray(lay.tools) && lay.tools.includes("userscripts")) {
+        lay.tools = lay.tools.filter((id) => id !== "userscripts");
+        lay.extra = (Array.isArray(lay.extra) ? lay.extra : []).filter((id) => id !== "userscripts");
+        const at = lay.extra.indexOf("sessions");
+        lay.extra.splice(at === -1 ? lay.extra.length : at + 1, 0, "userscripts");
+      }
+      await chrome.storage.local.set({ tt: next });
+    }).catch((err) => console.error("[userscripts] moving to 266", err));
+  }
+  usSync();
+});
 chrome.runtime.onStartup.addListener(() => usSync());
 chrome.permissions.onAdded.addListener((p) => p.permissions?.includes("userScripts") && usSync());
 chrome.permissions.onRemoved.addListener((p) => p.permissions?.includes("userScripts") && usSync());
@@ -606,7 +627,24 @@ chrome.tabs.onRemoved.addListener((tabId) => chrome.storage.session.remove(`usMe
 
 // ---- From the popup, settings, editor and install page ----
 
+// The userscripts page, in one tab: brought to the front (on the tab the hash names) when it's
+// open already. hash: "settings", "edit=<id>", "new=<site>" or nothing for the list.
+async function usOpenPage(hash = "") {
+  const base = chrome.runtime.getURL("userscripts.html");
+  const url = hash ? `${base}#${hash}` : base;
+  const [tab] = await chrome.tabs.query({ url: `${base}*` });
+  if (tab) {
+    await chrome.tabs.update(tab.id, { active: true, ...(hash ? { url } : {}) });
+    await chrome.windows.update(tab.windowId, { focused: true });
+  } else {
+    const win = await chrome.windows.getLastFocused({ windowTypes: ["normal"] }).catch(() => null);
+    await chrome.tabs.create({ url, ...(win ? { windowId: win.id } : {}) });
+    if (win) await chrome.windows.update(win.id, { focused: true });
+  }
+}
+
 const usHandlers = {
+  usOpen: ({ hash }) => usOpenPage(typeof hash === "string" ? hash : ""),
   usState: () => usState(),
   usSync: async () => { await usSync(); return usState(); },
   usList: async () => {
