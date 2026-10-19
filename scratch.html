@@ -6,6 +6,7 @@
   <title>Scratch pads · Extra Guac</title>
   <link rel="icon" href="icons/icon32.png">
   <link rel="stylesheet" href="scratch.css">
+  <link rel="stylesheet" href="find-bar.css">
 </head>
 <body>
   <header class="top">
@@ -115,6 +116,7 @@
     <div class="tools" id="plainTools" hidden>
       <span class="group"><label class="tool wide select"><select id="lang" aria-label="Language"></select><svg viewBox="0 0 24 24" class="stroke"><path d="m6 9 6 6 6-6"/></svg></label></span>
       <form class="group jump" id="jumpForm" autocomplete="off"><input id="jumpInput" type="text" inputmode="numeric" placeholder="Jump to row" aria-label="Jump to row number" title="Type a row number and press Enter (Ctrl/⌘+G)"></form>
+      <span class="group"><button class="tool" id="findBtn" title="Find and replace (Ctrl/⌘+F)"><svg viewBox="0 0 24 24" class="stroke"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg></button></span>
       <span class="group"><button class="tool" id="wrapBtn" title="Wrap long lines"><svg viewBox="0 0 24 24" class="stroke"><path d="M4 6h16M4 12h13a3 3 0 0 1 0 6h-4M4 18h5"/><path d="m15 16-2 2 2 2"/></svg></button></span>
       <span class="group">
         <button class="tool" data-act="undo" title="Undo (Ctrl/⌘+Z)"><svg viewBox="84.11 33.10 100.92 100.92" fill="currentColor" aria-hidden="true"><g transform="matrix(1 0 0 1 75.38989746093739 114.2724609375)"><path d="M105.905-16.5756C105.905-35.9327 92.8645-49.2793 70.6686-49.2793L39.9004-49.2793L23.4658-48.5663L25.0109-45.7498L37.1783-56.0337L49.7184-68.2926C50.7142-69.2347 51.282-70.4294 51.282-72.0142C51.282-75.0268 49.2195-77.1824 46.0744-77.1824C44.7123-77.1824 43.2663-76.5894 42.198-75.521L14.1578-47.9156C13.054-46.8637 12.4609-45.4241 12.4609-43.9649C12.4609-42.5143 13.054-41.0312 14.1578-39.9708L42.198-12.3756C43.2663-11.3592 44.7123-10.7228 46.0744-10.7228C49.2195-10.7228 51.282-12.9132 51.282-15.9258C51.282-17.5107 50.7142-18.6705 49.7184-19.6126L37.1783-31.8527L25.0109-42.1451L23.4658-39.3201L39.9004-38.6156L70.9756-38.6156C86.6869-38.6156 95.3443-29.6802 95.3443-16.9664C95.3443-4.24406 86.6869 5.07823 70.9756 5.07823L59.6069 5.07823C56.3938 5.07823 54.2023 7.46063 54.2023 10.3926C54.2023 13.3681 56.4024 15.7505 59.6155 15.7505L71.3114 15.7505C93.125 15.7505 105.905 2.92773 105.905-16.5756Z"></path></g></svg></button>
@@ -134,6 +136,7 @@
   <script src="shared.js"></script>
   <script src="pad-store.js"></script>
   <script src="md-render.js"></script>
+  <script src="find-bar.js"></script>
   <script src="scratch.js"></script>
 </body>
 </html>

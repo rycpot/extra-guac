@@ -109,6 +109,9 @@ svg.stroke { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: 
 .text-input::selection { background: var(--sel); color: transparent; }
 .plain-view.wrap .text-hl, .plain-view.wrap .text-input { white-space: pre-wrap; overflow-wrap: break-word; }
 .plain-view.wrap .text-doc { width: 100%; }
+.text-stack .find-marks { position: absolute; inset: 0; z-index: 0; margin: 0; padding: 14px 16px; overflow: hidden; white-space: pre; overflow-wrap: normal; word-break: normal;
+  font: 12.5px/20px ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace; letter-spacing: 0; font-variant-ligatures: none; tab-size: 4; }
+.plain-view.wrap .find-marks { white-space: pre-wrap; overflow-wrap: break-word; }
 .plain-view.wrap .text-gutter { display: none; }
 /* Huge text: just the textarea (coloring millions of characters per keystroke would crawl). */
 .plain-view.bare .text-scroll { overflow: hidden; }

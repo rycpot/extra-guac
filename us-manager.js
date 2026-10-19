@@ -119,11 +119,13 @@
     if (active === entry) show(editors[Math.min(i, editors.length - 1)] || "list");
     else title();
   }
-  // Ctrl/⌘+G: go to row in the open editor; Ctrl/⌘+S saves it even when focus is elsewhere.
+  // Ctrl/⌘+G: go to row in the open editor, Ctrl/⌘+F: find and replace; Ctrl/⌘+S saves it
+  // even when focus is elsewhere.
   document.addEventListener("keydown", (e) => {
     if (typeof active !== "object" || !(e.ctrlKey || e.metaKey) || e.altKey) return;
     const k = e.key.toLowerCase();
     if (k === "g" && !e.shiftKey) { e.preventDefault(); active.api.jump(); }
+    else if (k === "f" && !e.shiftKey) { e.preventDefault(); active.api.find(); }
     else if (k === "s" && !e.shiftKey) { e.preventDefault(); active.api.save(); }
   });
   // Left / right arrows move between all the tabs, as in any tab bar.
@@ -193,8 +195,8 @@
     $("usLegend").hidden = !scripts.length;
     $("usEmpty").hidden = !!scripts.length;
     $("usFilter").placeholder = `filter ${scripts.length || ""} script${scripts.length === 1 ? "" : "s"}`.replace("  ", " ");
-    // Rows that would look the same are kept as they are (no flicker, focus and an armed
-    // delete stay put); only changed ones are built again.
+    // Rows that would look the same are kept as they are (no flicker, focus stays
+    // put); only changed ones are built again.
     const body = $("usRows");
     const old = new Map([...body.children].map((tr) => [tr.dataset.key, tr]));
     const next = [];
@@ -216,7 +218,7 @@
     if (next.length !== body.children.length || next.some((tr, i) => body.children[i] !== tr)) {
       // Keyboard focus stays on the same control of a row that was built again.
       const f = document.activeElement, fr = f?.closest?.("#usRows tr");
-      const cls = f && f !== fr ? [...f.classList].filter((c) => c !== "ib" && c !== "armed" && c !== "spin") : [];
+      const cls = f && f !== fr ? [...f.classList].filter((c) => c !== "ib" && c !== "spin") : [];
       const where = fr && { id: fr.dataset.id, detail: fr.classList.contains("us-detail"), sel: f === fr ? null : f.matches("input") ? "input" : cls.length ? `.${cls.map(CSS.escape).join(".")}` : null };
       body.replaceChildren(...next);
       if (where && !body.contains(f)) {
@@ -286,22 +288,11 @@
     tr.querySelector(".dl").onclick = () => download(s).catch((err) => alert(err.message));
     const del = tr.querySelector(".del");
     named(del, "Delete");
-    // Delete asks twice: the first click turns the button red, the second asks to be sure.
-    let disarm = 0;
-    const reset = () => { clearTimeout(disarm); del.classList.remove("armed"); del.title = "Delete"; };
     del.onclick = async () => {
-      if (!del.classList.contains("armed")) {
-        del.classList.add("armed");
-        del.title = "Click again to delete";
-        disarm = setTimeout(reset, 4000);
-        return;
-      }
-      reset();
       if (!confirm(`Delete “${m.name}” and what it saved? This can't be undone.`)) return;
       open.delete(s.id);
       await send("usRemove", { id: s.id }).catch((err) => alert(err.message));
     };
-    del.onblur = reset;
     tr.onclick = (e) => {
       if (e.target.closest("button, label, input, a")) return;
       open.has(s.id) ? open.delete(s.id) : open.add(s.id);

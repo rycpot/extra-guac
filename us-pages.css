@@ -125,7 +125,6 @@ main.panel > * { max-width: 1120px; margin-inline: auto; }
 .us-table td.acts { text-align: right; }
 .row-acts { display: inline-flex; gap: 2px; }
 .row-acts .ib:disabled { opacity: .35; cursor: default; background: none; }
-.row-acts .ib.del.armed { background: color-mix(in srgb, var(--error) 18%, transparent); color: var(--error); }
 .row-acts .ib.spin svg { animation: us-spin .8s linear infinite; }
 @keyframes us-spin { to { transform: rotate(360deg); } }
 .us-dl a { color: var(--accent); }
@@ -135,3 +134,4 @@ main.panel > * { max-width: 1120px; margin-inline: auto; }
 .panel.editor > * { transition: opacity .12s ease-out; }
 .panel.editor.loading > * { opacity: 0; transition: none; }
 .editor .bar .tools .revert { margin-left: 6px; }
+.editor .find-bar .fb-btn { text-transform: lowercase; }

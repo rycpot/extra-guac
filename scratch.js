@@ -1260,6 +1260,7 @@ body.md a { cursor: pointer; }
   langSelect.append(new Option("Plain text", ""));
   for (const [id, label] of [...LANGS].sort((a, b) => a[1].localeCompare(b[1]))) langSelect.append(new Option(label, id));
   let gutterLines = 0;
+  let finder = null; // find and replace, set up below
 
   function countLines(v) {
     let n = 1;
@@ -1272,6 +1273,7 @@ body.md a { cursor: pointer; }
     gutterLines = 0;
     applyPlainFlags();
     renderText();
+    finder?.refresh();
     $("textScroll").scrollTop = 0;
     if (focus) {
       ta.setSelectionRange(0, 0);
@@ -1489,6 +1491,28 @@ body.md a { cursor: pointer; }
       e.preventDefault();
       jumpInput.focus();
       jumpInput.select();
+    }
+  });
+
+  // Find and replace (find-bar.js), Ctrl/⌘+F or the magnifier.
+  finder = findBar({
+    ta, mount: plainView, layer: document.querySelector(".text-stack"), edit: replaceRange,
+    // A very long Replace all can't be undone as typing can: Restore previous brings the text back.
+    beforeBig: () => {
+      syncFromEditor();
+      keepPrev(current, { ...cur() });
+      paintTop();
+      toast("Replaced. Restore previous brings back the text from before.");
+    },
+    scroller: () => (plainView.classList.contains("bare") ? ta : $("textScroll")),
+  });
+  const openFind = () => { if (cur().mode === "plain" && !previewing()) finder.open(); };
+  $("findBtn").onmousedown = (e) => e.preventDefault();
+  $("findBtn").onclick = openFind;
+  document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "f" && cur().mode === "plain" && !previewing()) {
+      e.preventDefault();
+      openFind();
     }
   });
 

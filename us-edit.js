@@ -1,10 +1,11 @@
 // Userscript editor, one per "edit" tab of the userscripts page (userscripts.html): the code
-// with the scratch pads' highlighting, undo and redo, go to row, and beside it what the
-// script's metadata says, kept up to date while typing.
+// with the scratch pads' highlighting, undo and redo, go to row, find and replace, and beside
+// it what the script's metadata says, kept up to date while typing.
 // usEditor(root, { id, site, onChange }) fills root (a copy of the page's editor template) and
-// returns { id(), name(), dirty(), focus(), save(), jump(), dispose() }. onChange() runs when the name,
-// the saved state or the script's id changes, so the page can update the tab. The editor stays
-// see-through (class "loading") until the code is in and colored, so it appears in one go.
+// returns { id(), name(), dirty(), focus(), save(), jump(), find(), dispose() }. onChange() runs
+// when the name, the saved state or the script's id changes, so the page can update the tab.
+// The editor stays see-through (class "loading") until the code is in and colored, so it
+// appears in one go.
 (() => {
   const send = async (type, payload = {}) => {
     const res = await chrome.runtime.sendMessage({ type, ...payload });
@@ -87,7 +88,8 @@
       onChange();
     }
     const say = (text, keep = false) => { status.textContent = text; status.classList.toggle("keep", keep); };
-    ta.addEventListener("input", (e) => { status.classList.remove("keep"); record(e.inputType === "insertText" && e.data?.length === 1 && !/\s/.test(e.data)); onText(); });
+    let replacing = false; // an edit from find and replace: a step of its own, never typing
+    ta.addEventListener("input", (e) => { status.classList.remove("keep"); record(!replacing && e.inputType === "insertText" && e.data?.length === 1 && !/\s/.test(e.data)); onText(); });
     ta.addEventListener("scroll", sync);
     ta.addEventListener("keydown", (e) => {
       const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
@@ -141,6 +143,7 @@
       ta.focus({ preventScroll: true });
       ta.setSelectionRange(a, b);
       onText();
+      finder.refresh();
       undoBtns();
     }
     function undoBtns() {
@@ -207,6 +210,20 @@
     jumpInput.onkeydown = (e) => {
       if (e.key === "Escape") { e.preventDefault(); jumpInput.value = ""; ta.focus({ preventScroll: true }); }
     };
+
+    // Find and replace (find-bar.js), over the code.
+    const finder = findBar({
+      ta, mount: q(".code"), layer: q(".stack"), mirror: true,
+      edit: (a, b, text) => {
+        replacing = true;
+        ta.focus({ preventScroll: true });
+        ta.setSelectionRange(a, b);
+        document.execCommand("insertText", false, text);
+        replacing = false;
+      },
+    });
+    q(".find").onmousedown = (e) => e.preventDefault();
+    q(".find").onclick = () => finder.open();
 
     // ---- What the metadata says ----
     function side() {
@@ -329,10 +346,12 @@
       ta.scrollTop = 0;
       record();
       onText();
+      finder.refresh();
     };
     q(".undo").title = `Undo (${key("Z")})`;
     q(".redo").title = `Redo (${MAC ? key("Z", true) : key("Y")})`;
     jumpInput.title = `Type a row number and press Enter (${key("G")})`;
+    q(".find").title = `Find and replace (${key("F")})`;
     q(".save").title = `Save (${key("S")})`;
     root.classList.add("loading");
     load();
@@ -344,6 +363,7 @@
       focus: () => ta.focus({ preventScroll: true }),
       save,
       jump: () => { jumpInput.focus(); jumpInput.select(); },
+      find: () => finder.open(),
       dispose: () => { chrome.storage.onChanged.removeListener(onStorage); clearTimeout(hlTimer); clearTimeout(sideTimer); },
     };
   };

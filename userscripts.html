@@ -5,6 +5,7 @@
   <title>Userscripts · Extra Guac</title>
   <link rel="stylesheet" href="settings.css">
   <link rel="stylesheet" href="us-pages.css">
+  <link rel="stylesheet" href="find-bar.css">
 </head>
 <body class="usm">
   <header class="tabbar">
@@ -113,6 +114,7 @@
         <span class="grow"></span>
         <span class="tools">
           <form class="jump" autocomplete="off"><input type="text" inputmode="numeric" placeholder="Jump to row" aria-label="Jump to row number"></form>
+          <button type="button" class="ib find" aria-label="Find and replace"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="m15 15 5 5"/></svg></button>
           <button type="button" class="ib undo" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
           <button type="button" class="ib redo" aria-label="Redo"><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
           <button type="button" class="btn ghost revert" disabled title="Throw away the changes since the last save">revert</button>
@@ -132,6 +134,7 @@
   <script src="shared.js"></script>
   <script src="us-meta.js"></script>
   <script src="us-zip.js"></script>
+  <script src="find-bar.js"></script>
   <script src="us-edit.js"></script>
   <script src="us-manager.js"></script>
 </body>
