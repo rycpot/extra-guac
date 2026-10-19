@@ -72,8 +72,8 @@ input.text.key-bad, input.text.key-bad:focus { border-color: var(--error); box-s
 .btn:hover { background: var(--hover); }
 .btn.ghost { background: none; color: var(--muted); }
 .service h2 .count { margin-left: 6px; }
-.service .key-state { margin: 6px 0 0; }
-.service .key-state:empty { display: none; }
+.service h2 .key-state:not(:empty) + .count { margin-left: 0; }
+.service h2 .key-state:not(:empty) + .count::before { content: "· "; }
 [hidden] { display: none !important; }
 h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
 h2 .hint { text-transform: none; letter-spacing: 0; font-weight: normal; }
