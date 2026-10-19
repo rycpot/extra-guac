@@ -368,6 +368,9 @@ main:not(.laid-out) .panel { visibility: hidden; }
 .ss .profile { position: relative; display: flex; align-items: center; gap: 8px; height: var(--ss-row); padding: 7px 6px 7px 8px; border-radius: 12px;
   background: var(--row); border: 1px solid transparent; cursor: pointer; }
 .ss .profile:hover { background: var(--hover); }
+/* Another tab's list while this tab's is read: dimmed, then it gives way (popup-sessions.js). */
+#ssContent { transition: opacity .12s; }
+#ssContent.moving { opacity: .4; }
 .ss .profile.active { border-color: color-mix(in srgb, var(--green) 45%, transparent); background: color-mix(in srgb, var(--green) 7%, transparent); cursor: default; }
 .ss .profile.dragging { opacity: .45; }
 .ss .profile.drop-before { box-shadow: 0 -2px 0 var(--green); }

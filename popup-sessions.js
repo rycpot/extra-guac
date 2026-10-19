@@ -15,6 +15,8 @@ let renaming = null;
 let sheetView = null;
 let stale = false; // a change came in while busy or renaming; load once that's over
 let armed = null; // { id, at }: a delete waiting for its second click
+let moving = false; // another tab's list still shows, dimmed, until this tab's is read
+let glide = null; // the section's height easing between two sites' lists
 
 function h(tag, props = {}, ...children) {
   const el = document.createElement(tag);
@@ -132,20 +134,45 @@ const proxyLabel = (proxy) => (proxy.country ? `${countryName(proxy.country)} pr
 
 // ---- Drawing ----
 
+const siteOf = (s) => (s?.supported ? s.domains.join(" ") : "");
+
 async function load() {
+  const forTab = tabId;
+  let next;
   try {
-    state = await call("state", { tabId });
+    next = await call("state", { tabId: forTab });
   } catch (e) {
-    state = { supported: false, reason: e.message };
+    next = { supported: false, reason: e.message };
   }
+  if (forTab !== tabId) return; // the popup moved on to another tab meanwhile
+  // Another site's list (from the tab before, or this tab's previous page) gives way to this
+  // one's, the section's height easing from one to the other so what's below glides instead of
+  // jumping.
+  const morph = moving || (state && siteOf(state) !== siteOf(next));
+  state = next;
+  if (!morph) return render();
+  const fade = moving;
+  moving = false;
+  const from = content.offsetHeight; // mid-glide if the last one hasn't finished: it carries on from there
+  content.getAnimations().forEach((a) => a.cancel());
+  content.classList.remove("moving");
+  content.inert = false;
   render();
+  const to = content.offsetHeight;
+  if (from === to || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  content.style.overflow = "hidden";
+  const grow = glide = content.animate([{ height: `${from}px` }, { height: `${to}px` }], { duration: 200, easing: "cubic-bezier(.2, 0, 0, 1)" });
+  if (fade) content.animate([{ opacity: 0.4 }, { opacity: 1 }], { duration: 160, easing: "ease-out" });
+  const done = () => glide === grow && (content.style.overflow = "", glide = null);
+  grow.onfinish = done;
+  grow.oncancel = done;
 }
 
 function render() {
   const ok = state?.supported;
   $("ssSite").textContent = ok ? state.domains.join(" + ") : "";
   $("ssNewBtn").hidden = !ok;
-  $("ssNewBtn").disabled = busy;
+  $("ssNewBtn").disabled = busy || moving;
   $("ssNewBtn").title = ok ? `Log ${site()} out here and start a new profile; the next login you make is saved to it` : "";
   content.replaceChildren(...[].concat(drawList()).filter(Boolean));
   // A sheet that shows the list's state follows it, unless the user is typing in it.
@@ -613,15 +640,26 @@ chrome.runtime.onMessage.addListener((message) => {
 
 // popup.js calls this for each tab the popup shows. The same tab again (its page changed, or a
 // switch moved it) keeps what's open; another tab starts afresh, so nothing can act on one site's
-// list while the popup already shows another tab.
+// list while the popup already shows another tab. Its list stays in place, dimmed and out of
+// reach, until the new tab's is read, so the section doesn't fold up in between.
 window.initSessions = (next) => {
   if ((next?.id ?? null) !== tabId) {
     tabId = next?.id ?? null;
-    state = null;
     renaming = null;
     armed = null;
     closeSheet();
-    render();
+    if (state && tabId != null) {
+      moving = true;
+      content.inert = true;
+      content.classList.add("moving");
+      render();
+    } else {
+      moving = false;
+      content.inert = false;
+      content.classList.remove("moving");
+      state = null;
+      render();
+    }
   }
   if (tabId == null) return;
   if (busy || renaming) stale = true;
