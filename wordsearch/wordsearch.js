@@ -232,7 +232,7 @@ try { english = new Intl.DisplayNames(["en"], { type: "language" }); } catch {}
 
 // ---- the game ---------------------------------------------------------------------------
 // opts.panel: the side panel's version (Easy only); opts.onOpenTab(level): open the game's own tab;
-// opts.onRoom(button): Play with others (the tab only, wordsearch/room.js). mount() returns what
+// opts.onRoom(button): Play with others (wordsearch/room.js in the tab; the panel opens the tab). mount() returns what
 // a room needs to play a shared puzzle here (api.room).
 function mount(root, opts = {}) {
   const panel = !!opts.panel;
@@ -261,7 +261,7 @@ function mount(root, opts = {}) {
   });
   const hintBtn = ib("bulb", "Hint", hint);
   const statsBtn = ib("chart", "Stats", showStats);
-  const roomBtn = !panel && opts.onRoom ? ib("people", "Play with others", () => opts.onRoom(roomBtn)) : null;
+  const roomBtn = opts.onRoom ? ib("people", "Play with others", () => opts.onRoom(roomBtn)) : null;
   roomBtn?.classList.add("ws-roombtn");
   const tools = [roomBtn, hintBtn, statsBtn, soundBtn].filter(Boolean);
   // The two ways out of the puzzle: Stop, and New game (which asks for a level).
@@ -302,13 +302,10 @@ function mount(root, opts = {}) {
   // In a room (room.js): its hooks, and the puzzle everyone in it plays.
   let room = null;
   const level = () => (room ? room.level() : panel ? "easy" : data.level);
-  // The tab's address names the level played (#new-<level> is the panel asking for a new game).
-  const markLevel = () => { if (!panel && !room) history.replaceState(null, "", `#${game && !game.sample ? game.level : data.level}`); };
   const done = (g) => g.found.length === g.words.length;
   const isSolved = () => game && done(game);
 
   function updateBar() {
-    markLevel();
     const lang = room ? room.lang() : game && !game.sample ? game.lang : data.lang;
     const name = lang ? langName(lang) : "Choose a language";
     langBtn.inert = !!room && !room.canPick();
@@ -474,7 +471,8 @@ function mount(root, opts = {}) {
       // A room's players strip (narrow windows) sits between the strip and the puzzle.
       const extra = [...root.querySelectorAll(":scope > .ws-extra")].reduce((h, n) => h + (n.offsetHeight ? n.offsetHeight + gap(root) : 0), 0);
       const H = root.clientHeight - bar.offsetHeight - credit.offsetHeight - 2 * gap(root) - extra - Math.max(parseFloat(getComputedStyle(wordsEl).minHeight), wordsEl.offsetHeight) - gap(play);
-      size = Math.min(TAB_CARD, size + pad, H) - pad;
+      // In a room on a narrow window the page scrolls (the chat is below), so only the width counts.
+      size = Math.min(TAB_CARD, size + pad, room && narrowRoom.matches ? Infinity : H) - pad;
     }
     size = Math.max(180, Math.floor(size));
     // The bars span what's below them.
@@ -485,6 +483,7 @@ function mount(root, opts = {}) {
     root.style.setProperty("--ws-card-h", `${size + pad}px`);
   }
   new ResizeObserver(layout).observe(root);
+  const narrowRoom = matchMedia("(max-width: 879px)");
 
   // ---- clock: runs only while the puzzle is on screen ----
   // In a room the clock is the race's: it runs from the start to the last word, whatever the tab does.
@@ -551,7 +550,7 @@ function mount(root, opts = {}) {
   const pathOf = (r0, c0, end) => Array.from({ length: end.len + 1 }, (_, k) => [r0 + end.dr * k, c0 + end.dc * k]);
 
   gridEl.addEventListener("pointerdown", (e) => {
-    if (!game || game.sample || isSolved() || e.button > 0) return;
+    if (!game || game.sample || isSolved() || e.button > 0 || gridEl.inert) return;
     e.preventDefault();
     gridEl.setPointerCapture(e.pointerId);
     const { r, c } = cellAt(e);
@@ -854,12 +853,15 @@ function mount(root, opts = {}) {
   function takeAsk(hash = location.hash) {
     const m = /^#new-([a-z]+)/.exec(hash), id = m && LEVELS[m[1]] ? m[1] : null;
     if (panel || !id || room) return false;
+    history.replaceState(null, "", location.href.split("#")[0]);
     if (id !== data.level) persist((d) => { d.level = data.level = id; });
     if (load().lang) newGame(undefined, true, id);
     else { if (game) stop(); else showSample(); }
     return true;
   }
-  const hash = location.hash;               // before the bar puts the level there
+  const hash = location.hash;
+  // An address from before that named the level (#easy): just the page's.
+  if (!panel && /^#[a-z]+$/.test(hash) && LEVELS[hash.slice(1)]) history.replaceState(null, "", location.href.split("#")[0]);
   updateBar();
   const g = panel ? data.panelGame : data.game;
   if (!takeAsk(hash)) {
@@ -904,6 +906,7 @@ function mount(root, opts = {}) {
       enter: enterRoom,
       exit: exitRoom,
       stage: play,
+      button: roomBtn,
       langName,
       hasLang: (code) => LANGS.some((l) => l[0] === code),
       levels: LEVELS,

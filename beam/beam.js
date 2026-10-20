@@ -167,6 +167,15 @@ function markup(preview) {
     </div>
   </section>
 
+  <section class="beam-card beam-chat off" id="beam-chat" aria-label="Chat">
+    <div class="beam-row beam-between"><p class="beam-eyebrow">Chat</p><span class="beam-hint" id="beam-chatNote">Connect a device to chat</span></div>
+    <div class="beam-msgs" id="beam-msgs" aria-live="polite"></div>
+    <form class="beam-compose" id="beam-compose">
+      <input type="text" id="beam-chatInput" placeholder="Message" maxlength="500" autocomplete="off" aria-label="Message" disabled>
+      <button type="submit" class="beam-send" aria-label="Send"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 18.5v-13M6.5 11 12 5.5l5.5 5.5"/></svg></button>
+    </form>
+  </section>
+
   <section id="beam-xferSec" class="beam-xfer-sec" hidden aria-label="Transfers">
     <div class="beam-row beam-between"><p class="beam-eyebrow">Transfers</p><button type="button" class="beam-btn small" id="beam-clearDone">Clear finished</button></div>
     <div class="beam-transfers" id="beam-transfers"></div>
@@ -357,6 +366,7 @@ function setMode(m) {
   $('connected').hidden = m === 'waiting'
   if (m === 'connected') { $('pairStatus').textContent = waitingText(); renderLinks() }
   showBroadcast()
+  showChat()
 }
 const waitingText = () => isHub() && broadcast ? 'Waiting for devices…' : 'Waiting for the other device…'
 const DIRECT_HINT = 'Files go straight between the devices and are never stored on a server. Keep the screens on while sending.'
@@ -464,6 +474,76 @@ function showAsk() {
   const n = roomLinks().length
   $('askNote').textContent = (n ? n + ' of ' + MAX_DEVICES + ' devices connected. ' : '') + 'Only accept a device you\'re pairing with right now.' +
     (asks.length > 1 ? ' ' + (asks.length - 1) + ' more waiting.' : '')
+}
+
+// ---------- chat ----------
+// Text between the room's devices, through the hub like everything else: a device that joined
+// writes to the hub, the hub shows it and passes it on to the others with the writer's name.
+// Kept only on these screens, and gone when the pairing ends.
+const CHAT_MAX = 500, CHAT_KEEP = 200
+const chatLines = []
+const chatText = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max)
+const toLink = (L, msg) => direct(L) ? sendCtl(L, msg) : postControl(L, msg, 3)
+function sayChat(text) {
+  text = chatText(text, CHAT_MAX)
+  if (!text || mode !== 'connected') return
+  const to = isHub() ? roomLinks().filter(L => L.accepted) : [hubLink()].filter(L => L && L.accepted)
+  if (!to.length) return
+  addChat({text})
+  for (const L of to) toLink(L, isHub() ? {t: 'chat', text, name: shownName()} : {t: 'chat', text})
+  markActive()
+}
+function onChat(L, m) {
+  const text = chatText(m.text, CHAT_MAX)
+  if (!text) return
+  markActive(true)
+  if (!isHub()) return addChat({name: chatText(m.name, 40) || nameOf(L), text})
+  addChat({name: nameOf(L), text})
+  for (const o of roomLinks()) if (o !== L && o.accepted) toLink(o, {t: 'chat', text, name: nameOf(L)})
+}
+function addChat(line) {
+  chatLines.push(line)
+  if (chatLines.length > CHAT_KEEP) chatLines.splice(0, chatLines.length - CHAT_KEEP)
+  const box = $('msgs')
+  const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 40
+  box.append(chatRow(line))
+  while (box.childElementCount > CHAT_KEEP) box.firstElementChild.remove()
+  if (atEnd || !line.name) box.scrollTop = box.scrollHeight
+}
+function chatRow(line) {
+  const row = document.createElement('div')
+  row.className = 'beam-m' + (line.name ? '' : ' mine')
+  if (line.name) { const n = document.createElement('small'); n.textContent = line.name; row.append(n) }
+  row.append(document.createTextNode(line.text))
+  return row
+}
+// Folded to a gray bar until a device is connected; then as tall as the window has room for
+// below the Beam box (the panel, Beam's tab, the web page), and never shorter than 260 px.
+function showChat() {
+  if (life.signal.aborted) return
+  const on = mode === 'connected'
+  const c = $('chat')
+  if (!on && chatLines.length) { chatLines.length = 0; $('msgs').replaceChildren() }
+  c.classList.toggle('off', !on)
+  $('chatNote').textContent = on ? '' : 'Connect a device to chat'
+  $('chatInput').disabled = !on
+  sizeChat()
+}
+function scrollerOf(el) {
+  for (let p = el.parentElement; p && p !== document.body && p !== document.documentElement; p = p.parentElement) {
+    const o = getComputedStyle(p).overflowY
+    if (o === 'auto' || o === 'scroll') return p
+  }
+  return null
+}
+function sizeChat() {
+  const c = $('chat')
+  if (GAME || c.classList.contains('off') || !c.offsetParent) { c.style.height = ''; return }
+  const s = scrollerOf(c), r = c.getBoundingClientRect()
+  const top = s ? r.top - s.getBoundingClientRect().top + s.scrollTop : r.top + scrollY
+  const room = (s ? s.clientHeight : innerHeight) - top - 16
+  const h = Math.max(260, Math.floor(room)) + 'px'
+  if (c.style.height !== h) c.style.height = h
 }
 
 // ---------- transfers UI ----------
@@ -1444,6 +1524,7 @@ function onPeerData(d, gen, c) {
         break
       case 'meta': if (!GAME) onMeta(L, m); break // a game room takes no files
       case 'g': if (GAME) { markActive(true); GAME.onData(isHub() ? L.pub : 'hub', m.d) } break
+      case 'chat': if (!GAME) onChat(L, m); break
       case 'ready': { const f = readyWaiters.get(m.id); if (f) f(true); break }
       case 'ack': { const f = peerAcks.get(m.id); if (f) f(true); break }
       case 'prog': { const o = outgoingPipe.get(m.id); if (o) o.progress(m.n); break } // a relay file's progress, told over the direct link
@@ -1817,6 +1898,7 @@ function handleControl(msg, gen, from, base) {
   if (msg.t === 'offer') return GAME ? undefined : onOffer(L, msg)
   if (msg.t === 'g') { if (GAME) { markActive(true); GAME.onData(isHub() ? L.pub : 'hub', msg.d) } return }
   if (msg.t === 'active') return markActive(true)
+  if (msg.t === 'chat') return GAME ? undefined : onChat(L, msg)
   if (msg.t === 'accept') { const f = acceptWaiters.get(msg.id); if (f) f(true) }
   if (msg.t === 'ack') { const f = ackWaiters.get(msg.id); if (f) f(true) }
   if (msg.t === 'prog') { const o = outgoingPipe.get(msg.id); if (o) o.progress(msg.n) }
@@ -2300,6 +2382,14 @@ $('clearDone').addEventListener('click', clearFinished)
 $('decline').addEventListener('click', decline)
 $('disconnect').addEventListener('click', endSession)
 $('route').addEventListener('change', () => renderLinks())
+$('compose').addEventListener('submit', e => { e.preventDefault(); sayChat($('chatInput').value); $('chatInput').value = '' })
+if (!GAME) {
+  // The chat's height follows what's above it and the window (the panel's tab shown, a device added).
+  const ro = new ResizeObserver(() => sizeChat())
+  ro.observe(root)
+  addEventListener('resize', sizeChat, {signal: life.signal})
+  life.signal.addEventListener('abort', () => ro.disconnect())
+}
 // The usage mark: its figures show on hover, or stay open after a tap / Enter (a tap elsewhere closes them).
 // The figures open below the arrows, moved left as needed to stay inside a narrow window
 // (the side panel), where the arrows sit near the right edge.

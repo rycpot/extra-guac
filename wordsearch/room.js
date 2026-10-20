@@ -18,9 +18,14 @@ const WEB_URL = "https://rycpot.github.io/wordsearch/";
 const NAME_KEY = "eg-name";             // the name, shared with Beam
 const PID_KEY = APP + "-pid";           // this tab's player, the same after a reload
 const COUNTDOWN = 10;                   // seconds
+const GONE_AFTER = 30000;               // a player (or the host) out of reach this long has left
+// Every few seconds the host sends the room and each player a ping. A tab that was closed says
+// nothing, and its link can look open for minutes: whoever isn't heard from for QUIET is shown
+// as reconnecting, and after GONE_AFTER as gone.
+const QUIET = 12000;
 const NAME_MAX = 24, CHAT_MAX = 200, CHAT_KEEP = 100;
 const IS_EXTENSION = location.protocol === "chrome-extension:";
-// A QR code's link: #join-<code>.<relay>, read before the game puts its level in the address.
+// An invite link: #join-<code>.<relay>, read before anything else looks at the address.
 const linkJoin = /^#join-(\d{6,10})(?:\.(\d))?$/.exec(location.hash);
 const COLORS = ["#7dd3fc", "#f9a8d4", "#fcd34d", "#86efac", "#c4b5fd", "#fdba74", "#93c5fd", "#f0abfc"];
 const ICON = {
@@ -78,10 +83,12 @@ let api = null, page = null, levels = {};
 let beam = null, beamRoot = null;
 let hosting = false, connected = false, ever = false;
 let view = null;                  // the room as the host last told it (the host's own, here)
+let seen = -1;                    // the number of the host's last state taken
 let mine = { round: 0, playing: false, ms: null };
-let lines = [], unread = 0, chatOpen = false;
+let lines = [];
 let closed = "";                  // the room ended: why (the stage says so)
-let countdown = null, editing = false, pendingStart = false, startNote = "";
+let countdown = null, editing = false, pendingStart = false, startNote = "", lostTimer = 0;
+let heard = 0, rawUp = false, pinger = 0;   // a player who joined: when the host was last heard
 // The host's own record of the room.
 let H = null;
 const me = { pid: "", name: "" };
@@ -112,8 +119,6 @@ function build() {
   chat.setAttribute("aria-label", "Chat");
   const chatHead = el("div", "ws-ph");
   chatHead.append(el("span", null, "Chat"));
-  ui.chatX = iconBtn("ws-chat-x", "close", "Close chat", () => setChat(false));
-  chatHead.append(ui.chatX);
   ui.msgs = el("div", "ws-msgs");
   ui.msgs.setAttribute("aria-live", "polite");
   const form = el("form", "ws-compose");
@@ -126,22 +131,14 @@ function build() {
   form.onsubmit = (e) => { e.preventDefault(); say(ui.input.value); ui.input.value = ""; };
   chat.append(chatHead, ui.msgs, form);
   ui.rail.append(players, chat);
-  ui.fab = iconBtn("ws-fab", "chat", "Chat", () => setChat(!chatOpen));
-  ui.badge = el("span", "ws-badge");
-  ui.fab.append(ui.badge);
+  ui.chat = chat;
 }
-function setChat(on) {
-  chatOpen = on;
-  page.classList.toggle("ws-chat-open", on);
-  ui.fab.innerHTML = ICON[on ? "close" : "chat"];
-  ui.fab.title = on ? "Close chat" : "Chat";
-  ui.fab.append(ui.badge);
-  if (on) { unread = 0; ui.input.focus({ preventScroll: true }); }
-  paintBadge();
-}
-function paintBadge() {
-  ui.badge.textContent = unread > 9 ? "9+" : String(unread);
-  ui.badge.hidden = !unread;
+// Narrow windows and phones: the chat right below the puzzle's words, in the page; wide ones: in
+// the rail beside it.
+function placeChat() {
+  if (!beam && !closed) return;
+  if (narrow.matches) root().insertBefore(ui.chat, root().querySelector(":scope > .ws-credit"));
+  else ui.rail.append(ui.chat);
 }
 const narrow = matchMedia("(max-width: 879px)");
 
@@ -154,7 +151,7 @@ function menu(btn) {
   menuEl.setAttribute("role", "dialog");
   menuEl.setAttribute("aria-label", "Play with others");
   menuEl.append(el("b", null, "Play with others"));
-  menuEl.append(el("p", "ws-rm-hint", "Race on the same puzzle with up to 5 others, connected straight to each other and encrypted."));
+  menuEl.append(el("p", "ws-rm-hint", `Race on the same puzzle with up to 5 others, connected straight to each other and encrypted. Others join from Extra Guac or from ${WEB_URL.replace(/^https:\/\/|\/$/g, "")}.`));
   const nameRow = el("label", "ws-rm-name");
   nameRow.append(el("span", null, "Your name"));
   const name = el("input");
@@ -199,14 +196,14 @@ function closeMenu() {
 document.addEventListener("pointerdown", (e) => { if (menuEl && !menuEl.contains(e.target) && !menuEl._btn.contains(e.target)) closeMenu(); }, true);
 
 // ---- the room's lifetime -----------------------------------------------------------------
-// o.join: a code to join; o.server: the relay its QR code names; o.resume: this tab's room
+// o.join: a code to join; o.server: the relay its invite link names; o.resume: this tab's room
 // again (a reload).
 function open(o) {
   if (beam || typeof Beam === "undefined" || !Beam.mount) return;
   me.pid = myPid();
   me.name = savedName() || defaultName();
   hosting = !o.join && !o.resume;
-  connected = false; ever = false; closed = ""; view = null; lines = []; unread = 0;
+  connected = false; ever = false; closed = ""; view = null; lines = []; seen = -1;
   pendingStart = false; startNote = ""; editing = false;
   mine = { round: 0, playing: false, ms: null };
   H = null;
@@ -215,15 +212,24 @@ function open(o) {
   root().classList.add("ws-lobby");
   api.stage.append(ui.stage);
   root().insertBefore(ui.chips, api.stage);
-  page.append(ui.rail, ui.fab);
-  setChat(false);
+  page.append(ui.rail);
   beamRoot = el("div");
   document.body.append(beamRoot);
   beam = Beam.mount(beamRoot, { game: { app: APP, join: o.join, server: o.server, resume: o.resume, onChange, onData, onEnd } });
   hosting = beam.info().host;
+  placeChat();
+  heard = Date.now(); rawUp = false;
+  clearInterval(pinger);
+  pinger = setInterval(() => {
+    if (!beam) return;
+    // Not heard from the host for a while (this device asleep, or the host let it go): a hello
+    // again, which puts it back in the room if the host is still there.
+    if (!hosting && rawUp) beam.send("hub", Date.now() - heard < QUIET ? { t: "ping" } : { t: "hi", pid: me.pid, name: me.name });
+    if (!hosting) onChange();
+  }, 4000);
   if (hosting) {
     const p = api.room.prefs();
-    H = { players: new Map(), byLink: new Map(), phase: "lobby", round: 0, total: 0, lang: p.lang, level: levels[p.level] ? p.level : "easy", timer: 0 };
+    H = { players: new Map(), byLink: new Map(), phase: "lobby", round: 0, total: 0, lang: p.lang, level: levels[p.level] ? p.level : "easy", timer: 0, seq: 0 };
     H.players.set(me.pid, { pid: me.pid, name: me.name, link: null, st: "host", n: 0, ms: null, spect: false, left: false });
     view = snapshot();
     sys("You made the room. Share its code to let others in.", true);
@@ -237,26 +243,34 @@ function leave() {
   stopCountdown();
   clearTimeout(H?.timer);
   clearTimeout(syncTimer);
+  clearTimeout(beat);
+  clearTimeout(lostTimer);
   try { beam?.dispose(); } catch {}
+  clearInterval(pinger);
   beam = null;
   beamRoot?.remove();
   beamRoot = null;
-  H = null; view = null; closed = ""; connected = false;
+  H = null; view = null; closed = ""; connected = false; seen = -1;
   pendingStart = false; startNote = ""; editing = false;
-  page.classList.remove("ws-room-on", "ws-chat-open");
-  ui.rail.remove(); ui.fab.remove(); ui.chips.remove(); ui.stage.remove();
+  page.classList.remove("ws-room-on");
+  ui.rail.remove(); ui.chat.remove(); ui.chips.remove(); ui.stage.remove();
+  ui.rail.append(ui.chat);
   api.room.exit(nodes);
   api.room.relayout();
 }
 // Beam ended the room: nobody answered, it was full, the host left, or it sat idle. A race
 // already on goes on here; its time counts on this screen.
 function onEnd(why) {
+  clearTimeout(beat);
+  clearTimeout(lostTimer);
+  clearInterval(pinger);
   const host = hostName();
   const text = {
     gone: "Nobody answered on that code. Check it on the host's screen and try again.",
     full: `That room already has ${Beam.maxDevices + 1} players.`,
     declined: "That room didn't let this device in.",
     bye: `${host} closed the room.`,
+    lost: `Lost the connection to ${host}. The room has probably closed.`,
     idle: "The room closed after 30 minutes without anything happening.",
   }[why] || "The room closed.";
   try { beam?.dispose(); } catch {}
@@ -304,10 +318,17 @@ function onChange() {
   const info = beam.info();
   if (hosting) return hostPeers(info);
   const hub = info.peers[0];
-  const now = !!(info.connected && hub && hub.state !== "away");
+  const up = !!(info.connected && hub && hub.state !== "away");
+  if (up && !rawUp) heard = Date.now();
+  rawUp = up;
+  const now = up && Date.now() - heard < QUIET;
   // Each time the link to the host (re)opens: who this is. A host that reloaded starts over and
   // needs to hear it again.
-  if (now && !connected) beam.send("hub", { t: "hi", pid: me.pid, name: me.name });
+  if (now && !connected) { seen = -1; beam.send("hub", { t: "hi", pid: me.pid, name: me.name }); }
+  // The host gone quiet: back within half a minute (a reload, a network change), or the room is
+  // taken as closed (its tab was closed, the device asleep).
+  if (now) clearTimeout(lostTimer);
+  if (!now && connected && ever) lostTimer = setTimeout(() => { if (beam && !connected) onEnd("lost"); }, GONE_AFTER - QUIET * (up ? 1 : 0));
   connected = now;
   if (now) ever = true;
   paint();
@@ -316,8 +337,19 @@ function onData(from, d) {
   if (!d || typeof d !== "object" || typeof d.t !== "string") return;
   if (hosting) return hostData(from, d);
   if (from !== "hub") return;
+  heard = Date.now();
+  if (!connected) onChange();
   switch (d.t) {
-    case "state": if (validState(d.s)) { view = tidy(d.s); onState(); } break;
+    case "state": {
+      if (!validState(d.s)) break;
+      const seq = Number.isInteger(d.s.seq) ? d.s.seq : 0;
+      // A smaller number is an older state, or a host that reloaded (it counts from 0 again).
+      if (seq <= seen && seen - seq < 5) break;
+      seen = seq;
+      view = tidy(d.s);
+      onState();
+      break;
+    }
     case "start": if (validPuzzle(d.puzzle) && Number.isInteger(d.round)) begin(d.round, d.puzzle); break;
     case "chat": if (d.line) addLine(d.line); break;
     case "hist": if (Array.isArray(d.lines)) { lines = lines.filter((l) => l.local); for (const l of d.lines.slice(-CHAT_KEEP)) addLine({ ...l, local: false }, true); paintChat(); } break;
@@ -369,26 +401,41 @@ function snapshot() {
   };
 }
 // Everyone gets the room as it is now, a moment after it changes (a burst of changes goes as one).
-let syncTimer = 0;
+// Each state is numbered, so one the relay brings late is passed over; and it goes again every
+// few seconds, so one the relay lost is made up for.
+let syncTimer = 0, beat = 0;
+const BEAT = 4000;
 function sync() {
   if (!H) return;
   view = snapshot();
   paint();
   clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => {
-    if (!H || !beam) return;
-    const s = snapshot();
-    for (const p of H.players.values()) if (p.link && !p.left) beam.send(p.link, { t: "state", s });
-  }, 120);
+  syncTimer = setTimeout(sendState, 120);
+}
+function sendState() {
+  clearTimeout(syncTimer);
+  clearTimeout(beat);
+  if (!H || !beam) return;
+  // Who's gone quiet, or been out of reach long enough, shows now (Beam may say nothing).
+  hostPeers(beam.info(), true);
+  view = snapshot();
+  paint();
+  const s = { ...snapshot(), seq: ++H.seq };
+  for (const p of H.players.values()) if (p.link && !p.left) beam.send(p.link, { t: "state", s });
+  beat = setTimeout(sendState, BEAT);
 }
 function toAll(d) { for (const p of H.players.values()) if (p.link && !p.left) beam.send(p.link, d); }
-function hostPeers(info) {
+function hostPeers(info, silent) {
   if (!H) return;
   const live = new Map(info.peers.map((p) => [p.id, p]));
   for (const p of [...H.players.values()]) {
     if (!p.link) continue;
     const peer = live.get(p.link);
-    if (peer) { p.st = peer.state; continue; }
+    const quiet = peer && (peer.state === "away" || Date.now() - (p.heard || 0) > QUIET);
+    if (peer) p.away = quiet ? p.away || Date.now() - (peer.state === "away" ? 0 : QUIET) : 0;
+    // Out of reach for half a minute counts as gone (Beam itself waits 2 minutes); back with a
+    // hello, it's in again.
+    if (peer && !(p.away && Date.now() - p.away >= GONE_AFTER)) { p.st = quiet ? "away" : peer.state; continue; }
     if (p.left) continue;
     // Gone from the room (left, or didn't come back within 2 minutes).
     H.byLink.delete(p.link);
@@ -397,7 +444,7 @@ function hostPeers(info) {
     sys(`${p.name} left`);
     checkEnd();
   }
-  sync();
+  if (!silent) sync();
 }
 function hostData(from, d) {
   if (d.t === "hi") {
@@ -414,9 +461,10 @@ function hostData(from, d) {
       }
       p.left = false;
       p.name = name;
+      p.heard = Date.now();
     } else {
       if (H.players.size >= Beam.maxDevices + 1) return;
-      p = { pid: d.pid, name, link: from, st: "direct", n: 0, ms: null, spect: racing, left: false };
+      p = { pid: d.pid, name, link: from, st: "direct", n: 0, ms: null, spect: racing, left: false, heard: Date.now() };
       H.players.set(d.pid, p);
       sys(`${name} joined`);
     }
@@ -427,6 +475,8 @@ function hostData(from, d) {
   }
   const p = H.players.get(H.byLink.get(from));
   if (!p) return;
+  p.heard = Date.now();
+  if (p.away) hostPeers(beam.info());
   switch (d.t) {
     case "name": { const n = clean(d.name, NAME_MAX); if (n) { p.name = n; sync(); } break; }
     case "chat": { const text = clean(d.text, CHAT_MAX); if (text) post({ pid: p.pid, name: p.name, text }); break; }
@@ -437,6 +487,7 @@ function hostData(from, d) {
 function hostFound(pid, round, n) {
   const p = H?.players.get(pid);
   if (!p || round !== H.round || p.spect || p.ms != null || !Number.isInteger(n)) return;
+  if (H.phase !== "count" && H.phase !== "play") return;
   p.n = Math.max(0, Math.min(H.total, n));
   sync();
 }
@@ -489,11 +540,10 @@ async function startRound() {
   H.total = puzzle.words.length;
   H.phase = "count";
   sys(`Round ${H.round} · ${levels[H.level].name} · ${api.room.langName(H.lang)}`);
-  sync();
-  clearTimeout(syncTimer);
+  view = snapshot();
   // The puzzle first (its countdown starts as it arrives), then the room in its new round.
-  const s = snapshot();
-  for (const p of H.players.values()) if (p.link) { beam.send(p.link, { t: "start", round: H.round, puzzle }); beam.send(p.link, { t: "state", s }); }
+  for (const p of H.players.values()) if (p.link) beam.send(p.link, { t: "start", round: H.round, puzzle });
+  sendState();
   begin(H.round, puzzle);
   H.timer = setTimeout(() => { if (H && H.phase === "count") { H.phase = "play"; sync(); } }, COUNTDOWN * 1000);
 }
@@ -555,9 +605,7 @@ function addLine(l, quiet) {
   lines.push(line);
   if (lines.length > CHAT_KEEP) lines.splice(0, lines.length - CHAT_KEEP);
   if (quiet) return;
-  if (!line.sys && line.pid !== me.pid && (narrow.matches && !chatOpen)) unread++;
   paintChat();
-  paintBadge();
 }
 function paintChat() {
   if (!ui.msgs) return;
@@ -586,7 +634,7 @@ function setName(v, quiet) {
   else beam.send("hub", { t: "name", name: me.name });
   paint();
 }
-function editName(row, nameEl) {
+function editName(nameEl) {
   if (editing) return;
   editing = true;
   const input = el("input", "ws-name-edit");
@@ -639,41 +687,50 @@ function standing(p, short) {
   if (p.ms != null) return el("span", "ws-time", fmt(p.ms));
   return short ? el("span", "ws-count", `${p.n}/${view.total}`) : progress(p, view.total);
 }
+// Each paint builds the room's parts again, but only what changed goes on screen: the rest stays
+// as it is (no box rising again, no bar starting over) however often the room changes.
+function swap(box, nodesNew) {
+  const tmp = el("div");
+  tmp.append(...nodesNew);
+  if (tmp.innerHTML === box.innerHTML) return false;
+  box.replaceChildren(...tmp.childNodes);
+  return true;
+}
 function paint() {
   if (!api || (!beam && !closed)) return;
   const code = beam?.info().code || "";
   if (!nodes.start.classList.contains("ws-copied")) {
-    nodes.start.innerHTML = `${ICON.people}<b></b>`;
-    nodes.start.querySelector("b").textContent = spaced(code);
+    const label = spaced(code);
+    if (nodes.start.querySelector("b")?.textContent !== label) {
+      nodes.start.innerHTML = `${ICON.people}<b></b>`;
+      nodes.start.querySelector("b").textContent = label;
+    }
   }
   nodes.start.title = code ? "Copy the invite link" : "";
   nodes.start.hidden = !code || (!hosting && !connected);
-  paintPlayers();
-  paintStage();
-  api.room.relayout();
+  const a = paintPlayers(), b = paintStage();
+  if (a || b) api.room.relayout();
 }
 function players() { return view?.players || []; }
 function paintPlayers() {
-  if (editing) return; // the name being typed stays; the list catches up after
+  if (editing) return false; // the name being typed stays; the list catches up after
   const list = players();
   const here = list.filter((p) => p.st !== "left").length;
-  ui.playersHead.replaceChildren(el("span", null, `Players · ${here}/${Beam.maxDevices + 1}`));
+  const head = [el("span", null, `Players · ${here}/${Beam.maxDevices + 1}`)];
   if (hosting && H && (H.phase === "play" || H.phase === "count") && !closed) {
     const end = el("button", "ws-endround", "End round");
     end.type = "button";
-    end.onclick = endRound;
-    ui.playersHead.append(end);
+    head.push(end);
   }
-  ui.list.replaceChildren(...list.map((p) => {
+  let changed = swap(ui.playersHead, head);
+  const end = ui.playersHead.querySelector(".ws-endround");
+  if (end) end.onclick = endRound;
+  const rows = list.map((p) => {
     const own = p.pid === me.pid;
     const row = el("div", "ws-p" + (own ? " ws-me" : ""));
     const nm = el("span", "ws-pn");
     const b = el("b", null, p.name);
-    if (own && !closed) {
-      const pen = iconBtn("ws-pen", "pencil", "Change your name", () => editName(row, b));
-      b.append(pen);
-      b.ondblclick = () => editName(row, b);
-    }
+    if (own && !closed) b.append(iconBtn("ws-pen", "pencil", "Change your name", null));
     nm.append(b);
     const sub = [own && "You", p.host && "Host"].filter(Boolean).join(" · ");
     if (sub) nm.append(el("small", null, sub));
@@ -682,16 +739,37 @@ function paintPlayers() {
     const right = own && !hosting && view.phase === "lobby" ? status(connected ? beamState() : "away") : standing(p);
     if (right) row.append(right);
     return row;
-  }));
-  if (!list.length) ui.list.append(el("p", "ws-empty", closed ? "" : "Connecting…"));
-  ui.chips.replaceChildren(...list.map((p) => {
-    const c = el("span", "ws-chip" + (p.ms != null ? " ws-fin" : "") + (p.st === "left" ? " ws-chip-left" : ""));
-    c.append(avatar(p.pid, p.name), el("span", "ws-chip-n", p.pid === me.pid ? "You" : p.name.split(" ")[0]));
+  });
+  if (!list.length) rows.push(el("p", "ws-empty", closed ? "" : "Connecting…"));
+  if (swap(ui.list, rows)) {
+    changed = true;
+    const own = ui.list.querySelector(".ws-me b");
+    if (own && !closed) {
+      own.querySelector(".ws-pen").onclick = () => editName(own);
+      own.ondblclick = () => editName(own);
+    }
+  }
+  // Narrow windows: the players as chips; this device's own one changes its name.
+  const chips = list.map((p) => {
+    const own = p.pid === me.pid;
+    const edit = own && !closed;
+    const c = el("span", "ws-chip" + (edit ? " ws-chip-me" : "") + (p.ms != null ? " ws-fin" : "") + (p.st === "left" ? " ws-chip-left" : ""));
+    if (edit) { c.title = "Change your name"; c.setAttribute("role", "button"); c.tabIndex = 0; }
+    c.append(avatar(p.pid, p.name), el("span", "ws-chip-n", own ? p.name : p.name.split(" ")[0]));
+    if (own && !closed) { const pen = el("span", "ws-chip-pen"); pen.innerHTML = ICON.pencil; c.append(pen); }
     const s = standing(p, true);
     if (s && view.phase !== "lobby") c.append(s);
     else if (p.st !== "direct" && p.st !== "host") c.append(el("i", "ws-dot " + (STATES[p.st]?.[1] || "")));
     return c;
-  }));
+  });
+  if (swap(ui.chips, chips)) changed = true;
+  const mine = ui.chips.querySelector(".ws-chip-me");
+  if (mine) {
+    const go = () => { const n = mine.querySelector(".ws-chip-n"); if (n) editName(n); };
+    mine.onclick = go;
+    mine.onkeydown = (e) => { if (e.key === "Enter" && e.target === mine) go(); };
+  }
+  return changed;
 }
 const beamState = () => beam?.info().peers[0]?.state || "away";
 
@@ -719,9 +797,22 @@ function paintStage() {
   } else if (view && (view.phase === "count" || view.phase === "play")) {
     box.append(el("span", "ws-eyebrow", `Round ${view.round}`), el("div", "ws-stitle", "A round is on"), el("p", "ws-shint", "You'll play the next one. The players' progress is beside the puzzle."));
   } else lobby(box);
-  ui.stage.className = `ws-stage ws-s-${kind}`;
-  ui.stage.hidden = kind === "none";
-  ui.stage.replaceChildren(box);
+  const cls = `ws-stage ws-s-${kind}`, hide = kind === "none";
+  let changed = ui.stage.className !== cls || ui.stage.hidden !== hide;
+  ui.stage.className = cls;
+  ui.stage.hidden = hide;
+  // The same screen as before (a new count, a player's progress): only its contents change.
+  const now = ui.stage.firstChild;
+  if (now && now.dataset.kind === kind) {
+    const tmp = el("div");
+    tmp.append(...box.childNodes);
+    if (tmp.innerHTML !== now.innerHTML) { now.replaceChildren(...tmp.childNodes); changed = true; }
+  } else {
+    box.dataset.kind = kind;
+    ui.stage.replaceChildren(box);
+    changed = true;
+  }
+  return changed;
 }
 function btn(cls, icon, text, onClick) {
   const b = el("button", cls);
@@ -737,10 +828,11 @@ function lobby(box) {
   if (hosting) {
     const code = beam?.info().code || "";
     box.append(el("span", "ws-eyebrow", "Room code"), el("div", "ws-roomcode", spaced(code)));
-    const qr = el("div", "ws-qr");
-    qr.setAttribute("aria-label", "QR code that opens the word search in this room");
-    drawQR(qr);
-    box.append(qr, el("p", "ws-shint", "Others open Word search in Extra Guac and enter this code, or scan it with a phone. Up to 5 can join."));
+    const hint = el("p", "ws-shint", "Up to 5 others can join with this code, from Word search in Extra Guac or from ");
+    const a = el("a", null, WEB_URL.replace(/^https:\/\/|\/$/g, ""));
+    Object.assign(a, { href: WEB_URL, target: "_blank", rel: "noopener" });
+    hint.append(a, " on any phone or browser.");
+    box.append(hint);
     const seg = el("div", "ws-seg");
     seg.setAttribute("role", "radiogroup");
     seg.setAttribute("aria-label", "Level");
@@ -802,7 +894,7 @@ function results(box) {
     const again = btn("ws-btn ws-go", "again", "Rematch", startRound);
     again.disabled = !others || pendingStart;
     acts.append(again, btn("ws-btn ws-ghost", null, "Back to room", toLobby));
-  } else if (done) acts.append(el("p", "ws-shint", `Waiting for ${hostName()} to start the next round`));
+  } else if (done) acts.append(el("p", "ws-shint", `Waiting for ${hostName()} to start the next round`), btn("ws-btn ws-ghost", "leave", "Leave room", leave));
   if (acts.childNodes.length) box.append(acts);
   if (startNote && hosting) box.append(el("p", "ws-snote", startNote));
 }
@@ -813,28 +905,6 @@ function inviteLink() {
   if (!info) return "";
   const base = IS_EXTENSION ? WEB_URL : location.href.split("#")[0].split("?")[0];
   return `${base}#join-${info.code}.${info.server}`;
-}
-// One drawing per link: a box that asks while it's being made waits for the same one.
-let qrFor = "", qrMade = null;
-async function drawQR(box) {
-  const text = inviteLink();
-  if (text !== qrFor) {
-    qrFor = text;
-    qrMade = (async () => {
-      try {
-        if (globalThis.EGQR && globalThis.jsQR) {
-          const made = await EGQR.make(text, { icon: await EGQR.dataUrlOf(new URL("../icons/icon128.png", location.href).href) });
-          if (made.ok) return made.svg;
-        }
-      } catch {}
-      return null;
-    })();
-  }
-  const svg = await qrMade;
-  if (text !== qrFor || !box.isConnected) return;
-  if (svg) { box.innerHTML = svg; return; }
-  try { box.textContent = ""; box.classList.add("ws-plain"); new QRCode(box, { text, width: 236, height: 236, correctLevel: QRCode.CorrectLevel.M }); }
-  catch { box.textContent = ""; }
 }
 async function copyLink() {
   const link = inviteLink();
@@ -853,12 +923,20 @@ function init(a, pageEl) {
   levels = api.room.levels;
   page = pageEl;
   build();
-  narrow.addEventListener("change", () => { if (!narrow.matches) setChat(false); api.room.relayout(); });
+  narrow.addEventListener("change", () => { placeChat(); api.room.relayout(); });
   // Opened from a room's link (the web page), or this tab was in a room before a reload.
   if (linkJoin) {
     history.replaceState(null, "", location.href.split("#")[0]);
     open({ join: linkJoin[1], server: linkJoin[2] != null ? Number(linkJoin[2]) : undefined });
   } else if (/^\d{6,10}$/.test(read(sessionStorage, APP + "-room"))) open({ resume: true });
+  else askedFromPanel();
+  addEventListener("hashchange", askedFromPanel);
+}
+// The panel's Play with others button opens this tab at #room.<n>: its menu, opened.
+function askedFromPanel() {
+  if (!/^#room\b/.test(location.hash)) return;
+  history.replaceState(null, "", location.href.split("#")[0]);
+  if (!beam && !menuEl && api.room.button) menu(api.room.button);
 }
 
 globalThis.WordSearchRoom = { init, menu };

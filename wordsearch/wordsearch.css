@@ -119,6 +119,7 @@
 /* Before a language is picked: everything but the language button, dimmed and out of reach */
 /* Without a puzzle: everything dimmed but the language button (and Start, after the first time) */
 .ws-preview .ws-clock, .ws-preview .ws-stop, .ws-preview .ws-new, .ws-preview .ws-sep, .ws-preview .ws-card, .ws-preview .ws-words, .ws-preview .ws-credit, .ws-preview .ws-timer, .ws-preview .ws-ib { opacity: .1; user-select: none; -webkit-user-select: none; }
+.ws-preview .ws-ib.ws-roombtn { opacity: 1; user-select: auto; -webkit-user-select: auto; } /* Play with others works without a puzzle */
 .ws-first .ws-lang { color: var(--text); box-shadow: inset 0 0 0 1.5px var(--green); animation: ws-call 2.4s ease-in-out infinite; }
 .ws-first .ws-lang svg { color: var(--green); }
 @keyframes ws-call { 50% { box-shadow: inset 0 0 0 1.5px var(--green), 0 0 0 5px color-mix(in srgb, var(--green) 18%, transparent); } }

@@ -275,7 +275,7 @@ function initWordSearch() {
   wordSearchStarted = true;
   const openTab = (level) => send("openWordSearch", { level }).then(() => closePopup(), fail);
   $("wsOpenTab").onclick = () => openTab();
-  WordSearch.mount($("wordSearch"), { panel: true, onOpenTab: openTab });
+  WordSearch.mount($("wordSearch"), { panel: true, onOpenTab: openTab, onRoom: () => openTab("room") });
 }
 
 // ---- QR code ------------------------------------------------------------------
