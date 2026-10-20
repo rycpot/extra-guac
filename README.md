@@ -82,5 +82,5 @@ Download the zip from [Releases](../../releases) and unzip it, then:
 ## Notes
 
 - Privacy: everything stays in your browser unless a tool you use needs an outside service, and then it goes only there. See [PRIVACY.md](PRIVACY.md).
-- The interface font is [Inter](https://github.com/rsms/inter) (SIL Open Font License).
+- The interface font is [Inter](https://github.com/rsms/inter) (SIL Open Font License), trimmed to the characters Extra Guac shows (`tools/inter-trim.py`).
 - License: [0BSD](LICENSE), use it for anything. The bundled libraries keep their own licenses, next to them in `vendor/` and `beam/lib/`.
