@@ -123,7 +123,17 @@
 .beam-xfer > .actions { gap: 6px; }
 /* Chat: a gray bar until a device is connected, then as tall as the window allows (beam.js sizeChat) */
 .beam-chat { grid-template-rows: auto 1fr auto; gap: 10px; padding: 12px; min-height: 0; }
-.beam-chat.off { grid-template-rows: auto; opacity: .55; }
+.beam-chat.off { grid-template-rows: auto; }
+.beam-chat.off .beam-eyebrow, .beam-chat.off .beam-hint { opacity: .55; }
+.beam-chat-head { flex-wrap: nowrap; }
+.beam-chat-who { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.beam-me { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; padding: 2px 8px; border: 0; border-radius: 8px; background: var(--field);
+  color: var(--text); font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+.beam-me:hover { background: var(--hover); }
+.beam-me span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.beam-me svg { width: 12px; height: 12px; color: var(--text3); }
+.beam .beam-me-edit { width: 11em; padding: 2px 8px; font-family: inherit; font-size: 11.5px; font-weight: 600; }
+.beam-chat-head .beam-hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .beam-chat.off .beam-msgs, .beam-chat.off .beam-compose { display: none; }
 .beam-msgs { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 0 2px; }
 .beam-msgs > :first-child { margin-top: auto; }

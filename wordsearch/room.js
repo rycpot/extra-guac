@@ -49,6 +49,14 @@ function el(tag, cls, text) {
   if (text != null) n.textContent = text;
   return n;
 }
+// A line that names the web page others can join from, as a link to it.
+function webHint(cls, before, after) {
+  const p = el("p", cls, before);
+  const a = el("a", null, WEB_URL.replace(/^https:\/\/|\/$/g, ""));
+  Object.assign(a, { href: WEB_URL, target: "_blank", rel: "noopener" });
+  p.append(a, after);
+  return p;
+}
 function iconBtn(cls, icon, label, onClick) {
   const b = el("button", cls);
   b.type = "button";
@@ -83,7 +91,7 @@ let api = null, page = null, levels = {};
 let beam = null, beamRoot = null;
 let hosting = false, connected = false, ever = false;
 let view = null;                  // the room as the host last told it (the host's own, here)
-let seen = -1;                    // the number of the host's last state taken
+let seen = -1, seenEpoch = "";    // the number of the host's last state taken, and its run
 let mine = { round: 0, playing: false, ms: null };
 let lines = [];
 let closed = "";                  // the room ended: why (the stage says so)
@@ -128,7 +136,7 @@ function build() {
   const send = iconBtn("ws-send", "send", "Send", null);
   send.type = "submit";
   form.append(ui.input, send);
-  form.onsubmit = (e) => { e.preventDefault(); say(ui.input.value); ui.input.value = ""; };
+  form.onsubmit = (e) => { e.preventDefault(); if (say(ui.input.value)) ui.input.value = ""; };
   chat.append(chatHead, ui.msgs, form);
   ui.rail.append(players, chat);
   ui.chat = chat;
@@ -151,7 +159,7 @@ function menu(btn) {
   menuEl.setAttribute("role", "dialog");
   menuEl.setAttribute("aria-label", "Play with others");
   menuEl.append(el("b", null, "Play with others"));
-  menuEl.append(el("p", "ws-rm-hint", `Race on the same puzzle with up to 5 others, connected straight to each other and encrypted. Others join from Extra Guac or from ${WEB_URL.replace(/^https:\/\/|\/$/g, "")}.`));
+  menuEl.append(webHint("ws-rm-hint", "Race on the same puzzle with up to 5 others, connected straight to each other and encrypted. Others join from Extra Guac or from ", "."));
   const nameRow = el("label", "ws-rm-name");
   nameRow.append(el("span", null, "Your name"));
   const name = el("input");
@@ -222,14 +230,15 @@ function open(o) {
   clearInterval(pinger);
   pinger = setInterval(() => {
     if (!beam) return;
-    // Not heard from the host for a while (this device asleep, or the host let it go): a hello
-    // again, which puts it back in the room if the host is still there.
-    if (!hosting && rawUp) beam.send("hub", Date.now() - heard < QUIET ? { t: "ping" } : { t: "hi", pid: me.pid, name: me.name });
+    // Not let in yet (the first hello lost), or not heard from the host for a while (this device
+    // asleep, or the host let it go): a hello again, which puts it back in if the host is there.
+    if (!hosting && rawUp) beam.send("hub", { ...(view && Date.now() - heard < QUIET ? { t: "ping" } : { t: "hi", pid: me.pid, name: me.name }), ...race() });
     if (!hosting) onChange();
   }, 4000);
   if (hosting) {
     const p = api.room.prefs();
-    H = { players: new Map(), byLink: new Map(), phase: "lobby", round: 0, total: 0, lang: p.lang, level: levels[p.level] ? p.level : "easy", timer: 0, seq: 0 };
+    H = { players: new Map(), byLink: new Map(), phase: "lobby", round: 0, total: 0, lang: p.lang, level: levels[p.level] ? p.level : "easy", timer: 0, seq: 0,
+      epoch: Math.random().toString(36).slice(2, 10), puzzle: null };
     H.players.set(me.pid, { pid: me.pid, name: me.name, link: null, st: "host", n: 0, ms: null, spect: false, left: false });
     view = snapshot();
     sys("You made the room. Share its code to let others in.", true);
@@ -299,6 +308,7 @@ const hooks = {
   },
   onFound(n) {
     if (!mine.playing) return;
+    mine.n = n;
     if (hosting) hostFound(me.pid, mine.round, n);
     else if (!closed) beam?.send("hub", { t: "found", round: mine.round, n });
   },
@@ -312,6 +322,11 @@ const hooks = {
   },
 };
 
+// This device's race, in every ping and hello: a word found or a finish the host missed (sent
+// while the link was down, or lost on the relay) gets there with the next one, and a round
+// whose puzzle never came here is sent again.
+const race = () => (mine.round ? { round: mine.round, n: mine.n || 0, ms: mine.ms } : {});
+
 // ---- Beam: who's connected, and messages ---------------------------------------------------
 function onChange() {
   if (!beam) return;
@@ -324,7 +339,7 @@ function onChange() {
   const now = up && Date.now() - heard < QUIET;
   // Each time the link to the host (re)opens: who this is. A host that reloaded starts over and
   // needs to hear it again.
-  if (now && !connected) { seen = -1; beam.send("hub", { t: "hi", pid: me.pid, name: me.name }); }
+  if (now && !connected) { seen = -1; beam.send("hub", { t: "hi", pid: me.pid, name: me.name, ...race() }); }
   // The host gone quiet: back within half a minute (a reload, a network change), or the room is
   // taken as closed (its tab was closed, the device asleep).
   if (now) clearTimeout(lostTimer);
@@ -342,15 +357,16 @@ function onData(from, d) {
   switch (d.t) {
     case "state": {
       if (!validState(d.s)) break;
-      const seq = Number.isInteger(d.s.seq) ? d.s.seq : 0;
-      // A smaller number is an older state, or a host that reloaded (it counts from 0 again).
-      if (seq <= seen && seen - seq < 5) break;
+      const seq = Number.isInteger(d.s.seq) ? d.s.seq : 0, epoch = typeof d.s.epoch === "string" ? d.s.epoch : "";
+      // An older state is passed over; a host that reloaded counts again from 1, under a new epoch.
+      if (epoch === seenEpoch && seq <= seen) break;
+      seenEpoch = epoch;
       seen = seq;
       view = tidy(d.s);
       onState();
       break;
     }
-    case "start": if (validPuzzle(d.puzzle) && Number.isInteger(d.round)) begin(d.round, d.puzzle); break;
+    case "start": if (validPuzzle(d.puzzle) && Number.isInteger(d.round) && d.round > mine.round) begin(d.round, d.puzzle); break;
     case "chat": if (d.line) addLine(d.line); break;
     case "hist": if (Array.isArray(d.lines)) { lines = lines.filter((l) => l.local); for (const l of d.lines.slice(-CHAT_KEEP)) addLine({ ...l, local: false }, true); paintChat(); } break;
   }
@@ -420,7 +436,7 @@ function sendState() {
   hostPeers(beam.info(), true);
   view = snapshot();
   paint();
-  const s = { ...snapshot(), seq: ++H.seq };
+  const s = { ...snapshot(), seq: ++H.seq, epoch: H.epoch };
   for (const p of H.players.values()) if (p.link && !p.left) beam.send(p.link, { t: "state", s });
   beat = setTimeout(sendState, BEAT);
 }
@@ -453,6 +469,11 @@ function hostData(from, d) {
     let p = H.players.get(d.pid);
     const racing = H.phase === "count" || H.phase === "play";
     if (p) {
+      // Someone else can't take a player's place: only a player whose own link is gone or quiet.
+      if (p.link && p.link !== from && !p.left) {
+        const old = beam.info().peers.find((x) => x.id === p.link);
+        if (old && old.state !== "away" && Date.now() - (p.heard || 0) < QUIET) return;
+      }
       // The same player on a new connection (it reloaded): back in, but a race it was in is lost.
       if (p.link !== from) {
         if (p.link) H.byLink.delete(p.link);
@@ -471,6 +492,8 @@ function hostData(from, d) {
     H.byLink.set(from, d.pid);
     beam.send(from, { t: "hist", lines: lines.filter((l) => !l.local).slice(-CHAT_KEEP) });
     onChange();
+    checkEnd(); // back as a watcher: maybe everyone still racing has finished
+    caughtUp(p, d);
     return;
   }
   const p = H.players.get(H.byLink.get(from));
@@ -478,11 +501,21 @@ function hostData(from, d) {
   p.heard = Date.now();
   if (p.away) hostPeers(beam.info());
   switch (d.t) {
+    case "ping": caughtUp(p, d); break;
     case "name": { const n = clean(d.name, NAME_MAX); if (n) { p.name = n; sync(); } break; }
     case "chat": { const text = clean(d.text, CHAT_MAX); if (text) post({ pid: p.pid, name: p.name, text }); break; }
     case "found": hostFound(p.pid, d.round, d.n); break;
     case "done": hostDone(p.pid, d.round, d.ms); break;
   }
+}
+// What a player's ping says of its race: progress or a finish not heard yet, or no puzzle for
+// the round on (its start was lost), which goes again.
+function caughtUp(p, d) {
+  if (!H || p.spect || p.left || (H.phase !== "count" && H.phase !== "play")) return;
+  if (d.round === H.round) {
+    if (Number.isFinite(d.ms) && p.ms == null) hostDone(p.pid, d.round, d.ms);
+    else if (Number.isInteger(d.n) && d.n > p.n) hostFound(p.pid, d.round, d.n);
+  } else if (H.puzzle && p.link && !(Number.isInteger(d.round) && d.round > H.round)) beam.send(p.link, { t: "start", round: H.round, puzzle: H.puzzle });
 }
 function hostFound(pid, round, n) {
   const p = H?.players.get(pid);
@@ -537,6 +570,7 @@ async function startRound() {
     Object.assign(p, { n: 0, ms: null, spect: false });
   }
   H.round++;
+  H.puzzle = puzzle;
   H.total = puzzle.words.length;
   H.phase = "count";
   sys(`Round ${H.round} · ${levels[H.level].name} · ${api.room.langName(H.lang)}`);
@@ -583,9 +617,10 @@ function stopCountdown() {
 // ---- chat ----------------------------------------------------------------------------------
 function say(text) {
   text = clean(text, CHAT_MAX);
-  if (!text || closed || !beam) return;
+  if (!text || closed || !beam || (!hosting && !connected)) return false; // kept in the box to send later
   if (hosting) post({ pid: me.pid, name: me.name, text });
   else beam.send("hub", { t: "chat", text });
+  return true;
 }
 // The host gives every line its place and passes it on.
 function post(line) {
@@ -828,11 +863,7 @@ function lobby(box) {
   if (hosting) {
     const code = beam?.info().code || "";
     box.append(el("span", "ws-eyebrow", "Room code"), el("div", "ws-roomcode", spaced(code)));
-    const hint = el("p", "ws-shint", "Up to 5 others can join with this code, from Word search in Extra Guac or from ");
-    const a = el("a", null, WEB_URL.replace(/^https:\/\/|\/$/g, ""));
-    Object.assign(a, { href: WEB_URL, target: "_blank", rel: "noopener" });
-    hint.append(a, " on any phone or browser.");
-    box.append(hint);
+    box.append(webHint("ws-shint", "Up to 5 others can join with this code, from Word search in Extra Guac or from ", " on any phone or browser."));
     const seg = el("div", "ws-seg");
     seg.setAttribute("role", "radiogroup");
     seg.setAttribute("aria-label", "Level");

@@ -89,6 +89,7 @@ const ICON_X = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M
 // The Broadcast switch: under the code while waiting, and under the devices once connected.
 const BCAST = '<div class="beam-bcast" data-bcast hidden><span class="beam-bcast-text">Broadcast<small></small></span>' +
   '<button type="button" class="beam-switch" role="switch" aria-checked="false" aria-label="Broadcast: let up to ' + MAX_DEVICES + ' devices join"></button></div>'
+const ICON_PEN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19h3.5L18.5 9 15 5.5 5 15.5z"/></svg>'
 const WEB_LABEL = WEB_APP_URL.replace(/^https?:\/\//, '').replace(/\/$/, '')
 
 function markup(preview) {
@@ -168,7 +169,7 @@ function markup(preview) {
   </section>
 
   <section class="beam-card beam-chat off" id="beam-chat" aria-label="Chat">
-    <div class="beam-row beam-between"><p class="beam-eyebrow">Chat</p><span class="beam-hint" id="beam-chatNote">Connect a device to chat</span></div>
+    <div class="beam-row beam-between beam-chat-head"><div class="beam-chat-who"><p class="beam-eyebrow">Chat as</p><button type="button" class="beam-me" id="beam-me" title="Change the name others see"><span id="beam-meName"></span>${ICON_PEN}</button></div><span class="beam-hint" id="beam-chatNote">Connect a device to chat</span></div>
     <div class="beam-msgs" id="beam-msgs" aria-live="polite"></div>
     <form class="beam-compose" id="beam-compose">
       <input type="text" id="beam-chatInput" placeholder="Message" maxlength="500" autocomplete="off" aria-label="Message" disabled>
@@ -500,6 +501,55 @@ function onChat(L, m) {
   if (!isHub()) return addChat({name: chatText(m.name, 40) || nameOf(L), text})
   addChat({name: nameOf(L), text})
   for (const o of roomLinks()) if (o !== L && o.accepted) toLink(o, {t: 'chat', text, name: nameOf(L)})
+}
+// The name the other devices see (the same one the word search uses): changed from the chat's
+// header, sent to every connected device at once, and to new ones in the hello.
+function showMe() { $('meName').textContent = shownName() }
+function editMe() {
+  if (life.signal.aborted || $('me').hidden) return
+  const btn = $('me'), input = document.createElement('input')
+  Object.assign(input, {type: 'text', value: shownName(), maxLength: 24, placeholder: myName, autocomplete: 'off', spellcheck: false, className: 'beam-me-edit'})
+  input.setAttribute('aria-label', 'Your name')
+  btn.hidden = true
+  btn.after(input)
+  input.focus(); input.select()
+  let done = false
+  const finish = (save, refocus) => {
+    if (done) return
+    done = true
+    input.remove(); btn.hidden = false
+    if (save) setMe(input.value)
+    if (refocus) btn.focus({preventScroll: true}) // not after a click elsewhere: that keeps its focus
+  }
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); finish(true, true) } if (e.key === 'Escape') { e.stopPropagation(); finish(false, true) } })
+  input.addEventListener('blur', () => finish(true))
+}
+function setMe(v) {
+  const name = chatText(v, 24), before = shownName()
+  try { if (name && name !== myName) localStorage.setItem(NAME_KEY, name); else localStorage.removeItem(NAME_KEY) } catch (e) {}
+  if (shownName() !== before) announceMe()
+}
+let lastSent = ''
+function announceMe() {
+  showMe()
+  const name = shownName()
+  if (name === lastSent) return
+  lastSent = name
+  for (const L of links.values()) if (L.accepted) toLink(L, {t: 'name', name})
+}
+// Another device renamed itself (for a device that joined: the hub did).
+function onName(L, m) {
+  const name = chatText(m.name, 24)
+  if (!name) return
+  if (isHub()) renameLink(L, name)
+  else { L.name = name; renderLinks() }
+}
+function renameLink(L, name) {
+  const taken = new Set([...links.values()].filter(o => o !== L).map(o => o.name))
+  let shown = name
+  for (let k = 2; taken.has(shown); k++) shown = name + ' (' + k + ')'
+  L.baseName = name; L.name = shown
+  renderLinks()
 }
 function addChat(line) {
   chatLines.push(line)
@@ -931,6 +981,9 @@ async function hubHello(m, name, via, gen, conn, base) {
       L = newLink(m.pub, key, shown)
       L.id = id; L.baseName = name; L.relay = relay
       if (conn) { conn._link = L; L.lanes[0] = conn }
+      // A game's full room: a player that dropped and hasn't come back gives up its place (most
+      // often this same player, reloaded with a new key; the game knows it again by its id).
+      if (GAME && links.size >= MAX_DEVICES) { const gone = [...links.values()].find(l => l.known && !l.accepted); if (gone) { removeLink(gone, 'Connection lost'); notify() } }
       // With Broadcast off, a device that dropped and is only waiting to come back doesn't keep
       // others out: a device that reloads comes back with a new key, so it looks like a new one.
       const holding = [...links.values()].filter(l => l.accepted || asks.includes(l)).length
@@ -947,6 +1000,7 @@ async function hubHello(m, name, via, gen, conn, base) {
     }
   }
   if (relay) L.relay = relay
+  else if (name && L.known && name !== L.baseName) renameLink(L, name) // renamed while its link was down
   if (conn && L.lanes[0] !== conn) {
     // A device's direct link is its own: another connection can't take it over while it's open.
     if (direct(L) && L.lanes[0].peer !== conn.peer) { try { conn.close() } catch (e) {} return }
@@ -1525,6 +1579,7 @@ function onPeerData(d, gen, c) {
       case 'meta': if (!GAME) onMeta(L, m); break // a game room takes no files
       case 'g': if (GAME) { markActive(true); GAME.onData(isHub() ? L.pub : 'hub', m.d) } break
       case 'chat': if (!GAME) onChat(L, m); break
+      case 'name': if (!GAME) onName(L, m); break
       case 'ready': { const f = readyWaiters.get(m.id); if (f) f(true); break }
       case 'ack': { const f = peerAcks.get(m.id); if (f) f(true); break }
       case 'prog': { const o = outgoingPipe.get(m.id); if (o) o.progress(m.n); break } // a relay file's progress, told over the direct link
@@ -1899,6 +1954,7 @@ function handleControl(msg, gen, from, base) {
   if (msg.t === 'g') { if (GAME) { markActive(true); GAME.onData(isHub() ? L.pub : 'hub', msg.d) } return }
   if (msg.t === 'active') return markActive(true)
   if (msg.t === 'chat') return GAME ? undefined : onChat(L, msg)
+  if (msg.t === 'name') return GAME ? undefined : onName(L, msg)
   if (msg.t === 'accept') { const f = acceptWaiters.get(msg.id); if (f) f(true) }
   if (msg.t === 'ack') { const f = ackWaiters.get(msg.id); if (f) f(true) }
   if (msg.t === 'prog') { const o = outgoingPipe.get(msg.id); if (o) o.progress(msg.n) }
@@ -2382,6 +2438,10 @@ $('clearDone').addEventListener('click', clearFinished)
 $('decline').addEventListener('click', decline)
 $('disconnect').addEventListener('click', endSession)
 $('route').addEventListener('change', () => renderLinks())
+showMe()
+$('me').addEventListener('click', editMe)
+// The word search (or another Beam) changed the name: shown here too.
+addEventListener('storage', e => { if (e.key === NAME_KEY && !GAME) announceMe() }, {signal: life.signal})
 $('compose').addEventListener('submit', e => { e.preventDefault(); sayChat($('chatInput').value); $('chatInput').value = '' })
 if (!GAME) {
   // The chat's height follows what's above it and the window (the panel's tab shown, a device added).

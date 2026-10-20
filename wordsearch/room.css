@@ -58,6 +58,8 @@
 .ws-roomcode { margin-top: -6px; font-size: 42px; font-weight: 800; letter-spacing: .06em; line-height: 1.1; }
 .ws-stitle { margin: 0; font-size: 22px; font-weight: 800; line-height: 1.2; }
 .ws-shint { margin: 0; max-width: 340px; color: var(--text2); font-size: 12.5px; }
+.ws-shint a, .ws-rm-hint a { color: var(--text); text-decoration: underline; text-decoration-color: var(--stroke); text-underline-offset: 2px; }
+.ws-shint a:hover, .ws-rm-hint a:hover { text-decoration-color: currentColor; }
 .ws-snote { margin: -4px 0 0; color: var(--yellow); font-size: 12px; }
 .ws-seg { display: flex; gap: 2px; padding: 3px; border-radius: 12px; background: var(--field); }
 .ws-seg button { padding: 7px 14px; border-radius: 9px; font-weight: 600; font-size: 12.5px; color: var(--text2); }
