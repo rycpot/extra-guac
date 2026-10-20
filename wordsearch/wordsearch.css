@@ -51,23 +51,27 @@
 @keyframes ws-in { from { opacity: 0; transform: scale(.4); } }
 @keyframes ws-wave { 40% { transform: translateY(calc(var(--cell) * -.22)) scale(1.12); } }
 
-.ws-words { display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: 6px 16px; max-width: 520px; min-height: 46px; padding: 0 4px; }
+.ws-words { display: flex; flex-wrap: wrap; justify-content: center; align-content: flex-start; gap: 6px 16px; max-width: 520px; min-height: 46px; padding: 0 4px; }
 .ws-word { font-weight: 700; font-size: 16px; line-height: 1.25; letter-spacing: .02em; color: var(--text); transition: opacity .5s, color .3s; }
 .ws-word.ws-got { opacity: .28; }
 .ws-word.ws-hinted { color: var(--yellow); }
-.ws-left { width: 100%; text-align: center; color: var(--text2); font-weight: 600; }
+.ws-blank { display: inline-flex; align-items: center; gap: 7px; }
+.ws-blank i { width: calc(var(--n) * .55em); height: 3px; margin-top: .55em; border-radius: 2px; opacity: .55;
+  background: repeating-linear-gradient(90deg, currentColor 0 .4em, transparent .4em .55em); }
+.ws-blank b { display: grid; place-items: center; min-width: 1.7em; height: 1.7em; padding: 0 .45em; border-radius: .85em; background: var(--field);
+  color: var(--text2); font-size: .62em; font-variant-numeric: tabular-nums; }
+.ws-blank.ws-hinted b { color: var(--yellow); }
 .ws-credit { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text3); }
 .ws-credit a { color: var(--text2); }
 .ws .ws-credit svg.ws-gh { width: 13px; height: 13px; fill: currentColor; stroke: none; }
 .ws:not(.ws-panel) .ws-credit { width: 100%; max-width: max(320px, var(--ws-span, 520px)); align-self: center; }
 
-/* Its own tab: the same 500px card on every level, the list above it at a fixed height (room for
-   four lines, scrolling past that) so switching level moves nothing. */
-.ws:not(.ws-panel) { height: 100%; justify-content: center; }
+/* Its own tab: at the top, the same 500px card on every level, the list below it. */
+.ws:not(.ws-panel) { height: 100%; }
 .ws:not(.ws-panel) .ws-bar, .ws:not(.ws-panel) .ws-seg { width: 100%; max-width: max(320px, var(--ws-span, 520px)); align-self: center; }
 .ws:not(.ws-panel) .ws-play { justify-content: center; }
 .ws:not(.ws-panel) .ws-word { font-size: 19px; }
-.ws:not(.ws-panel) .ws-words { width: min(var(--ws-span, 500px), 100%); max-width: none; height: 124px; min-height: 0; overflow-y: auto; gap: 8px 18px; }
+.ws:not(.ws-panel) .ws-words { width: min(var(--ws-span, 500px), 100%); max-width: none; min-height: 124px; gap: 8px 18px; }
 
 /* Waiting for Start: the puzzle dimmed under the button */
 .ws-start { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; }

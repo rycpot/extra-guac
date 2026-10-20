@@ -51,6 +51,7 @@ const ICON = {
   soundOn: '<svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18.2 6.4a8 8 0 0 1 0 11.2"/></svg>',
   soundOff: '<svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>',
   close: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  stop: '<svg viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2.5"/></svg>',
   open: '<svg viewBox="0 0 24 24"><path d="M14 4.5h5.5V10M19.5 4.5l-8 8M17 14v5.5H4.5V7H10"/></svg>',
   play: '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg>',
 };
@@ -246,13 +247,14 @@ function mount(root, opts = {}) {
     b.onclick = onClick;
     return b;
   };
+  data.mute ??= true;                    // quiet until the sound is turned on
   const soundBtn = ib(data.mute ? "soundOff" : "soundOn", "Sound", () => {
     data.mute = !data.mute;
     persist((d) => { d.mute = data.mute; });
     soundBtn.innerHTML = ICON[data.mute ? "soundOff" : "soundOn"];
   });
   const hintBtn = ib("bulb", "Hint", hint);
-  const tools = [hintBtn, ib("again", "New puzzle", () => newGame()), ib("chart", "Stats", showStats), soundBtn];
+  const tools = [ib("stop", "Stop", stop), hintBtn, ib("again", "New puzzle", () => newGame()), ib("chart", "Stats", showStats), soundBtn];
   bar.append(langBtn, el("div", "ws-grow"), timerEl, ...tools);
   const seg = el("div", "ws-seg");
   const thumb = el("div", "ws-thumb");
@@ -276,8 +278,7 @@ function mount(root, opts = {}) {
   gridEl.append(svg, lettersEl);
   card.append(gridEl);
   const wordsEl = el("div", "ws-words");
-  // The words above the grid, where the eye goes first.
-  play.append(wordsEl, card);
+  play.append(card, wordsEl);
   // Each time the panel or the tab opens, the puzzle waits, dimmed, for Start.
   const start = el("div", "ws-start");
   const startBtn = el("button", "ws-btn");
@@ -342,15 +343,27 @@ function mount(root, opts = {}) {
     stopClock();
     const d = persist((d) => { d.level = data.level = id; });
     const g = d.games[id];
-    if (usable(g, id) && g.lang === d.lang) {
-      pending = null;                        // a download still on its way doesn't replace it
-      dropOverlay();
-      game = g;
-      render(true);
-    } else newGame(undefined, wait);
+    if (usable(g, id) && g.lang === d.lang) resume(g);
+    else newGame(undefined, wait);
+  }
+  function resume(g) {
+    pending = null;                          // a download still on its way doesn't replace it
+    dropOverlay();
+    game = g;
+    render(true);
   }
 
-  // Until a language is picked: a puzzle to look at, dimmed, and only the language button to press.
+  // Until a language is picked, and after Stop: a puzzle to look at, dimmed, and only the language
+  // button to press. A stopped puzzle stays kept: picking its language again goes back to it,
+  // another language starts a new one in its place.
+  function stop() {
+    if (!game || game.sample) return;
+    stopClock();                             // saves it, when the clock was running
+    clearAnchor();
+    pending = null;
+    dropOverlay();
+    showSample();
+  }
   function showSample() {
     game = structuredClone(SAMPLE);
     render(false);
@@ -401,14 +414,18 @@ function mount(root, opts = {}) {
     chips = game.words.map((w, i) => {
       const got = game.found.some((f) => f.i === i);
       const chip = el("span", "ws-word" + (got ? " ws-got" : ""));
-      chip.textContent = w.text;
-      if (!(hidden && !got)) wordsEl.append(chip);
+      // Expert keeps a word hidden until it's found: a blank as long as the word, and its length.
+      if (hidden && !got) {
+        chip.classList.add("ws-blank");
+        chip.title = `${w.len} letters`;
+        chip.innerHTML = `<i style="--n:${w.len}"></i><b>${w.len}</b>`;
+      } else chip.textContent = w.text;
       return chip;
     });
-    if (hidden) {
-      const left = game.words.length - game.found.length;
-      wordsEl.prepend(el("div", "ws-left", left ? `${left} hidden word${left === 1 ? "" : "s"} left` : "All found"));
-    }
+    // Blanks longest first, so their order gives nothing away.
+    const order = chips.map((_, i) => i);
+    if (hidden) order.sort((a, b) => game.words[b].len - game.words[a].len);
+    for (const i of order) wordsEl.append(chips[i]);
   }
 
   function line(r1, c1, r2, c2, cls) {
@@ -422,19 +439,22 @@ function mount(root, opts = {}) {
   function drawFound(f, animate) {
     const l = line(f.r1, f.c1, f.r2, f.c2, "ws-found" + (animate ? " ws-pop" : ""));
     l.style.setProperty("--h", f.hue);
-    const len = Math.max(Math.abs(f.r2 - f.r1), Math.abs(f.c2 - f.c1)), dr = Math.sign(f.r2 - f.r1), dc = Math.sign(f.c2 - f.c1);
-    for (let k = 0; k <= len; k++) cells[f.r1 + dr * k][f.c1 + dc * k].classList.add("ws-in-word");
+    for (const [r, c] of foundCells(f)) cells[r][c].classList.add("ws-in-word");
+  }
+  function foundCells(f) {
+    const dr = Math.sign(f.r2 - f.r1), dc = Math.sign(f.c2 - f.c1);
+    return pathOf(f.r1, f.c1, { len: Math.max(Math.abs(f.r2 - f.r1), Math.abs(f.c2 - f.c1)), dr, dc });
   }
 
   // The grid as big as fits in the panel's width; in a tab, the same size on every level, smaller
-  // only when the window can't hold it.
+  // only when the window can't hold it and the list below.
   function layout() {
     if (!game) return;
     const pad = 2 * parseFloat(getComputedStyle(card).paddingLeft || 0);
     let size = root.clientWidth - pad;
     if (!panel) {
       const gap = (n) => parseFloat(getComputedStyle(n).rowGap) || 0;
-      const H = root.clientHeight - bar.offsetHeight - seg.offsetHeight - credit.offsetHeight - 3 * gap(root) - wordsEl.offsetHeight - gap(play);
+      const H = root.clientHeight - bar.offsetHeight - seg.offsetHeight - credit.offsetHeight - 3 * gap(root) - Math.max(parseFloat(getComputedStyle(wordsEl).minHeight), wordsEl.offsetHeight) - gap(play);
       size = Math.min(TAB_CARD, size + pad, H) - pad;
     }
     size = Math.max(180, Math.floor(size));
@@ -589,16 +609,23 @@ function mount(root, opts = {}) {
     if (isSolved()) solved(); else saveGame();
   }
 
-  // A ring around the first letter of a word not found yet, and that word lights up in the list.
+  // A ring around one end of a word not found yet, and that word lights up in the list. The end
+  // is one no found word covers, so the ring never points into a band already there.
   function hint() {
     if (!game || game.sample || isSolved()) return;
-    const left = game.words.map((_, i) => i).filter((i) => !game.found.some((f) => f.i === i));
-    const i = left[Math.floor(Math.random() * left.length)], w = game.words[i];
+    const covered = new Set(game.found.flatMap((f) => foundCells(f).map(([r, c]) => `${r},${c}`)));
+    const ends = [];
+    game.words.forEach((w, i) => {
+      if (game.found.some((f) => f.i === i)) return;
+      for (const [r, c] of [[w.r, w.c], [w.r + w.dr * (w.len - 1), w.c + w.dc * (w.len - 1)]]) ends.push({ i, r, c, free: !covered.has(`${r},${c}`) });
+    });
+    const free = ends.filter((e) => e.free), pool = free.length ? free : ends;
+    const { i, r, c } = pool[Math.floor(Math.random() * pool.length)];
     game.hints++;
     saveGame();
     svg.querySelector(".ws-flash")?.remove();
     const ring = document.createElementNS(SVG, "circle");
-    ring.setAttribute("cx", w.c + 0.5); ring.setAttribute("cy", w.r + 0.5); ring.setAttribute("r", 0.44);
+    ring.setAttribute("cx", c + 0.5); ring.setAttribute("cy", r + 0.5); ring.setAttribute("r", 0.44);
     ring.setAttribute("class", "ws-flash");
     svg.append(ring);
     setTimeout(() => ring.remove(), 1800);
@@ -738,6 +765,13 @@ function mount(root, opts = {}) {
   function pick(code) {
     closeMenu(false);
     if (game && !game.sample && code === game.lang && !isSolved()) return startClock();
+    // After Stop: the kept puzzle, when it's in the language picked.
+    const d = load(), g = panel ? d.panelGame : d.games[level()];
+    if (game?.sample && usable(g, level()) && g.lang === code) {
+      if (code !== data.lang) persist((d) => { d.lang = data.lang = code; });
+      ready = true;
+      return resume(g);
+    }
     newGame(code);
   }
   langBtn.setAttribute("aria-haspopup", "listbox");
@@ -759,6 +793,7 @@ function mount(root, opts = {}) {
   }
 
   function showSolved() {
+    if (!game || game.sample) return;        // stopped before the card came up
     openOverlay((box) => {
       const s = data.stats[game.level];
       box.append(el("h2", null, `${LEVELS[game.level].name} solved`));

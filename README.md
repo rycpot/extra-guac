@@ -64,7 +64,7 @@ A Chrome extension. Click its icon to open the side panel (or a popup, in settin
 |---|---|
 | **Drive backup** | Snapshots of your settings, data and bookmarks to your own Google Drive, by hand or every 1 to 24 hours. Restore any snapshot from the list. |
 | **Beam** | Send files between your devices with a 6-digit code or a QR code, encrypted end to end. The other device uses Extra Guac too, or just [rycpot.github.io/beam](https://rycpot.github.io/beam) in any browser. |
-| **Word search** | Find the hidden words, in 42 languages, with hints and best times. The puzzle waits behind a Start button each time it opens, the timer pauses when you look away or leave the puzzle alone for a minute, and each level keeps the puzzle you were on. Easy plays right in the panel; Medium, Hard and Expert open in a tab of their own. Each language's word list (made from [wordfreq](https://github.com/rspeer/wordfreq), CC BY-SA 4.0) downloads the first time you pick it. |
+| **Word search** | Find the hidden words, in 42 languages, with hints and best times (Expert shows only each word's length until it's found). The puzzle waits behind a Start button each time it opens, the timer pauses when you look away or leave the puzzle alone for a minute, and each level keeps the puzzle you were on. Easy plays right in the panel; Medium, Hard and Expert open in a tab of their own. Each language's word list (made from [wordfreq](https://github.com/rspeer/wordfreq), CC BY-SA 4.0) downloads the first time you pick it. |
 | **Settings file** | Export everything as a .json file, or import one to replace it. |
 
 **Layout:** drag tools between tabs, or reorder them, in settings → general. Tab 3 holds session switch and userscripts at first, and anything you drag there.
