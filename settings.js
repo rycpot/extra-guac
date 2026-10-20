@@ -951,7 +951,7 @@
         }));
       }
       const empty = el("p", { className: "hint px-empty", textContent: full() ? "none: every site goes through the proxy" : "none yet: add a site below, or use add this site in the panel" });
-      const hint = el("p", { className: "hint px-empty", textContent: `Some sites change their ending every now and then, or have one per country. Enter just the name to match it on every real domain ending${full() ? " and keep it off the proxy" : ""}. For example, google covers google.com, google.co.uk and google.co.id, plus their subdomains.` });
+      const hint = el("p", { className: "hint px-empty", textContent: `Some sites change their ending every now and then, or have one per country. Enter just the name to match it on every real domain ending${full() ? " and keep it off the proxy" : ""}. For example, google covers google.com, google.co.uk and google.es, plus their subdomains.` });
       const kids = [el("div", { className: "px-list" }, head,
         ...profileRows, group("Your sites", rows.length), ...(rows.length ? rows : [empty]), add,
         group("Sites on any ending", nameRows.length), ...nameRows, hint, addName)];
