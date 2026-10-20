@@ -15,7 +15,7 @@ const WORDS_URL = "https://rycpot.github.io/extra-guac/words/";
 const REFRESH_DAYS = 30;                 // a kept list is fetched again (quietly) after this long
 const KEY = "ws";                        // localStorage: settings, stats and the games in progress
 const IDLE_MS = 60000;                   // the clock pauses after this long with no touch
-const TAB_SIZE = 0.8;                    // the tab's game, at this size of what would fit
+const TAB_CARD = 500;                    // the tab's puzzle card, px, on every level (less only if the window is small)
 const LIST_KEY = (lang) => `ws-words:${lang}`;
 
 // Native names, in the order the picker shows them.
@@ -52,6 +52,7 @@ const ICON = {
   soundOff: '<svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>',
   close: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   open: '<svg viewBox="0 0 24 24"><path d="M14 4.5h5.5V10M19.5 4.5l-8 8M17 14v5.5H4.5V7H10"/></svg>',
+  play: '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg>',
 };
 const SVG = "http://www.w3.org/2000/svg";
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -233,7 +234,6 @@ function mount(root, opts = {}) {
 
   root.classList.add("ws");
   root.classList.toggle("ws-panel", panel);
-  if (!panel) root.style.zoom = TAB_SIZE;
   root.innerHTML = "";
   const bar = el("div", "ws-bar");
   const langBtn = el("button", "ws-lang");
@@ -251,7 +251,8 @@ function mount(root, opts = {}) {
     persist((d) => { d.mute = data.mute; });
     soundBtn.innerHTML = ICON[data.mute ? "soundOff" : "soundOn"];
   });
-  const tools = [ib("bulb", "Hint", hint), ib("again", "New puzzle", () => newGame()), ib("chart", "Stats", showStats), soundBtn];
+  const hintBtn = ib("bulb", "Hint", hint);
+  const tools = [hintBtn, ib("again", "New puzzle", () => newGame()), ib("chart", "Stats", showStats), soundBtn];
   bar.append(langBtn, el("div", "ws-grow"), timerEl, ...tools);
   const seg = el("div", "ws-seg");
   const thumb = el("div", "ws-thumb");
@@ -275,13 +276,20 @@ function mount(root, opts = {}) {
   gridEl.append(svg, lettersEl);
   card.append(gridEl);
   const wordsEl = el("div", "ws-words");
-  play.append(card, wordsEl);
+  // The words above the grid, where the eye goes first.
+  play.append(wordsEl, card);
+  // Each time the panel or the tab opens, the puzzle waits, dimmed, for Start.
+  const start = el("div", "ws-start");
+  const startBtn = el("button", "ws-btn");
+  startBtn.onclick = () => { ready = true; setWaiting(); startClock(); };
+  start.append(startBtn);
+  card.append(start);
   // The word lists' source, as their CC BY-SA 4.0 license asks.
   const credit = el("p", "ws-credit", `<svg class="ws-gh" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>Powered by <a href="https://github.com/rspeer/wordfreq" target="_blank" rel="noopener" title="Word lists made from wordfreq, CC BY-SA 4.0">wordfreq</a>`);
   root.append(bar, seg, play, credit);
 
   let game = null, cells = [], chips = [], startedAt = 0, ticking = null, overlay = null, menu = null, visible = true, lastSave = 0;
-  let idle = false, lastActive = 0;
+  let idle = false, lastActive = 0, ready = false;
   const level = () => (panel ? "easy" : data.level);
   // The tab's address names its level, so the panel asking for another one is a change.
   const markLevel = () => { if (!panel) history.replaceState(null, "", `#${data.level}`); };
@@ -299,7 +307,9 @@ function mount(root, opts = {}) {
   // A new puzzle, in the language picked last (here or in the other place) or the one given;
   // a language becomes the default once its words are here.
   let pending = null;
-  async function newGame(lang = load().lang || data.lang) {
+  // wait: the puzzle shows dimmed until Start, as when the panel or the tab opens.
+  async function newGame(lang = load().lang || data.lang, wait = false) {
+    ready = !wait;
     stopClock();
     dropOverlay();
     if (!lang) return showSample();
@@ -327,7 +337,8 @@ function mount(root, opts = {}) {
   const usable = (g, id) => g && LANGS.some((l) => l[0] === g.lang) && g.level === id && g.grid?.length === LEVELS[id].size && !done(g);
 
   // Another level: its unfinished puzzle when there's one in the current language, or a new one.
-  function switchLevel(id) {
+  function switchLevel(id, wait = false) {
+    ready = !wait;
     stopClock();
     const d = persist((d) => { d.level = data.level = id; });
     const g = d.games[id];
@@ -336,7 +347,7 @@ function mount(root, opts = {}) {
       dropOverlay();
       game = g;
       render(true);
-    } else newGame();
+    } else newGame(undefined, wait);
   }
 
   // Until a language is picked: a puzzle to look at, dimmed, and only the language button to press.
@@ -345,10 +356,21 @@ function mount(root, opts = {}) {
     render(false);
   }
 
+  function setWaiting() {
+    const waiting = !ready && !game.sample && !isSolved();
+    root.classList.toggle("ws-waiting", waiting);
+    gridEl.inert = wordsEl.inert = waiting;
+    hintBtn.inert = waiting || !!game.sample;
+    start.hidden = !waiting;
+    const begun = game.elapsed > 0 || game.found.length > 0;
+    startBtn.innerHTML = begun ? `${ICON.play}Resume · ${fmt(game.elapsed)}` : `${ICON.play}Start`;
+  }
+
   function render(fresh) {
     updateBar();
     root.classList.toggle("ws-preview", !!game.sample);
     for (const n of [seg, play, credit, timerEl, ...tools]) n.inert = !!game.sample;
+    setWaiting();
     const n = game.n;
     root.lang = game.lang;
     wordsEl.dir = RTL.has(game.lang) ? "rtl" : "ltr";
@@ -404,33 +426,20 @@ function mount(root, opts = {}) {
     for (let k = 0; k <= len; k++) cells[f.r1 + dr * k][f.c1 + dc * k].classList.add("ws-in-word");
   }
 
-  // The grid as big as fits: in the panel, the panel's width; in a tab, beside the list on a
-  // wide window and above it on a narrow one, and a little smaller than that (the whole tab is
-  // zoomed out to TAB_SIZE, so its measures are already in the larger, zoomed units).
+  // The grid as big as fits in the panel's width; in a tab, the same size on every level, smaller
+  // only when the window can't hold it.
   function layout() {
     if (!game) return;
     const pad = 2 * parseFloat(getComputedStyle(card).paddingLeft || 0);
-    let size;
-    if (panel) size = root.clientWidth - pad;
-    else {
-      // What's left beside the bar, the levels and the credit; the whole stack is then centered.
-      const W = root.clientWidth, gaps = 3 * (parseFloat(getComputedStyle(root).rowGap) || 0);
-      const H = root.clientHeight - bar.offsetHeight - seg.offsetHeight - credit.offsetHeight - gaps;
-      const wide = W >= 640 && W - 240 > H * 0.8;
-      play.classList.toggle("ws-wide", wide);
-      let listH;
-      if (wide) size = Math.min(W - 240, H) - pad;
-      else {
-        listH = Math.min(wordsEl.scrollHeight, H * 0.3);
-        size = Math.min(W, H - listH - 16) - pad;
-      }
-      size = Math.max(180, Math.floor(size * TAB_SIZE));
-      // A long list scrolls rather than pushing the bar off the top.
-      wordsEl.style.maxHeight = `${wide ? size + pad : listH}px`;
+    let size = root.clientWidth - pad;
+    if (!panel) {
+      const gap = (n) => parseFloat(getComputedStyle(n).rowGap) || 0;
+      const H = root.clientHeight - bar.offsetHeight - seg.offsetHeight - credit.offsetHeight - 3 * gap(root) - wordsEl.offsetHeight - gap(play);
+      size = Math.min(TAB_CARD, size + pad, H) - pad;
     }
     size = Math.max(180, Math.floor(size));
     // The bar and levels span what's below them.
-    if (!panel) root.style.setProperty("--ws-span", `${size + pad + (play.classList.contains("ws-wide") ? 236 : 0)}px`);
+    if (!panel) root.style.setProperty("--ws-span", `${size + pad}px`);
     gridEl.style.width = gridEl.style.height = `${size}px`;
     root.style.setProperty("--cell", `${size / game.n}px`);
   }
@@ -439,7 +448,7 @@ function mount(root, opts = {}) {
   // ---- clock: runs only while the puzzle is on screen ----
   function startClock() {
     stopClock();
-    if (!game || game.sample || isSolved() || document.hidden || overlay || menu || !visible) return;
+    if (!game || game.sample || !ready || isSolved() || document.hidden || overlay || menu || !visible) return;
     setIdle(false);
     startedAt = performance.now() - game.elapsed;
     lastActive = performance.now();
@@ -777,13 +786,13 @@ function mount(root, opts = {}) {
   updateBar();
   const g = panel ? data.panelGame : data.games[level()];
   if (usable(g, level())) { game = g; render(true); }
-  else if (data.lang) newGame();
+  else if (data.lang) newGame(undefined, true);
   else showSample();
 
   // The panel asked for another level in this tab.
   if (!panel) addEventListener("hashchange", () => {
     const id = location.hash.slice(1);
-    if (LEVELS[id] && id !== data.level) switchLevel(id);
+    if (LEVELS[id] && id !== data.level) switchLevel(id, true);
   });
 
 }

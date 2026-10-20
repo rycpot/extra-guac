@@ -28,7 +28,7 @@
   box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .35s cubic-bezier(.3,1.3,.5,1); }
 
 .ws-play { display: flex; flex-direction: column; align-items: center; gap: 16px; }
-.ws-card { padding: 10px; border-radius: 16px; background: var(--ws-card); box-shadow: var(--ws-shadow); }
+.ws-card { position: relative; padding: 10px; border-radius: 16px; background: var(--ws-card); box-shadow: var(--ws-shadow); }
 .ws-grid { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; }
 .ws-marks { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; stroke-linecap: round; }
 .ws-marks line { stroke-width: .8; }
@@ -51,8 +51,8 @@
 @keyframes ws-in { from { opacity: 0; transform: scale(.4); } }
 @keyframes ws-wave { 40% { transform: translateY(calc(var(--cell) * -.22)) scale(1.12); } }
 
-.ws-words { display: flex; flex-wrap: wrap; justify-content: center; align-content: flex-start; gap: 6px 16px; max-width: 520px; padding: 0 4px; }
-.ws-word { font-weight: 700; font-size: 14px; letter-spacing: .02em; color: var(--text); transition: opacity .5s, color .3s; }
+.ws-words { display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: 6px 16px; max-width: 520px; min-height: 46px; padding: 0 4px; }
+.ws-word { font-weight: 700; font-size: 16px; line-height: 1.25; letter-spacing: .02em; color: var(--text); transition: opacity .5s, color .3s; }
 .ws-word.ws-got { opacity: .28; }
 .ws-word.ws-hinted { color: var(--yellow); }
 .ws-left { width: 100%; text-align: center; color: var(--text2); font-weight: 600; }
@@ -61,15 +61,19 @@
 .ws .ws-credit svg.ws-gh { width: 13px; height: 13px; fill: currentColor; stroke: none; }
 .ws:not(.ws-panel) .ws-credit { width: 100%; max-width: max(320px, var(--ws-span, 520px)); align-self: center; }
 
-/* Its own tab: as big as the window, the list beside the grid when there's room. */
+/* Its own tab: the same 500px card on every level, the list above it at a fixed height (room for
+   four lines, scrolling past that) so switching level moves nothing. */
 .ws:not(.ws-panel) { height: 100%; justify-content: center; }
 .ws:not(.ws-panel) .ws-bar, .ws:not(.ws-panel) .ws-seg { width: 100%; max-width: max(320px, var(--ws-span, 520px)); align-self: center; }
 .ws:not(.ws-panel) .ws-play { justify-content: center; }
-.ws:not(.ws-panel) .ws-word { font-size: 16px; }
-.ws:not(.ws-panel) .ws-words { overflow-y: auto; }
-.ws-play.ws-wide { flex-direction: row; gap: 36px; }
-.ws-play.ws-wide .ws-words { flex-direction: column; flex-wrap: nowrap; justify-content: flex-start; align-items: flex-start; width: 200px; gap: 9px; }
-.ws-play.ws-wide .ws-left { text-align: start; }
+.ws:not(.ws-panel) .ws-word { font-size: 19px; }
+.ws:not(.ws-panel) .ws-words { width: min(var(--ws-span, 500px), 100%); max-width: none; height: 124px; min-height: 0; overflow-y: auto; gap: 8px 18px; }
+
+/* Waiting for Start: the puzzle dimmed under the button */
+.ws-start { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; }
+.ws-start[hidden] { display: none; }
+.ws-waiting .ws-grid, .ws-waiting .ws-words { opacity: .1; filter: blur(2.5px); }
+.ws-start svg { fill: currentColor; stroke: none; }
 
 /* The language list, dropping from its button over the game */
 .ws-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 6; width: min(100%, 270px); max-height: 320px; display: flex; flex-direction: column;
@@ -79,7 +83,7 @@
 @keyframes ws-drop { from { opacity: 0; transform: translateY(-6px) scale(.97); } }
 .ws-search { flex: none; height: 34px; margin-bottom: 4px; padding: 0 10px; border: 0; border-radius: 9px; background: var(--field); color: var(--text);
   font: inherit; outline: none; }
-.ws-search:focus-visible { box-shadow: inset 0 0 0 1.5px var(--stroke); }
+.ws .ws-search:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--stroke); }
 .ws-search::placeholder { color: var(--text3); }
 .ws-search::-webkit-search-cancel-button { display: none; }
 .ws-options { position: relative; flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
