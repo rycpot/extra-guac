@@ -13,7 +13,9 @@
 "use strict";
 const WORDS_URL = "https://rycpot.github.io/extra-guac/words/";
 const REFRESH_DAYS = 30;                 // a kept list is fetched again (quietly) after this long
-const KEY = "ws";                        // localStorage: settings, stats and the game in progress
+const KEY = "ws";                        // localStorage: settings, stats and the games in progress
+const IDLE_MS = 60000;                   // the clock pauses after this long with no touch
+const TAB_SIZE = 0.8;                    // the tab's game, at this size of what would fit
 const LIST_KEY = (lang) => `ws-words:${lang}`;
 
 // Native names, in the order the picker shows them.
@@ -68,6 +70,9 @@ function load() {
   let d = {};
   try { d = JSON.parse(localStorage.getItem(KEY)) || {}; } catch {}
   d.stats ||= {};
+  d.games ||= {};
+  // Before each level kept its own puzzle, the tab had one.
+  if (d.game) { d.games[d.game.level] ||= d.game; delete d.game; }
   if (!LEVELS[d.level]) d.level = "easy";
   if (!LANGS.some((l) => l[0] === d.lang)) d.lang = null;
   return d;
@@ -207,6 +212,17 @@ function tone(muted, freq, at = 0, dur = 0.5, vol = 0.08) {
 }
 const SCALE = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.51, 1567.98, 1760];
 
+// What shows, dimmed, until a language is picked: an Easy puzzle half done.
+const SAMPLE = {
+  lang: "en", level: "easy", n: 8, elapsed: 0, hints: 0, sample: true,
+  grid: ["AVOCADOT", "RKEWBOJO", "SALSANFM", "LUYGPIZA", "IWQDHOXT", "MFBRKNUO", "ECHIPSGV", "DNTJYEWL"].map((r) => [...r]),
+  words: ["AVOCADO", "LIME", "SALSA", "CHIPS", "TOMATO", "ONION"].map((text) => ({ text })),
+  found: [{ i: 0, hue: HUES[0], r1: 0, c1: 0, r2: 0, c2: 6 }, { i: 2, hue: HUES[1], r1: 2, c1: 0, r2: 2, c2: 4 },
+    { i: 5, hue: HUES[2], r1: 1, c1: 5, r2: 5, c2: 5 }],
+};
+let english = null;
+try { english = new Intl.DisplayNames(["en"], { type: "language" }); } catch {}
+
 // ---- the game ---------------------------------------------------------------------------
 // opts.panel: the side panel's version (Easy only); opts.onOpenTab(level): open the game's own tab.
 function mount(root, opts = {}) {
@@ -217,6 +233,7 @@ function mount(root, opts = {}) {
 
   root.classList.add("ws");
   root.classList.toggle("ws-panel", panel);
+  if (!panel) root.style.zoom = TAB_SIZE;
   root.innerHTML = "";
   const bar = el("div", "ws-bar");
   const langBtn = el("button", "ws-lang");
@@ -234,8 +251,8 @@ function mount(root, opts = {}) {
     persist((d) => { d.mute = data.mute; });
     soundBtn.innerHTML = ICON[data.mute ? "soundOff" : "soundOn"];
   });
-  bar.append(langBtn, el("div", "ws-grow"), timerEl, ib("bulb", "Hint", hint), ib("again", "New puzzle", () => newGame()),
-    ib("chart", "Stats", showStats), soundBtn);
+  const tools = [ib("bulb", "Hint", hint), ib("again", "New puzzle", () => newGame()), ib("chart", "Stats", showStats), soundBtn];
+  bar.append(langBtn, el("div", "ws-grow"), timerEl, ...tools);
   const seg = el("div", "ws-seg");
   const thumb = el("div", "ws-thumb");
   seg.append(thumb);
@@ -244,7 +261,7 @@ function mount(root, opts = {}) {
     b.dataset.id = id;
     b.onclick = () => {
       if (panel && id !== "easy") return needsTab(id);
-      if (data.level !== id) { persist((d) => { d.level = data.level = id; }); newGame(); }
+      if (data.level !== id) switchLevel(id);
     };
     seg.append(b);
     return b;
@@ -263,16 +280,18 @@ function mount(root, opts = {}) {
   const credit = el("p", "ws-credit", `<svg class="ws-gh" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>Powered by <a href="https://github.com/rspeer/wordfreq" target="_blank" rel="noopener" title="Word lists made from wordfreq, CC BY-SA 4.0">wordfreq</a>`);
   root.append(bar, seg, play, credit);
 
-  let game = null, cells = [], chips = [], startedAt = 0, ticking = null, overlay = null, visible = true, lastSave = 0;
+  let game = null, cells = [], chips = [], startedAt = 0, ticking = null, overlay = null, menu = null, visible = true, lastSave = 0;
+  let idle = false, lastActive = 0;
   const level = () => (panel ? "easy" : data.level);
   // The tab's address names its level, so the panel asking for another one is a change.
   const markLevel = () => { if (!panel) history.replaceState(null, "", `#${data.level}`); };
-  const isSolved = () => game && game.found.length === game.words.length;
+  const done = (g) => g.found.length === g.words.length;
+  const isSolved = () => game && done(game);
 
   function updateBar() {
     markLevel();
     const lang = game?.lang || data.lang;
-    langBtn.innerHTML = `${ICON.globe}<span>${lang ? langName(lang) : "Language"}</span>`;
+    langBtn.innerHTML = `${ICON.globe}<span>${game?.sample ? "Choose a language" : lang ? langName(lang) : "Language"}</span>`;
     for (const b of levelBtns) b.setAttribute("aria-pressed", String(b.dataset.id === level()));
     thumb.style.transform = `translateX(${LEVEL_IDS.indexOf(level()) * 100}%)`;
   }
@@ -283,7 +302,7 @@ function mount(root, opts = {}) {
   async function newGame(lang = load().lang || data.lang) {
     stopClock();
     dropOverlay();
-    if (!lang) return pickLanguage(true);
+    if (!lang) return showSample();
     pending = lang;
     let words;
     try {
@@ -301,10 +320,35 @@ function mount(root, opts = {}) {
     saveGame();
     render(true);
   }
-  const saveGame = () => persist((d) => { d[panel ? "panelGame" : "game"] = game; });
+  // The panel keeps one Easy puzzle; the tab keeps one for each level.
+  const keep = (d) => { if (panel) d.panelGame = game; else d.games[game.level] = game; };
+  const saveGame = () => { if (game && !game.sample) persist(keep); };
+  // A kept puzzle worth going back to: unfinished, and still the shape its level has.
+  const usable = (g, id) => g && LANGS.some((l) => l[0] === g.lang) && g.level === id && g.grid?.length === LEVELS[id].size && !done(g);
+
+  // Another level: its unfinished puzzle when there's one in the current language, or a new one.
+  function switchLevel(id) {
+    stopClock();
+    const d = persist((d) => { d.level = data.level = id; });
+    const g = d.games[id];
+    if (usable(g, id) && g.lang === d.lang) {
+      pending = null;                        // a download still on its way doesn't replace it
+      dropOverlay();
+      game = g;
+      render(true);
+    } else newGame();
+  }
+
+  // Until a language is picked: a puzzle to look at, dimmed, and only the language button to press.
+  function showSample() {
+    game = structuredClone(SAMPLE);
+    render(false);
+  }
 
   function render(fresh) {
     updateBar();
+    root.classList.toggle("ws-preview", !!game.sample);
+    for (const n of [seg, play, credit, timerEl, ...tools]) n.inert = !!game.sample;
     const n = game.n;
     root.lang = game.lang;
     wordsEl.dir = RTL.has(game.lang) ? "rtl" : "ltr";
@@ -361,21 +405,28 @@ function mount(root, opts = {}) {
   }
 
   // The grid as big as fits: in the panel, the panel's width; in a tab, beside the list on a
-  // wide window and above it on a narrow one.
+  // wide window and above it on a narrow one, and a little smaller than that (the whole tab is
+  // zoomed out to TAB_SIZE, so its measures are already in the larger, zoomed units).
   function layout() {
     if (!game) return;
     const pad = 2 * parseFloat(getComputedStyle(card).paddingLeft || 0);
     let size;
     if (panel) size = root.clientWidth - pad;
     else {
-      const W = play.clientWidth, H = play.clientHeight;
+      // What's left beside the bar, the levels and the credit; the whole stack is then centered.
+      const W = root.clientWidth, gaps = 3 * (parseFloat(getComputedStyle(root).rowGap) || 0);
+      const H = root.clientHeight - bar.offsetHeight - seg.offsetHeight - credit.offsetHeight - gaps;
       const wide = W >= 640 && W - 240 > H * 0.8;
       play.classList.toggle("ws-wide", wide);
+      let listH;
       if (wide) size = Math.min(W - 240, H) - pad;
       else {
-        const listH = Math.min(wordsEl.scrollHeight, H * 0.3);
+        listH = Math.min(wordsEl.scrollHeight, H * 0.3);
         size = Math.min(W, H - listH - 16) - pad;
       }
+      size = Math.max(180, Math.floor(size * TAB_SIZE));
+      // A long list scrolls rather than pushing the bar off the top.
+      wordsEl.style.maxHeight = `${wide ? size + pad : listH}px`;
     }
     size = Math.max(180, Math.floor(size));
     // The bar and levels span what's below them.
@@ -383,14 +434,20 @@ function mount(root, opts = {}) {
     gridEl.style.width = gridEl.style.height = `${size}px`;
     root.style.setProperty("--cell", `${size / game.n}px`);
   }
-  new ResizeObserver(layout).observe(panel ? root : play);
+  new ResizeObserver(layout).observe(root);
 
   // ---- clock: runs only while the puzzle is on screen ----
   function startClock() {
     stopClock();
-    if (!game || isSolved() || document.hidden || overlay || !visible) return;
+    if (!game || game.sample || isSolved() || document.hidden || overlay || menu || !visible) return;
+    setIdle(false);
     startedAt = performance.now() - game.elapsed;
-    ticking = setInterval(tick, 250);
+    lastActive = performance.now();
+    ticking = setInterval(() => {
+      tick();
+      // The minute nobody touched it doesn't count.
+      if (performance.now() - lastActive > IDLE_MS) { stopClock(); game.elapsed = lastActive - startedAt; timerEl.textContent = fmt(game.elapsed); saveGame(); setIdle(true); }
+    }, 250);
   }
   function tick() {
     game.elapsed = performance.now() - startedAt;
@@ -403,6 +460,15 @@ function mount(root, opts = {}) {
     clearInterval(ticking);
     ticking = null;
     saveGame();
+  }
+  // Left alone for a minute, the clock waits for the next touch.
+  function setIdle(on) {
+    idle = on;
+    timerEl.classList.toggle("ws-paused", on);
+    timerEl.title = on ? "Paused. Touch the puzzle to go on." : "";
+  }
+  for (const type of ["pointerdown", "pointermove", "keydown", "wheel"]) {
+    root.addEventListener(type, () => { lastActive = performance.now(); if (idle) startClock(); }, { capture: true, passive: true });
   }
   document.addEventListener("visibilitychange", () => (document.hidden ? stopClock() : startClock()));
   new IntersectionObserver(([e]) => { visible = e.isIntersecting; visible ? startClock() : stopClock(); }).observe(gridEl);
@@ -433,7 +499,7 @@ function mount(root, opts = {}) {
   const pathOf = (r0, c0, end) => Array.from({ length: end.len + 1 }, (_, k) => [r0 + end.dr * k, c0 + end.dc * k]);
 
   gridEl.addEventListener("pointerdown", (e) => {
-    if (!game || isSolved() || e.button > 0) return;
+    if (!game || game.sample || isSolved() || e.button > 0) return;
     e.preventDefault();
     gridEl.setPointerCapture(e.pointerId);
     const { r, c } = cellAt(e);
@@ -516,7 +582,7 @@ function mount(root, opts = {}) {
 
   // A ring around the first letter of a word not found yet, and that word lights up in the list.
   function hint() {
-    if (!game || isSolved()) return;
+    if (!game || game.sample || isSolved()) return;
     const left = game.words.map((_, i) => i).filter((i) => !game.found.some((f) => f.i === i));
     const i = left[Math.floor(Math.random() * left.length)], w = game.words[i];
     game.hints++;
@@ -544,7 +610,7 @@ function mount(root, opts = {}) {
       s.played++;
       s.total += t;
       if (!s.best || t < s.best) s.best = t;
-      d[panel ? "panelGame" : "game"] = game;
+      keep(d);
     }).stats;
     [0, 2, 4, 6].forEach((k, j) => tone(data.mute, SCALE[k], j * 0.09, 0.7, 0.06));
     if (!reducedMotion()) { lettersEl.classList.remove("ws-enter", "ws-wave"); void lettersEl.offsetWidth; lettersEl.classList.add("ws-wave"); }
@@ -553,6 +619,7 @@ function mount(root, opts = {}) {
 
   // ---- cards: language, stats, solved, messages ----
   function openOverlay(build, closable = true) {
+    closeMenu(false);
     stopClock();
     dropOverlay();
     overlay = el("div", "ws-overlay");
@@ -588,29 +655,86 @@ function mount(root, opts = {}) {
         b.onclick = () => newGame(retry);
         box.append(b);
         const other = el("button", "ws-link", "Pick another language");
-        other.onclick = () => pickLanguage(false);
+        other.onclick = () => { dropOverlay(); openMenu(); };
         box.append(other);
       }
     }, false);
   }
 
-  function pickLanguage(first) {
-    openOverlay((box) => {
-      box.append(el("h2", null, first ? "Choose a language" : "Language"));
-      box.append(el("p", null, first ? "Puzzles use words in this language. You can change it any time." : "Starts a new puzzle in that language."));
-      const list = el("div", "ws-langs");
-      for (const [code, name] of LANGS) {
-        const b = el("button", code === (game?.lang || data.lang) ? "ws-cur" : null);
-        b.lang = code;
-        b.textContent = name;
-        b.onclick = () => (game && code === game.lang && !isSolved() ? closeOverlay() : newGame(code));
-        list.append(b);
+  // ---- languages: a list dropping from the language button, searchable by either name ----
+  function openMenu() {
+    stopClock();
+    menu = el("div", "ws-menu");
+    const search = el("input", "ws-search");
+    Object.assign(search, { type: "search", placeholder: "Search languages", spellcheck: false, autocomplete: "off" });
+    search.setAttribute("aria-label", "Search languages");
+    const list = el("div", "ws-options");
+    list.setAttribute("role", "listbox");
+    list.setAttribute("aria-label", "Languages");
+    const none = el("p", "ws-none", "No language matches");
+    none.hidden = true;
+    const cur = game && !game.sample ? game.lang : data.lang;
+    const fold = (t) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+    const items = LANGS.map(([code, name]) => {
+      const en = english?.of(code);
+      const b = el("button", code === cur ? "ws-cur" : null);
+      b.setAttribute("role", "option");
+      b.setAttribute("aria-selected", String(code === cur));
+      const native = el("span");
+      native.lang = code;
+      native.textContent = name;
+      b.append(native);
+      if (en && en !== name) b.append(Object.assign(el("small"), { textContent: en }));
+      b.dataset.code = code;
+      b.dataset.find = fold(`${name} ${en || ""} ${code}`);
+      b.onclick = () => pick(code);
+      list.append(b);
+      return b;
+    });
+    search.oninput = () => {
+      const q = fold(search.value.trim());
+      for (const b of items) b.hidden = !!q && !b.dataset.find.includes(q);
+      none.hidden = items.some((b) => !b.hidden);
+    };
+    menu.addEventListener("keydown", (e) => {
+      const shown = items.filter((b) => !b.hidden), at = shown.indexOf(document.activeElement);
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const next = at + (e.key === "ArrowDown" ? 1 : -1);
+        (next < 0 ? search : shown[Math.min(next, shown.length - 1)])?.focus();
+      } else if (e.key === "Enter" && e.target === search && shown.length) {
+        e.preventDefault();
+        pick(shown[0].dataset.code);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        closeMenu();
+        langBtn.focus();
       }
-      box.append(list);
-      box.querySelector(".ws-cur")?.scrollIntoView({ block: "center" });
-    }, !first);
+    });
+    menu.append(search, list, none);
+    bar.append(menu);
+    langBtn.setAttribute("aria-expanded", "true");
+    const curBtn = list.querySelector(".ws-cur");
+    if (curBtn) list.scrollTop = curBtn.offsetTop - (list.clientHeight - curBtn.offsetHeight) / 2;
+    search.focus({ preventScroll: true });
   }
-  langBtn.onclick = () => pickLanguage(false);
+  function closeMenu(resume = true) {
+    if (!menu) return;
+    menu.remove();
+    menu = null;
+    langBtn.setAttribute("aria-expanded", "false");
+    if (resume) startClock();
+  }
+  function pick(code) {
+    closeMenu(false);
+    if (game && !game.sample && code === game.lang && !isSolved()) return startClock();
+    newGame(code);
+  }
+  langBtn.setAttribute("aria-haspopup", "listbox");
+  langBtn.setAttribute("aria-expanded", "false");
+  langBtn.onclick = () => (menu ? closeMenu() : openMenu());
+  document.addEventListener("pointerdown", (e) => { if (menu && !menu.contains(e.target) && !langBtn.contains(e.target)) closeMenu(); }, true);
 
   function showStats() {
     data.stats = load().stats;
@@ -651,15 +775,15 @@ function mount(root, opts = {}) {
 
   // ---- start ----
   updateBar();
-  const g = panel ? data.panelGame : data.game;
-  if (g && LANGS.some((l) => l[0] === g.lang) && g.level === level() && g.grid?.length === LEVELS[g.level].size) { game = g; render(true); }
+  const g = panel ? data.panelGame : data.games[level()];
+  if (usable(g, level())) { game = g; render(true); }
   else if (data.lang) newGame();
-  else pickLanguage(true);
+  else showSample();
 
   // The panel asked for another level in this tab.
   if (!panel) addEventListener("hashchange", () => {
     const id = location.hash.slice(1);
-    if (LEVELS[id] && id !== data.level) { persist((d) => { d.level = data.level = id; }); newGame(); }
+    if (LEVELS[id] && id !== data.level) switchLevel(id);
   });
 
 }

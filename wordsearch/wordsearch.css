@@ -8,7 +8,7 @@
 :where(.ws) button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
 :where(.ws) button:focus-visible { outline: 1.5px solid var(--stroke); outline-offset: 2px; }
 
-.ws-bar { display: flex; align-items: center; gap: 2px; }
+.ws-bar { position: relative; display: flex; align-items: center; gap: 2px; }
 .ws-grow { flex: 1; }
 .ws-lang { height: 32px; padding: 0 12px 0 9px; display: inline-flex; align-items: center; gap: 7px; border-radius: 16px; background: var(--field);
   font-weight: 600; max-width: 60%; }
@@ -17,6 +17,7 @@
 .ws-lang svg { width: 16px; height: 16px; color: var(--text2); }
 .ws-timer { min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 14px; color: var(--text2); }
 .ws-timer.ws-done { color: var(--green); }
+.ws-timer.ws-paused { opacity: .45; }
 .ws-ib { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; color: var(--text2); }
 .ws-ib:hover { background: var(--hover); color: var(--text); }
 
@@ -61,15 +62,42 @@
 .ws:not(.ws-panel) .ws-credit { width: 100%; max-width: max(320px, var(--ws-span, 520px)); align-self: center; }
 
 /* Its own tab: as big as the window, the list beside the grid when there's room. */
-.ws:not(.ws-panel) { height: 100%; }
+.ws:not(.ws-panel) { height: 100%; justify-content: center; }
 .ws:not(.ws-panel) .ws-bar, .ws:not(.ws-panel) .ws-seg { width: 100%; max-width: max(320px, var(--ws-span, 520px)); align-self: center; }
-.ws:not(.ws-panel) .ws-play { flex: 1; min-height: 0; justify-content: center; }
+.ws:not(.ws-panel) .ws-play { justify-content: center; }
 .ws:not(.ws-panel) .ws-word { font-size: 16px; }
+.ws:not(.ws-panel) .ws-words { overflow-y: auto; }
 .ws-play.ws-wide { flex-direction: row; gap: 36px; }
-.ws-play.ws-wide .ws-words { flex-direction: column; flex-wrap: nowrap; align-items: flex-start; width: 200px; max-height: 100%; overflow-y: auto; gap: 9px; }
+.ws-play.ws-wide .ws-words { flex-direction: column; flex-wrap: nowrap; justify-content: flex-start; align-items: flex-start; width: 200px; gap: 9px; }
 .ws-play.ws-wide .ws-left { text-align: start; }
 
-/* Cards over the game: language, stats, solved */
+/* The language list, dropping from its button over the game */
+.ws-menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 6; width: min(100%, 270px); max-height: 320px; display: flex; flex-direction: column;
+  padding: 6px; border-radius: 14px; background: var(--ws-card); border: 1px solid var(--divider); box-shadow: 0 16px 44px rgba(0,0,0,.35);
+  transform-origin: top left; animation: ws-drop .22s cubic-bezier(.2,.9,.3,1.15); }
+.ws:not(.ws-panel) .ws-menu { width: 300px; max-height: min(460px, 70vh); }
+@keyframes ws-drop { from { opacity: 0; transform: translateY(-6px) scale(.97); } }
+.ws-search { flex: none; height: 34px; margin-bottom: 4px; padding: 0 10px; border: 0; border-radius: 9px; background: var(--field); color: var(--text);
+  font: inherit; outline: none; }
+.ws-search:focus-visible { box-shadow: inset 0 0 0 1.5px var(--stroke); }
+.ws-search::placeholder { color: var(--text3); }
+.ws-search::-webkit-search-cancel-button { display: none; }
+.ws-options { position: relative; flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
+.ws-options button { flex: none; display: flex; align-items: baseline; gap: 8px; padding: 7px 10px; border-radius: 8px; text-align: start; }
+.ws-options button[hidden] { display: none; }
+.ws-options button:hover, .ws-options button:focus-visible { background: var(--hover); outline: none; }
+.ws-options span { font-weight: 600; }
+.ws-options small { margin-inline-start: auto; color: var(--text3); font-size: 11px; white-space: nowrap; }
+.ws-options button.ws-cur { box-shadow: inset 0 0 0 1.5px var(--green); }
+.ws-none { margin: 0; padding: 10px; color: var(--text3); text-align: center; }
+
+/* Before a language is picked: everything but the language button, dimmed and out of reach */
+.ws-preview .ws-seg, .ws-preview .ws-play, .ws-preview .ws-credit, .ws-preview .ws-timer, .ws-preview .ws-ib { opacity: .1; user-select: none; -webkit-user-select: none; }
+.ws-preview .ws-lang { color: var(--text); box-shadow: inset 0 0 0 1.5px var(--green); animation: ws-call 2.4s ease-in-out infinite; }
+.ws-preview .ws-lang svg { color: var(--green); }
+@keyframes ws-call { 50% { box-shadow: inset 0 0 0 1.5px var(--green), 0 0 0 5px color-mix(in srgb, var(--green) 18%, transparent); } }
+
+/* Cards over the game: stats, solved, messages */
 .ws-overlay { position: absolute; inset: -6px; z-index: 5; display: grid; place-items: center; padding: 10px; border-radius: 16px;
   background: color-mix(in srgb, var(--bg) 60%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: ws-fade .25s; }
 .ws:not(.ws-panel) .ws-overlay { position: fixed; inset: 0; border-radius: 0; }
@@ -82,11 +110,6 @@
 .ws-box h2 { margin: 0; font-size: 16px; font-weight: 700; }
 .ws-box p { margin: 0; color: var(--text2); }
 .ws-x { position: absolute; top: 8px; right: 8px; }
-.ws-langs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; width: 100%; }
-.ws-langs button { padding: 9px 10px; border-radius: 10px; background: var(--field); font-weight: 600; text-align: start; transition: background-color .2s, transform .15s; }
-.ws-langs button:hover { background: var(--hover); }
-.ws-langs button:active { transform: scale(.97); }
-.ws-langs button.ws-cur { box-shadow: inset 0 0 0 1.5px var(--green); }
 .ws-big { font-size: 38px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
 .ws-box .ws-best { color: var(--yellow); font-weight: 600; }
 .ws-btn { height: 40px; padding: 0 20px; border-radius: 20px; background: var(--text); color: var(--bg); font-weight: 700;
@@ -101,5 +124,5 @@
 .ws-stats tr + tr td { border-top: 1px solid var(--divider); }
 
 @media (prefers-reduced-motion: reduce) {
-  .ws-letters.ws-enter span, .ws-letters.ws-wave span, .ws-marks line.ws-pop, .ws-overlay, .ws-box { animation: none; }
+  .ws-letters.ws-enter span, .ws-letters.ws-wave span, .ws-marks line.ws-pop, .ws-overlay, .ws-box, .ws-menu, .ws-preview .ws-lang { animation: none; }
 }
