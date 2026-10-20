@@ -382,7 +382,7 @@ function tidy(s) {
     phase: s.phase, round: s.round, level: s.level, total: int(s.total),
     lang: api.room.hasLang(s.lang) ? s.lang : null,
     players: s.players.filter((p) => p && typeof p.pid === "string").map((p) => ({
-      pid: p.pid.slice(0, 24), name: clean(p.name, NAME_MAX) || "Player", host: !!p.host, st: STATES[p.st] ? p.st : "direct",
+      pid: p.pid.slice(0, 24), name: clean(p.name, NAME_MAX + 5) || "Player", host: !!p.host, st: STATES[p.st] ? p.st : "direct",
       n: int(p.n), ms: Number.isFinite(p.ms) && p.ms >= 0 ? p.ms : null, spect: !!p.spect,
     })),
   };
@@ -397,14 +397,12 @@ function validPuzzle(p) {
 }
 // The host's word: a state where this device's round ended, or a new lobby.
 function onState() {
-  const p = view.players.find((x) => x.pid === me.pid);
   if (mine.playing && (view.phase === "done" || view.round !== mine.round)) {
     mine.playing = false;
     stopCountdown();
     api.room.freeze();
   }
   if (view.phase === "lobby" && mine.round && !mine.playing) backToLobby();
-  if (p && p.name !== me.name && !editing) me.name = p.name;
   api.room.refresh();
   paint();
 }
@@ -481,13 +479,14 @@ function hostData(from, d) {
         if (racing && p.ms == null) p.spect = true;
       }
       p.left = false;
-      p.name = name;
+      named(p, name);
       p.heard = Date.now();
     } else {
       if (H.players.size >= Beam.maxDevices + 1) return;
       p = { pid: d.pid, name, link: from, st: "direct", n: 0, ms: null, spect: racing, left: false, heard: Date.now() };
+      named(p, name);
       H.players.set(d.pid, p);
-      sys(`${name} joined`);
+      sys(`${p.name} joined`);
     }
     H.byLink.set(from, d.pid);
     beam.send(from, { t: "hist", lines: lines.filter((l) => !l.local).slice(-CHAT_KEEP) });
@@ -502,7 +501,7 @@ function hostData(from, d) {
   if (p.away) hostPeers(beam.info());
   switch (d.t) {
     case "ping": caughtUp(p, d); break;
-    case "name": { const n = clean(d.name, NAME_MAX); if (n) { p.name = n; sync(); } break; }
+    case "name": { const n = clean(d.name, NAME_MAX); if (n) { named(p, n); sync(); } break; }
     case "chat": { const text = clean(d.text, CHAT_MAX); if (text) post({ pid: p.pid, name: p.name, text }); break; }
     case "found": hostFound(p.pid, d.round, d.n); break;
     case "done": hostDone(p.pid, d.round, d.ms); break;
@@ -516,6 +515,13 @@ function caughtUp(p, d) {
     if (Number.isFinite(d.ms) && p.ms == null) hostDone(p.pid, d.round, d.ms);
     else if (Number.isInteger(d.n) && d.n > p.n) hostFound(p.pid, d.round, d.n);
   } else if (H.puzzle && p.link && !(Number.isInteger(d.round) && d.round > H.round)) beam.send(p.link, { t: "start", round: H.round, puzzle: H.puzzle });
+}
+// Two players with the same name are told apart by a number, as in Beam's list of devices.
+function named(p, want) {
+  const taken = new Set([...H.players.values()].filter((o) => o.pid !== p.pid && !o.left).map((o) => o.name));
+  let name = want;
+  for (let k = 2; taken.has(name); k++) name = `${want} (${k})`;
+  p.name = name;
 }
 function hostFound(pid, round, n) {
   const p = H?.players.get(pid);
@@ -665,7 +671,7 @@ function setName(v, quiet) {
   store(localStorage, NAME_KEY, name);
   me.name = name || defaultName();
   if (quiet || !beam) return;
-  if (hosting) { const p = H?.players.get(me.pid); if (p) { p.name = me.name; sync(); } }
+  if (hosting) { const p = H?.players.get(me.pid); if (p) { named(p, me.name); sync(); } }
   else beam.send("hub", { t: "name", name: me.name });
   paint();
 }
