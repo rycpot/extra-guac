@@ -59,6 +59,7 @@ const ICON = {
   stop: '<svg viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2.5"/></svg>',
   open: '<svg viewBox="0 0 24 24"><path d="M14 4.5h5.5V10M19.5 4.5l-8 8M17 14v5.5H4.5V7H10"/></svg>',
   play: '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg>',
+  people: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><circle cx="16.5" cy="9.5" r="2.4"/><path d="M15.8 14.1A4.6 4.6 0 0 1 20.5 18.5"/></svg>',
 };
 const SVG = "http://www.w3.org/2000/svg";
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -230,7 +231,9 @@ let english = null;
 try { english = new Intl.DisplayNames(["en"], { type: "language" }); } catch {}
 
 // ---- the game ---------------------------------------------------------------------------
-// opts.panel: the side panel's version (Easy only); opts.onOpenTab(level): open the game's own tab.
+// opts.panel: the side panel's version (Easy only); opts.onOpenTab(level): open the game's own tab;
+// opts.onRoom(button): Play with others (the tab only, wordsearch/room.js). mount() returns what
+// a room needs to play a shared puzzle here (api.room).
 function mount(root, opts = {}) {
   const panel = !!opts.panel;
   const data = load();
@@ -257,7 +260,10 @@ function mount(root, opts = {}) {
     soundBtn.innerHTML = ICON[data.mute ? "soundOff" : "soundOn"];
   });
   const hintBtn = ib("bulb", "Hint", hint);
-  const tools = [hintBtn, ib("chart", "Stats", showStats), soundBtn];
+  const statsBtn = ib("chart", "Stats", showStats);
+  const roomBtn = !panel && opts.onRoom ? ib("people", "Play with others", () => opts.onRoom(roomBtn)) : null;
+  roomBtn?.classList.add("ws-roombtn");
+  const tools = [roomBtn, hintBtn, statsBtn, soundBtn].filter(Boolean);
   // The two ways out of the puzzle: Stop, and New game (which asks for a level).
   const stopBtn = ib("stop", "Stop", stop);
   stopBtn.className = "ws-stop";
@@ -293,16 +299,19 @@ function mount(root, opts = {}) {
 
   let game = null, cells = [], chips = [], startedAt = 0, ticking = null, overlay = null, menu = null, visible = true, lastSave = 0;
   let idle = false, lastActive = 0, ready = false;
-  const level = () => (panel ? "easy" : data.level);
+  // In a room (room.js): its hooks, and the puzzle everyone in it plays.
+  let room = null;
+  const level = () => (room ? room.level() : panel ? "easy" : data.level);
   // The tab's address names the level played (#new-<level> is the panel asking for a new game).
-  const markLevel = () => { if (!panel) history.replaceState(null, "", `#${game && !game.sample ? game.level : data.level}`); };
+  const markLevel = () => { if (!panel && !room) history.replaceState(null, "", `#${game && !game.sample ? game.level : data.level}`); };
   const done = (g) => g.found.length === g.words.length;
   const isSolved = () => game && done(game);
 
   function updateBar() {
     markLevel();
-    const lang = game && !game.sample ? game.lang : data.lang;
+    const lang = room ? room.lang() : game && !game.sample ? game.lang : data.lang;
     const name = lang ? langName(lang) : "Choose a language";
+    langBtn.inert = !!room && !room.canPick();
     langBtn.innerHTML = `${ICON.globe}${lang ? `<span class="ws-code">${lang.toUpperCase()}</span>` : ""}<span class="ws-name">${name}</span>`;
     langBtn.title = lang ? `Language: ${name}` : "Language";
     const lv = LEVELS[game && !game.sample ? game.level : level()];
@@ -349,7 +358,7 @@ function mount(root, opts = {}) {
   }
   // One puzzle at a time: the panel's (Easy) and the tab's.
   const keep = (d) => { if (panel) d.panelGame = game; else d.game = game; };
-  const saveGame = () => { if (game && !game.sample) persist(keep); };
+  const saveGame = () => { if (game && !game.sample && !room) persist(keep); };
   // A kept puzzle worth going back to: unfinished, and still the shape its level has.
   const usable = (g) => g && LANGS.some((l) => l[0] === g.lang) && LEVELS[g.level] && (!panel || g.level === "easy") &&
     g.grid?.length === LEVELS[g.level].size && !done(g);
@@ -374,14 +383,15 @@ function mount(root, opts = {}) {
   function setState() {
     const sample = !!game.sample, first = sample && !data.lang;
     const waiting = !ready && !sample && !isSolved();
-    root.classList.toggle("ws-preview", sample);
-    root.classList.toggle("ws-first", first);
+    root.classList.toggle("ws-preview", sample && !room);
+    root.classList.toggle("ws-first", first && !room);
     root.classList.toggle("ws-waiting", waiting);
-    for (const n of [clock, stopBtn, newBtn, card, wordsEl, credit, ...tools]) n.inert = sample;
+    // In a room's lobby the strip stays usable: only the sample under the lobby card is out of reach.
+    for (const n of [clock, stopBtn, newBtn, card, wordsEl, credit, ...tools]) n.inert = sample && n !== roomBtn && (!room || n === card || n === wordsEl);
     gridEl.inert = waiting;
     if (!sample) wordsEl.inert = waiting;
     hintBtn.inert = waiting || sample;
-    start.hidden = first || !(sample || waiting);
+    start.hidden = !!room || first || !(sample || waiting);
     const begun = !sample && (game.elapsed >= 1000 || game.found.length > 0);
     startBtn.innerHTML = `${ICON.play}${begun ? `Resume · ${fmt(game.elapsed)}` : "Start"}`;
     fit();
@@ -461,7 +471,9 @@ function mount(root, opts = {}) {
     let size = root.clientWidth - pad;
     if (!panel) {
       const gap = (n) => parseFloat(getComputedStyle(n).rowGap) || 0;
-      const H = root.clientHeight - bar.offsetHeight - credit.offsetHeight - 2 * gap(root) - Math.max(parseFloat(getComputedStyle(wordsEl).minHeight), wordsEl.offsetHeight) - gap(play);
+      // A room's players strip (narrow windows) sits between the strip and the puzzle.
+      const extra = [...root.querySelectorAll(":scope > .ws-extra")].reduce((h, n) => h + (n.offsetHeight ? n.offsetHeight + gap(root) : 0), 0);
+      const H = root.clientHeight - bar.offsetHeight - credit.offsetHeight - 2 * gap(root) - extra - Math.max(parseFloat(getComputedStyle(wordsEl).minHeight), wordsEl.offsetHeight) - gap(play);
       size = Math.min(TAB_CARD, size + pad, H) - pad;
     }
     size = Math.max(180, Math.floor(size));
@@ -470,20 +482,23 @@ function mount(root, opts = {}) {
     gridEl.style.width = gridEl.style.height = `${size}px`;
     root.style.setProperty("--cell", `${size / game.n}px`);
     start.style.height = `${size + pad}px`;
+    root.style.setProperty("--ws-card-h", `${size + pad}px`);
   }
   new ResizeObserver(layout).observe(root);
 
   // ---- clock: runs only while the puzzle is on screen ----
+  // In a room the clock is the race's: it runs from the start to the last word, whatever the tab does.
   function startClock() {
     stopClock();
-    if (!game || game.sample || !ready || isSolved() || document.hidden || overlay || menu || !visible) return;
+    if (!game || game.sample || !ready || isSolved()) return;
+    if (!room && (document.hidden || overlay || menu || !visible)) return;
     setIdle(false);
     startedAt = performance.now() - game.elapsed;
     lastActive = performance.now();
     ticking = setInterval(() => {
       tick();
       // The minute nobody touched it doesn't count.
-      if (performance.now() - lastActive > IDLE_MS) { stopClock(); game.elapsed = lastActive - startedAt; timerEl.textContent = fmt(game.elapsed); saveGame(); setIdle(true); }
+      if (!room && performance.now() - lastActive > IDLE_MS) { stopClock(); game.elapsed = lastActive - startedAt; timerEl.textContent = fmt(game.elapsed); saveGame(); setIdle(true); }
     }, 250);
   }
   function tick() {
@@ -507,8 +522,8 @@ function mount(root, opts = {}) {
   for (const type of ["pointerdown", "pointermove", "keydown", "wheel"]) {
     root.addEventListener(type, () => { lastActive = performance.now(); if (idle) startClock(); }, { capture: true, passive: true });
   }
-  document.addEventListener("visibilitychange", () => (document.hidden ? stopClock() : startClock()));
-  new IntersectionObserver(([e]) => { visible = e.isIntersecting; visible ? startClock() : stopClock(); }).observe(gridEl);
+  document.addEventListener("visibilitychange", () => { if (!room) document.hidden ? stopClock() : startClock(); });
+  new IntersectionObserver(([e]) => { visible = e.isIntersecting; if (!room) visible ? startClock() : stopClock(); }).observe(gridEl);
   addEventListener("pagehide", () => { if (ticking) { tick(); saveGame(); } });
 
   // ---- selecting ----
@@ -614,6 +629,7 @@ function mount(root, opts = {}) {
     tone(data.mute, note, 0, 0.55);
     tone(data.mute, note * 1.5, 0.06, 0.5, 0.04);
     try { navigator.vibrate?.(12); } catch {}
+    room?.onFound(game.found.length);
     if (isSolved()) solved(); else saveGame();
   }
 
@@ -648,6 +664,12 @@ function mount(root, opts = {}) {
     stopClock();
     timerEl.classList.add("ws-done");
     const t = Math.round(game.elapsed);
+    // A race's times are the room's (its results), not this device's stats.
+    if (room) {
+      [0, 2, 4, 6].forEach((k, j) => tone(data.mute, SCALE[k], j * 0.09, 0.7, 0.06));
+      if (!reducedMotion()) { lettersEl.classList.remove("ws-enter", "ws-wave"); void lettersEl.offsetWidth; lettersEl.classList.add("ws-wave"); }
+      return room.onSolved(t);
+    }
     data.stats = persist((d) => {
       const s = (d.stats[game.level] ||= { played: 0, total: 0, best: 0 });
       game.record = s.played > 0 && t < s.best;
@@ -772,6 +794,7 @@ function mount(root, opts = {}) {
   }
   function pick(code) {
     closeMenu(false);
+    if (room) return room.onLang(code);
     if (game && !game.sample && code === game.lang && !isSolved()) return startClock();
     newGame(code);
   }
@@ -830,7 +853,7 @@ function mount(root, opts = {}) {
   // opening. Without a language yet, the level is kept for the first puzzle.
   function takeAsk(hash = location.hash) {
     const m = /^#new-([a-z]+)/.exec(hash), id = m && LEVELS[m[1]] ? m[1] : null;
-    if (panel || !id) return false;
+    if (panel || !id || room) return false;
     if (id !== data.level) persist((d) => { d.level = data.level = id; });
     if (load().lang) newGame(undefined, true, id);
     else { if (game) stop(); else showSample(); }
@@ -847,6 +870,70 @@ function mount(root, opts = {}) {
   if (!panel) addEventListener("hashchange", () => takeAsk());
   document.fonts?.ready.then(fit);       // the strip measured again in its own font
 
+  // ---- a room (room.js): one puzzle for everyone, its clock from the countdown's end ----
+  // hooks: lang(), level(), canPick(), onLang(code), onFound(n), onSolved(ms); nodes: the room's
+  // own parts of the strip (start: before the tools, end: after them) and of the credit line.
+  function enterRoom(hooks, nodes) {
+    stopClock();
+    clearAnchor();
+    closeMenu(false);
+    dropOverlay();
+    pending = null;
+    room = hooks;
+    root.classList.add("ws-in-room");
+    for (const b of [roomBtn, hintBtn, statsBtn, stopBtn, newBtn]) b.hidden = true;
+    bar.insertBefore(nodes.start, tools[0]);
+    bar.append(nodes.end);
+    credit.append(nodes.credit);
+    showSample();
+  }
+  function exitRoom(nodes) {
+    if (!room) return;
+    stopClock(false);
+    room = null;
+    root.classList.remove("ws-in-room", "ws-lobby");
+    for (const b of [roomBtn, hintBtn, statsBtn, stopBtn, newBtn]) b.hidden = false;
+    for (const n of Object.values(nodes)) n.remove();
+    ready = false;
+    const g = data.game = load().game;
+    if (usable(g)) { game = g; render(true); }
+    else showSample();
+  }
+  return {
+    room: {
+      enter: enterRoom,
+      exit: exitRoom,
+      stage: play,
+      langName,
+      hasLang: (code) => LANGS.some((l) => l[0] === code),
+      levels: LEVELS,
+      // The host's puzzle: a new one in that language and level (the words downloaded if needed).
+      async make(lang, id) {
+        const words = await wordsFor(lang);
+        const g = generate(words, lang, id);
+        return { lang, level: id, n: g.n, grid: g.grid, words: g.words };
+      },
+      // A puzzle from the room, dimmed until go(); sample: back to the dimmed sample (the lobby).
+      load(p) {
+        stopClock(false);
+        clearAnchor();
+        closeMenu(false);
+        ready = false;
+        game = { lang: p.lang, level: p.level, n: p.n, grid: p.grid, words: p.words, found: [], elapsed: 0, hints: 0 };
+        render(true);
+      },
+      sample() { stopClock(false); clearAnchor(); ready = false; showSample(); },
+      go() { ready = true; setState(); startClock(); },
+      // The puzzle can't be played any more (the round ended): it stays on screen, out of reach.
+      freeze() { stopClock(); clearAnchor(); gridEl.inert = true; },
+      elapsed: () => game?.elapsed || 0,
+      // The language and level picked last, which the host's room starts with and keeps.
+      prefs: () => { const d = load(); return { lang: d.lang, level: d.level }; },
+      savePrefs(p) { persist((d) => { if (p.lang) d.lang = data.lang = p.lang; if (LEVELS[p.level]) d.level = data.level = p.level; }); },
+      refresh: updateBar,
+      relayout: layout,
+    },
+  };
 }
 
 globalThis.WordSearch = { mount };

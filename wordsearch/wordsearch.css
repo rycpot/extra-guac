@@ -11,6 +11,7 @@
 /* The strip: language | level and time | hint, stats, sound | Stop, New game */
 .ws-bar { position: relative; display: flex; align-items: center; gap: 1px; height: 44px; padding: 0 5px; border-radius: 22px; background: var(--row);
   border: 1px solid var(--divider); }
+.ws-bar [hidden] { display: none !important; }
 .ws-sep { flex: none; width: 1px; height: 18px; margin: 0 4px; background: var(--divider); }
 .ws-grow { flex: 1; }
 .ws-lang { flex: none; height: 32px; padding: 0 10px 0 8px; display: inline-flex; align-items: center; gap: 7px; border-radius: 16px; font-weight: 600; }

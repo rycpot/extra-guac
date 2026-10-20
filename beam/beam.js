@@ -34,7 +34,7 @@ const ICON_GAUGE = '<svg class="beam-gauge" viewBox="16 16 480 480" aria-hidden=
 // The version mark's icon: a green dome with two eyes and two antennae.
 const ICON_DROID = '<svg class="beam-droid" viewBox="0 0 24 15" aria-hidden="true"><path d="M7.2 5.2 5 2M16.8 5.2 19 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M2.2 13.6a9.8 9.8 0 0 1 19.6 0Z" fill="#4caf50" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="8.3" cy="9.6" r="1.25" fill="#16210f"/><circle cx="15.7" cy="9.6" r="1.25" fill="#16210f"/></svg>'
 const VERSION = IS_EXTENSION ? chrome.runtime.getManifest().version : RELEASE
-const APP = 'egbeam4'                  // also the protocol version: devices on different versions don't pair
+const BEAM_APP = 'egbeam4'             // also the protocol version: devices on different versions don't pair
 const PIPE_SERVERS = ['https://piping.onrender.com', 'https://ppng.io']
 // How devices find a direct path: two STUN servers (each tells a device its public address; the
 // browser asks both at once, so either answering is enough) and two TURN fallbacks for networks
@@ -198,8 +198,26 @@ function markup(preview) {
   ${preview ? `<div class="beam-preview-cover"><p>Beam needs to stay open while files are sent, and this popup closes when you click elsewhere.</p><button type="button" class="beam-btn primary" id="beam-openTab">Open Beam in a tab</button></div>` : ''}`
 }
 
+function deviceName() {
+  const ua = navigator.userAgent
+  // An iPad asks for desktop sites as a Mac with a touch screen.
+  const ipad = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1
+  const os = /Android/i.test(ua) ? 'Android' : /iPhone|iPad/i.test(ua) || ipad ? 'iPhone/iPad' : /Mac/i.test(ua) ? 'Mac' : /Windows/i.test(ua) ? 'Windows' : /Linux/i.test(ua) ? 'Linux' : 'Device'
+  // Browsers on iPhones and iPads all say "Safari"; their own names are in the CriOS-style tags.
+  const br = /Edg\/|EdgiOS\//.test(ua) ? 'Edge' : /Firefox\/|FxiOS\//.test(ua) ? 'Firefox' : /OPR\/|OPiOS\//.test(ua) ? 'Opera' : /CriOS\//.test(ua) ? 'Chrome' : /DuckDuckGo\//.test(ua) ? 'DuckDuckGo' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Browser'
+  return os + ' · ' + br
+}
 let mounted = false
+// opts.game: a room for a game (the word search) instead of Beam's own page. The markup is there
+// but hidden, everyone who enters the code is let in (up to MAX_DEVICES), and the game gets its
+// own messages, the room's devices and a word when the room ends; mount() returns the room. It
+// isn't held to one at a time like Beam itself, and can be mounted again after dispose().
 function mount(root, opts = {}) {
+  if (opts.game) {
+    root.hidden = true
+    root.innerHTML = markup(false)
+    return start(root, opts)
+  }
   if (mounted) return
   mounted = true
   root.classList.add('beam')
@@ -280,7 +298,10 @@ function single(root) {
   take(false)
 }
 
-function start(root) {
+function start(root, opts = {}) {
+const GAME = opts.game || null
+// A game's rooms are apart from Beam's: their own codes and relay inboxes.
+const APP = GAME ? GAME.app : BEAM_APP
 const life = new AbortController() // dispose() ends it: the root's listeners and the idle timer go
 // Once disposed, late callbacks (a connection closing, a relay answer) write into a detached
 // element instead of the page, which may now show another Beam or the "open elsewhere" card.
@@ -309,16 +330,11 @@ const fmtTime = ms => {
   const s = Math.round(ms / 1000) // rounded once, so 119.6 s is "2 min 0 s", never "1 min 60 s"
   return Math.floor(s / 60) + ' min ' + (s % 60) + ' s'
 }
-function deviceName() {
-  const ua = navigator.userAgent
-  // An iPad asks for desktop sites as a Mac with a touch screen.
-  const ipad = /Macintosh/.test(ua) && navigator.maxTouchPoints > 1
-  const os = /Android/i.test(ua) ? 'Android' : /iPhone|iPad/i.test(ua) || ipad ? 'iPhone/iPad' : /Mac/i.test(ua) ? 'Mac' : /Windows/i.test(ua) ? 'Windows' : /Linux/i.test(ua) ? 'Linux' : 'Device'
-  // Browsers on iPhones and iPads all say "Safari"; their own names are in the CriOS-style tags.
-  const br = /Edg\/|EdgiOS\//.test(ua) ? 'Edge' : /Firefox\/|FxiOS\//.test(ua) ? 'Firefox' : /OPR\/|OPiOS\//.test(ua) ? 'Opera' : /CriOS\//.test(ua) ? 'Chrome' : /DuckDuckGo\//.test(ua) ? 'DuckDuckGo' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Browser'
-  return os + ' · ' + br
-}
 const myName = deviceName()
+// The name this device goes by in Beam and the word search: the one picked there, or the device's.
+const NAME_KEY = 'eg-name'
+const shownName = () => { try { const n = (localStorage.getItem(NAME_KEY) || '').trim(); if (n) return n.slice(0, 24) } catch (e) {} return myName }
+const TS = GAME ? GAME.app + '-' : 'beam-' // this tab's room, apart from Beam's own
 const randomCode = () => String(crypto.getRandomValues(new Uint32Array(1))[0] % 900000 + 100000)
 const cleanCode = s => (s || '').replace(/\D/g, '').slice(0, 10)
 const validCode = c => /^\d{6,10}$/.test(c)
@@ -334,6 +350,7 @@ const within = (p, ms) => Promise.race([p, sleep(ms).then(() => false)])
 let mode = 'waiting' // 'waiting' | 'connected'
 function setMode(m) {
   mode = m
+  notify()
   paintJoining()
   showUse()
   $('pair').hidden = m !== 'waiting'
@@ -353,7 +370,7 @@ const SOME_RELAY_HINT = 'Devices marked Relay can\'t connect directly on this ne
 const links = new Map() // hub: public key -> link; a device that joined: 'hub' -> link
 let asks = []           // hub: devices waiting for Accept, first come first served
 const declined = new Set()
-let broadcast = false // starts off on every visit, reload included
+let broadcast = !!GAME // starts off on every visit, reload included (always on in a game)
 const isHub = () => intent === 'create'
 const hubLink = () => links.get('hub')
 const present = L => [...links.values()].includes(L)
@@ -378,6 +395,7 @@ function routeOf(L) {
 }
 // The connected card: who's here, how each is reached, and (with several) who gets the next files.
 function renderLinks() {
+  notify()
   if (mode !== 'connected') return
   const list = roomLinks()
   const many = isHub() && list.length > 1
@@ -576,8 +594,8 @@ function setRoom(newCode, how, reclaim) {
   const c = cleanCode(newCode)
   intent = validCode(c) ? (how || 'join') : 'create'
   code = validCode(c) ? c : randomCode()
-  tabStore.set('beam-room', code)
-  tabStore.set('beam-intent', intent)
+  tabStore.set(TS + 'room', code)
+  tabStore.set(TS + 'intent', intent)
   generation++
   closeAllLanes()
   for (const L of links.values()) clearTimeout(L.lostTimer)
@@ -601,12 +619,21 @@ function setRoom(newCode, how, reclaim) {
       const L = hubLink()
       if (gen !== generation || mode !== 'waiting' || (L && L.pub)) return
       leaveJoin()
+      if (startOver('gone')) return
       setRoom('', 'create')
       $('pairStatus').textContent = 'Nobody answered on ' + tried + '. Check the code on the other device and try again, or share this code of yours.'
     }, JOIN_GIVE_UP)
   }
 }
 const JOIN_GIVE_UP = 120000
+// A game's room that can't go on (nobody answered, full, the host left, idle) ends there and
+// tells the game why, rather than moving to a new code as Beam does.
+function startOver(why) {
+  if (!GAME || life.signal.aborted) return !!GAME
+  GAME.onEnd(why)
+  return true
+}
+const notify = () => { if (GAME && !life.signal.aborted) GAME.onChange() }
 // While joining, the code shown is the one being joined, and Cancel goes back to one of this device's own.
 function paintJoining() {
   const joining = intent === 'join' && mode === 'waiting'
@@ -626,6 +653,7 @@ function paintJoining() {
 // icon in the middle, read back before it's shown; a plain one if that can't be drawn.
 let qrRun = 0
 async function drawQR() {
+  if (GAME) return // a game shows its own, for its own page
   const run = ++qrRun, text = roomLink()
   let svg = null
   try {
@@ -767,7 +795,7 @@ function stopScan() {
 function joinScanned(r) {
   stopScan()
   if (r.code === code) { $('pairStatus').textContent = 'That is this device\'s own code. Scan the code on the other device.'; return }
-  if (r.s !== null && r.s !== serverIndex) { serverIndex = r.s; $('pipeServer').value = String(serverIndex); tabStore.set('beam-server', String(serverIndex)) }
+  if (r.s !== null && r.s !== serverIndex) { serverIndex = r.s; $('pipeServer').value = String(serverIndex); tabStore.set(TS + 'server', String(serverIndex)) }
   setRoom(r.code, 'join')
 }
 
@@ -793,7 +821,7 @@ async function sessionFor(pub) {
 }
 // "relay": the relay this device listens on (it may have come from a QR code, or be the default
 // when the code was typed), so the hub answers it there.
-async function helloMsg(t) { await keys; return {t, v: APP, name: myName, pub: myPub, intent, relay: serverIndex} }
+async function helloMsg(t) { await keys; return {t, v: APP, name: shownName(), pub: myPub, intent, relay: serverIndex} }
 
 async function onHello(m, via, gen, conn, base) {
   if (gen !== generation) return
@@ -829,10 +857,13 @@ async function hubHello(m, name, via, gen, conn, base) {
       const why = declined.has(m.pub) ? 'declined' : links.size >= MAX_DEVICES ? 'full' : !broadcast && holding ? 'closed' : ''
       if (why) return turnAway(L, why)
       links.set(m.pub, L)
-      asks.push(L)
-      showAsk()
-      if (mode === 'waiting') $('pairStatus').textContent = 'Someone entered your code'
-      log(name + ' wants to connect')
+      if (GAME) L.letIn = true // a game lets in whoever has the code
+      else {
+        asks.push(L)
+        showAsk()
+        if (mode === 'waiting') $('pairStatus').textContent = 'Someone entered your code'
+        log(name + ' wants to connect')
+      }
     }
   }
   if (relay) L.relay = relay
@@ -846,7 +877,7 @@ async function hubHello(m, name, via, gen, conn, base) {
   // Through the relay the device hasn't heard from the hub yet: say hello back, so it can show
   // who it's waiting for.
   if (via === 'relay' && !L.helloBack) { L.helloBack = true; postHandshake(L, await helloMsg('hello')) }
-  if (L.known) welcome(L) // back after a dropped link
+  if (L.known || L.letIn) { L.letIn = false; welcome(L) } // back after a dropped link, or let straight in
 }
 function turnAway(L, why) {
   declined.add(L.pub) // it asks again only with a new key, which means entering the code again
@@ -917,6 +948,7 @@ function onReject(m, gen) {
   if (gen !== generation || !L || L.known || !forMe(m)) return
   const why = m && m.why
   log(why === 'full' ? 'That room is full' : why === 'closed' ? 'The other device is already connected to another device' : 'The other device declined', true)
+  if (startOver(why === 'full' ? 'full' : 'declined')) return
   setRoom('', 'create')
   $('pairStatus').textContent = why === 'full' ? 'That room already has ' + MAX_DEVICES + ' devices. Here\'s a code of your own to share instead.'
     : why === 'closed' ? 'That device is already connected to another one. Ask them to turn on Broadcast, or share this new code.'
@@ -1103,6 +1135,7 @@ let lastUnavailable = 0
 const hostId = () => APP + '-' + code
 
 function showLaneCount() {
+  notify()
   const n = [...links.values()].reduce((s, L) => s + L.lanes.filter(c => c && c.open).length, 0)
   pillIn($('laneState'), n + ' open', n ? 'good' : 'muted')
 }
@@ -1409,7 +1442,8 @@ function onPeerData(d, gen, c) {
           if (L.path === 'relay' && !L.relayName) showPath(L, 'relay', L.theirRelay)
         }
         break
-      case 'meta': onMeta(L, m); break
+      case 'meta': if (!GAME) onMeta(L, m); break // a game room takes no files
+      case 'g': if (GAME) { markActive(true); GAME.onData(isHub() ? L.pub : 'hub', m.d) } break
       case 'ready': { const f = readyWaiters.get(m.id); if (f) f(true); break }
       case 'ack': { const f = peerAcks.get(m.id); if (f) f(true); break }
       case 'prog': { const o = outgoingPipe.get(m.id); if (o) o.progress(m.n); break } // a relay file's progress, told over the direct link
@@ -1780,7 +1814,8 @@ function handleControl(msg, gen, from, base) {
   // Everything else must come sealed with the key only that device and this one have, after accepting.
   const L = from
   if (!L || !L.accepted) return
-  if (msg.t === 'offer') return onOffer(L, msg)
+  if (msg.t === 'offer') return GAME ? undefined : onOffer(L, msg)
+  if (msg.t === 'g') { if (GAME) { markActive(true); GAME.onData(isHub() ? L.pub : 'hub', msg.d) } return }
   if (msg.t === 'active') return markActive(true)
   if (msg.t === 'accept') { const f = acceptWaiters.get(msg.id); if (f) f(true) }
   if (msg.t === 'ack') { const f = ackWaiters.get(msg.id); if (f) f(true) }
@@ -2179,6 +2214,7 @@ async function endSession(reason) {
     for (const L of links.values()) sayBye(L)
     await sleep(300) // let the goodbye leave before the connection closes
     log(reason || 'Disconnected')
+    if (startOver('idle')) return
     setRoom('', 'create')
     $('pairStatus').textContent = (reason || 'Disconnected') + '. Share this new code to connect again.'
   } finally { ending = false }
@@ -2187,6 +2223,7 @@ async function endSession(reason) {
 function onBye() {
   for (const x of [...activeX]) stopXfer(x, 'Stopped: the other device disconnected')
   log('The other device ended the connection')
+  if (startOver('bye')) return
   setRoom('', 'create')
   $('pairStatus').textContent = 'The other device disconnected. Share this new code to connect again.'
 }
@@ -2210,7 +2247,8 @@ function markActive(fromOther) {
     }
   }
 }
-;['pointerdown', 'keydown', 'dragenter'].forEach(ev => root.addEventListener(ev, () => markActive(), {passive: true, signal: life.signal}))
+// A game room's markup stays hidden, so the game page's own input counts.
+;['pointerdown', 'keydown', 'dragenter'].forEach(ev => (GAME ? document : root).addEventListener(ev, () => markActive(), {passive: true, signal: life.signal}))
 $('stayBtn').addEventListener('click', () => markActive())
 const idleTimer = setInterval(() => {
   if (mode === 'waiting') { lastActivity = Date.now(); $('idleWarn').hidden = true; return }
@@ -2286,18 +2324,18 @@ $('turnVia').addEventListener('change', () => {
 })
 $('pipeServer').addEventListener('change', () => {
   serverIndex = parseInt($('pipeServer').value, 10) || 0
-  tabStore.set('beam-server', String(serverIndex))
+  tabStore.set(TS + 'server', String(serverIndex))
   drawQR(); resetPipeState(); startPipe(generation)
   // A device that joined tells the hub, through the new relay, to answer it there from now on.
   const H = hubLink()
   if (H && H.known) sendHelloByRelay(generation)
   dbg('Relay server changed to ' + PIPE_SERVERS[serverIndex].replace('https://', '') + (isHub() ? '. Devices that scan the QR code from now on use it.' : '.'))
 })
-if (!IS_EXTENSION) window.addEventListener('hashchange', () => {
+if (!IS_EXTENSION && !GAME) window.addEventListener('hashchange', () => {
   // A QR link opened in an existing tab: take its room and server, then clean the address bar.
   const h = parseHash()
   cleanAddressBar()
-  if (h.s !== null && h.s !== serverIndex) { serverIndex = h.s; $('pipeServer').value = String(serverIndex); tabStore.set('beam-server', String(serverIndex)) }
+  if (h.s !== null && h.s !== serverIndex) { serverIndex = h.s; $('pipeServer').value = String(serverIndex); tabStore.set(TS + 'server', String(serverIndex)) }
   if (validCode(h.code) && h.code !== code) setRoom(h.code, 'join')
   else { drawQR(); resetPipeState(); startPipe(generation) }
 })
@@ -2311,18 +2349,24 @@ for (const [toggle, box] of [['qrToggle', 'qrBox'], ['qrToggle2', 'qrBox2']]) $(
   $(toggle).setAttribute('aria-expanded', String(show))
   $(toggle).querySelector('span').textContent = show ? 'Hide QR code' : 'Show QR code'
 })
-const h = parseHash()
-const savedServer = parseInt(tabStore.get('beam-server'), 10)
+// A game's page keeps its own address: its room comes from the game (a code to join, or this tab's
+// room again after a reload).
+const h = GAME ? {code: '', s: Number.isInteger(GAME.server) && GAME.server >= 0 && GAME.server < PIPE_SERVERS.length ? GAME.server : null} : parseHash()
+const savedServer = parseInt(tabStore.get(TS + 'server'), 10)
 serverIndex = h.s !== null ? h.s : (Number.isInteger(savedServer) && savedServer >= 0 && savedServer < PIPE_SERVERS.length ? savedServer : 0)
-tabStore.set('beam-server', String(serverIndex))
+tabStore.set(TS + 'server', String(serverIndex))
 $('pipeServer').value = String(serverIndex)
-cleanAddressBar()
+if (!GAME) cleanAddressBar()
 probeWebRTC()
 if (DEV) setTimeout(deepProbe, 7000)
 showUse()
 if (Object.keys(relaySpeeds).length) showSpeeds()
-const savedRoom = tabStore.get('beam-room'), savedIntent = tabStore.get('beam-intent')
-if (validCode(h.code)) setRoom(h.code, 'join')                                   // opened from a QR code
+const savedRoom = tabStore.get(TS + 'room'), savedIntent = tabStore.get(TS + 'intent')
+if (GAME) {
+  if (validCode(GAME.join)) setRoom(GAME.join, 'join')
+  else if (GAME.resume && validCode(savedRoom)) setRoom(savedRoom, savedIntent === 'create' ? 'create' : 'join', true)
+  else setRoom('', 'create')
+} else if (validCode(h.code)) setRoom(h.code, 'join')                            // opened from a QR code
 else if (validCode(savedRoom)) setRoom(savedRoom, savedIntent === 'create' ? 'create' : 'join', true) // reload: back to this tab's room
 else setRoom('', 'create')                                                       // fresh visit
 
@@ -2330,6 +2374,18 @@ else setRoom('', 'create')                                                      
 // tells every device goodbye, stops transfers, gives up the code and stops listening.
 return {
   busy: () => mode !== 'waiting' || activeX.size > 0 || asks.length > 0,
+  // For a game: the room as it is now, and a message to one device ('hub' from a device that joined).
+  info: () => ({
+    code, host: isHub(), server: serverIndex, connected: mode === 'connected',
+    peers: roomLinks().map(L => ({id: isHub() ? L.pub : 'hub', name: L.name, state: !L.accepted ? 'away' : viaRelay(L) ? 'relay' : 'direct'})),
+  }),
+  send(id, d) {
+    const L = id === 'hub' ? hubLink() : links.get(id)
+    if (!L || !L.accepted || life.signal.aborted) return
+    markActive()
+    if (direct(L)) sendCtl(L, {t: 'g', d})
+    else postControl(L, {t: 'g', d}, 3)
+  },
   dispose() {
     for (const x of [...activeX]) { if (x.cancel) x.cancel(); else finishXfer(x, 'failed', 'Stopped') }
     for (const L of links.values()) sayBye(L)
@@ -2347,12 +2403,12 @@ return {
     keepAwake(false)
     stopScan()
     for (const x of rows) if (x.url) URL.revokeObjectURL(x.url)
-    tabStore.set('beam-room', '')
+    tabStore.set(TS + 'room', '')
   },
 }
 }
 
-window.Beam = { mount }
+window.Beam = { mount, deviceName: () => deviceName(), maxDevices: MAX_DEVICES }
 // The page versions (beam/index.html, the website) mount themselves.
 const auto = document.querySelector('[data-beam-auto]')
 if (auto) mount(auto)

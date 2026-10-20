@@ -24,4 +24,6 @@ body { background: var(--bg); color: var(--text); font: 400 13px/1.4 "Inter", sy
   overflow: hidden; padding: 14px 16px 12px; }
 body::after { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: var(--grain);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
-#ws { max-width: 1000px; height: 100%; margin: 0 auto; }
+/* The game, and in a room the players and chat beside it (room.css) */
+.ws-page { height: 100%; display: flex; justify-content: center; gap: 20px; }
+#ws { flex: 0 1 1000px; min-width: 0; max-width: 1000px; height: 100%; }
