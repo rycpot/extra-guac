@@ -18,7 +18,7 @@ const IDLE_MS = 60000;                   // the clock pauses after this long wit
 const TAB_CARD = 500;                    // the tab's puzzle card, px, on every level (less only if the window is small)
 const LIST_KEY = (lang) => `ws-words:${lang}`;
 
-// Native names, in the order the picker shows them.
+// Native names. The picker shows English first, then the rest in alphabetical order.
 const LANGS = [
   ["en", "English"], ["es", "Español"], ["fr", "Français"], ["de", "Deutsch"], ["it", "Italiano"], ["pt", "Português"],
   ["nl", "Nederlands"], ["sv", "Svenska"], ["nb", "Norsk"], ["da", "Dansk"], ["fi", "Suomi"], ["is", "Íslenska"],
@@ -28,6 +28,10 @@ const LANGS = [
   ["mk", "Македонски"], ["el", "Ελληνικά"], ["he", "עברית"], ["ar", "العربية"], ["fa", "فارسی"], ["ur", "اردو"],
   ["hi", "हिन्दी"], ["bn", "বাংলা"], ["ta", "தமிழ்"], ["zh", "中文"], ["ja", "日本語"], ["ko", "한국어"],
 ];
+{
+  const order = new Intl.Collator("en", { sensitivity: "base" });
+  LANGS.splice(1, Infinity, ...LANGS.slice(1).sort((a, b) => order.compare(a[1], b[1])));
+}
 const RTL = new Set(["he", "ar", "fa", "ur"]);
 // Where a cell holds a syllable or a character, words are fewer cells long.
 const SYLLABIC = new Set(["zh", "ja", "ko", "hi", "bn", "ta"]);
@@ -237,6 +241,7 @@ function mount(root, opts = {}) {
   const bar = el("div", "ws-bar");
   const langBtn = el("button", "ws-lang");
   langBtn.title = "Language";
+  const levelEl = el("div", "ws-level");
   const timerEl = el("div", "ws-timer", "0:00");
   const ib = (icon, label, onClick) => {
     const b = el("button", "ws-ib", ICON[icon]);
@@ -253,15 +258,15 @@ function mount(root, opts = {}) {
   });
   const hintBtn = ib("bulb", "Hint", hint);
   const tools = [hintBtn, ib("chart", "Stats", showStats), soundBtn];
-  bar.append(langBtn, el("div", "ws-grow"), timerEl, ...tools);
-  // The level being played, and the two ways out of it: Stop, and New game (which asks for a level).
-  const row = el("div", "ws-row");
-  const levelEl = el("div", "ws-level");
-  const stopBtn = el("button", "ws-stop", `${ICON.stop}Stop`);
-  stopBtn.onclick = stop;
-  const newBtn = el("button", "ws-new", `${ICON.plus}New game`);
-  newBtn.onclick = pickLevel;
-  row.append(levelEl, el("div", "ws-grow"), stopBtn, newBtn);
+  // The two ways out of the puzzle: Stop, and New game (which asks for a level).
+  const stopBtn = ib("stop", "Stop", stop);
+  stopBtn.className = "ws-stop";
+  const newBtn = ib("plus", "New game", pickLevel);
+  newBtn.className = "ws-new";
+  // One strip: language | level and time | hint, stats, sound | Stop, New game.
+  const clock = el("div", "ws-clock");
+  clock.append(levelEl, timerEl);
+  bar.append(langBtn, el("i", "ws-sep"), clock, el("div", "ws-grow"), ...tools, el("i", "ws-sep"), stopBtn, newBtn);
   const play = el("div", "ws-play");
   const card = el("div", "ws-card");
   const gridEl = el("div", "ws-grid");
@@ -284,7 +289,7 @@ function mount(root, opts = {}) {
   play.append(card, wordsEl, start);
   // The word lists' source, as their CC BY-SA 4.0 license asks.
   const credit = el("p", "ws-credit", `<svg class="ws-gh" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>Powered by <a href="https://github.com/rspeer/wordfreq" target="_blank" rel="noopener" title="Word lists made from wordfreq, CC BY-SA 4.0">wordfreq</a>`);
-  root.append(bar, row, play, credit);
+  root.append(bar, play, credit);
 
   let game = null, cells = [], chips = [], startedAt = 0, ticking = null, overlay = null, menu = null, visible = true, lastSave = 0;
   let idle = false, lastActive = 0, ready = false;
@@ -297,9 +302,20 @@ function mount(root, opts = {}) {
   function updateBar() {
     markLevel();
     const lang = game && !game.sample ? game.lang : data.lang;
-    langBtn.innerHTML = `${ICON.globe}<span>${lang ? langName(lang) : "Choose a language"}</span>`;
+    const name = lang ? langName(lang) : "Choose a language";
+    langBtn.innerHTML = `${ICON.globe}${lang ? `<span class="ws-code">${lang.toUpperCase()}</span>` : ""}<span class="ws-name">${name}</span>`;
+    langBtn.title = lang ? `Language: ${name}` : "Language";
     const lv = LEVELS[game && !game.sample ? game.level : level()];
-    levelEl.textContent = `${lv.name} · ${lv.size}×${lv.size}`;
+    levelEl.textContent = lv.name;
+    levelEl.title = `${lv.size}×${lv.size}, ${lv.count} words`;
+    fit();
+  }
+
+  // When the strip is too narrow: the language's code for its name, then no level, closer
+  // buttons, no clock (and the first time, no Stop or New game), then a shortened name.
+  function fit() {
+    for (let i = 1; i <= 5; i++) bar.classList.remove(`ws-f${i}`);
+    for (let i = 1; i <= 5 && bar.scrollWidth > bar.clientWidth; i++) bar.classList.add(`ws-f${i}`);
   }
 
   // A new puzzle, in the language picked last (here or in the other place) or the one given;
@@ -361,13 +377,14 @@ function mount(root, opts = {}) {
     root.classList.toggle("ws-preview", sample);
     root.classList.toggle("ws-first", first);
     root.classList.toggle("ws-waiting", waiting);
-    for (const n of [row, card, wordsEl, credit, timerEl, ...tools]) n.inert = sample;
+    for (const n of [clock, stopBtn, newBtn, card, wordsEl, credit, ...tools]) n.inert = sample;
     gridEl.inert = waiting;
     if (!sample) wordsEl.inert = waiting;
     hintBtn.inert = waiting || sample;
     start.hidden = first || !(sample || waiting);
     const begun = !sample && (game.elapsed >= 1000 || game.found.length > 0);
     startBtn.innerHTML = `${ICON.play}${begun ? `Resume · ${fmt(game.elapsed)}` : "Start"}`;
+    fit();
   }
 
   function render(fresh) {
@@ -438,12 +455,13 @@ function mount(root, opts = {}) {
   // The grid as big as fits in the panel's width; in a tab, the same size on every level, smaller
   // only when the window can't hold it and the list below.
   function layout() {
+    fit();
     if (!game) return;
     const pad = 2 * parseFloat(getComputedStyle(card).paddingLeft || 0);
     let size = root.clientWidth - pad;
     if (!panel) {
       const gap = (n) => parseFloat(getComputedStyle(n).rowGap) || 0;
-      const H = root.clientHeight - bar.offsetHeight - row.offsetHeight - credit.offsetHeight - 3 * gap(root) - Math.max(parseFloat(getComputedStyle(wordsEl).minHeight), wordsEl.offsetHeight) - gap(play);
+      const H = root.clientHeight - bar.offsetHeight - credit.offsetHeight - 2 * gap(root) - Math.max(parseFloat(getComputedStyle(wordsEl).minHeight), wordsEl.offsetHeight) - gap(play);
       size = Math.min(TAB_CARD, size + pad, H) - pad;
     }
     size = Math.max(180, Math.floor(size));
@@ -827,6 +845,7 @@ function mount(root, opts = {}) {
   }
 
   if (!panel) addEventListener("hashchange", () => takeAsk());
+  document.fonts?.ready.then(fit);       // the strip measured again in its own font
 
 }
 

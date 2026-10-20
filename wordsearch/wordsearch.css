@@ -8,30 +8,38 @@
 :where(.ws) button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
 :where(.ws) button:focus-visible { outline: 1.5px solid var(--stroke); outline-offset: 2px; }
 
-.ws-bar { position: relative; display: flex; align-items: center; gap: 2px; }
+/* The strip: language | level and time | hint, stats, sound | Stop, New game */
+.ws-bar { position: relative; display: flex; align-items: center; gap: 1px; height: 44px; padding: 0 5px; border-radius: 22px; background: var(--row);
+  border: 1px solid var(--divider); }
+.ws-sep { flex: none; width: 1px; height: 18px; margin: 0 4px; background: var(--divider); }
 .ws-grow { flex: 1; }
-.ws-lang { height: 32px; padding: 0 12px 0 9px; display: inline-flex; align-items: center; gap: 7px; border-radius: 16px; background: var(--field);
-  font-weight: 600; max-width: 60%; }
+.ws-lang { flex: none; height: 32px; padding: 0 10px 0 8px; display: inline-flex; align-items: center; gap: 7px; border-radius: 16px; font-weight: 600; }
 .ws-lang span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws-lang:hover { background: var(--hover); }
 .ws-lang svg { width: 16px; height: 16px; color: var(--text2); }
-.ws-timer { min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 14px; color: var(--text2); }
+.ws-clock { flex: none; display: flex; align-items: center; gap: 8px; padding-inline-start: 4px; white-space: nowrap; }
+.ws-timer { min-width: 40px; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 14px; color: var(--text2); }
 .ws-timer.ws-done { color: var(--green); }
 .ws-timer.ws-paused { opacity: .45; }
-.ws-ib { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; color: var(--text2); }
+.ws-ib { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; color: var(--text2); }
 .ws-ib:hover { background: var(--hover); color: var(--text); }
 
-/* The level being played, Stop and New game */
-.ws-row { display: flex; align-items: center; gap: 6px; }
-.ws-level { color: var(--text2); font-weight: 600; font-size: 12.5px; padding-inline-start: 4px; }
-.ws-row button { height: 32px; padding: 0 13px 0 10px; border-radius: 16px; display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 12.5px;
-  transition: transform .15s, filter .2s; }
-.ws-row button:hover { filter: brightness(1.06); }
-.ws-row button:active { transform: scale(.97); }
-.ws-row svg { width: 15px; height: 15px; stroke-width: 2.2; }
+.ws-level { color: var(--text2); font-weight: 600; font-size: 12.5px; }
+.ws-stop, .ws-new { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; transition: transform .15s, filter .2s; }
+.ws-stop:hover, .ws-new:hover { filter: brightness(1.06); }
+.ws-stop:active, .ws-new:active { transform: scale(.94); }
+.ws-stop svg, .ws-new svg { width: 15px; height: 15px; stroke-width: 2.2; }
 .ws-stop { background: #f6b4b4; color: #7a1f1f; }
 .ws-stop svg { fill: currentColor; stroke: none; }
-.ws-new { background: var(--text); color: var(--bg); }
+.ws-new { margin-inline-start: 4px; background: var(--text); color: var(--bg); }
+/* Narrower: the language's code, then no level, closer buttons, no clock, a shortened name */
+.ws-code { display: none; }
+.ws-f1 .ws-code { display: inline; }
+.ws-f1 .ws-code + .ws-name, .ws-f2 .ws-level, .ws-f4 .ws-clock, .ws-f4 .ws-lang + .ws-sep { display: none; }
+.ws-f3 .ws-ib { width: 28px; }
+.ws-f3 .ws-sep { margin: 0 2px; }
+.ws-preview.ws-first .ws-f4 :is(.ws-stop, .ws-new, .ws-ib + .ws-sep) { display: none; } /* only the language counts the first time */
+.ws-f5 .ws-lang { flex: 0 1 auto; min-width: 0; }
 
 .ws-play { position: relative; display: flex; flex-direction: column; align-items: center; gap: 16px; }
 .ws-card { position: relative; padding: 10px; border-radius: 16px; background: var(--ws-card); box-shadow: var(--ws-shadow); }
@@ -74,7 +82,7 @@
 
 /* Its own tab: at the top, the same 500px card on every level, the list below it. */
 .ws:not(.ws-panel) { height: 100%; }
-.ws:not(.ws-panel) .ws-bar, .ws:not(.ws-panel) .ws-row { width: 100%; max-width: max(320px, var(--ws-span, 520px)); align-self: center; }
+.ws:not(.ws-panel) .ws-bar { width: 100%; max-width: max(320px, var(--ws-span, 520px)); align-self: center; }
 .ws:not(.ws-panel) .ws-play { justify-content: center; }
 .ws:not(.ws-panel) .ws-word { font-size: 19px; }
 .ws:not(.ws-panel) .ws-words { width: min(var(--ws-span, 500px), 100%); max-width: none; min-height: 124px; gap: 8px 18px; }
@@ -109,7 +117,7 @@
 
 /* Before a language is picked: everything but the language button, dimmed and out of reach */
 /* Without a puzzle: everything dimmed but the language button (and Start, after the first time) */
-.ws-preview .ws-row, .ws-preview .ws-card, .ws-preview .ws-words, .ws-preview .ws-credit, .ws-preview .ws-timer, .ws-preview .ws-ib { opacity: .1; user-select: none; -webkit-user-select: none; }
+.ws-preview .ws-clock, .ws-preview .ws-stop, .ws-preview .ws-new, .ws-preview .ws-sep, .ws-preview .ws-card, .ws-preview .ws-words, .ws-preview .ws-credit, .ws-preview .ws-timer, .ws-preview .ws-ib { opacity: .1; user-select: none; -webkit-user-select: none; }
 .ws-first .ws-lang { color: var(--text); box-shadow: inset 0 0 0 1.5px var(--green); animation: ws-call 2.4s ease-in-out infinite; }
 .ws-first .ws-lang svg { color: var(--green); }
 @keyframes ws-call { 50% { box-shadow: inset 0 0 0 1.5px var(--green), 0 0 0 5px color-mix(in srgb, var(--green) 18%, transparent); } }
@@ -121,9 +129,10 @@
 @keyframes ws-fade { from { opacity: 0; } }
 .ws-box { position: relative; width: min(100%, 380px); max-height: 100%; overflow-y: auto; background: var(--ws-card); border: 1px solid var(--divider); border-radius: 18px;
   padding: 22px 18px 18px; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.35);
-  animation: ws-rise .35s cubic-bezier(.2,.9,.3,1.2); }
+  animation: ws-rise .28s cubic-bezier(.2,.8,.2,1); }
 .ws-panel .ws-box { max-height: 520px; }
-@keyframes ws-rise { from { transform: translateY(12px) scale(.97); opacity: 0; } }
+/* A plain rise that ends exactly in place: no overshoot or scale, so the text doesn't settle after it shows. */
+@keyframes ws-rise { from { transform: translateY(8px); opacity: 0; } }
 .ws-box h2 { margin: 0; font-size: 16px; font-weight: 700; }
 .ws-box p { margin: 0; color: var(--text2); }
 .ws-x { position: absolute; top: 8px; right: 8px; }
