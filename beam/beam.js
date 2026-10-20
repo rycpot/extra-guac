@@ -169,7 +169,7 @@ function markup(preview) {
   </section>
 
   <section class="beam-card beam-chat off" id="beam-chat" aria-label="Chat">
-    <div class="beam-row beam-between beam-chat-head"><div class="beam-chat-who"><p class="beam-eyebrow">Chat as</p><button type="button" class="beam-me" id="beam-me" title="Change the name others see"><span id="beam-meName"></span>${ICON_PEN}</button></div><span class="beam-hint" id="beam-chatNote">Connect a device to chat</span></div>
+    <div class="beam-row beam-between beam-chat-head"><div class="beam-chat-who"><p class="beam-eyebrow">Chat as</p><button type="button" class="beam-me" id="beam-me" title="Change the name others see"><span id="beam-meName"></span>${ICON_PEN}</button></div><span class="beam-hint" id="beam-chatNote">Connect to chat</span></div>
     <div class="beam-msgs" id="beam-msgs" aria-live="polite"></div>
     <form class="beam-compose" id="beam-compose">
       <input type="text" id="beam-chatInput" placeholder="Message" maxlength="500" autocomplete="off" aria-label="Message" disabled>
@@ -575,7 +575,7 @@ function showChat() {
   const c = $('chat')
   if (!on && chatLines.length) { chatLines.length = 0; $('msgs').replaceChildren() }
   c.classList.toggle('off', !on)
-  $('chatNote').textContent = on ? '' : 'Connect a device to chat'
+  $('chatNote').textContent = on ? '' : 'Connect to chat'
   $('chatInput').disabled = !on
   sizeChat()
 }
