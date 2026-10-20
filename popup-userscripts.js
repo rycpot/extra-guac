@@ -22,6 +22,7 @@ globalThis.initUserscripts = function (tab) {
   const url = tab?.url || "";
   const isWeb = /^(https?|file):/i.test(url);
   let state = null, scripts = [], menus = [], on = false;
+  const checking = new Set(); // ids whose update check is running
 
   function render() {
     setSwitch(master, on);
@@ -49,9 +50,11 @@ globalThis.initUserscripts = function (tab) {
       const cmds = menus.filter((m) => m.us === s.id);
       return h("div", { class: "us-item" },
         h("div", { class: "row tight sub-row" },
-          h("span", { class: `us-name${s.enabled === false || !on ? " off" : ""}`, title: s.meta.description || s.meta.name }, s.meta.name,
-            s.meta.version ? h("span", { class: "us-ver" }, ` ${s.meta.version}`) : null),
+          h("span", { class: `us-name${s.enabled === false || !on ? " off" : ""}`, title: s.meta.description || s.meta.name }, s.meta.name),
+          // Always there, so the name gives way first; a script without @version shows a dash.
+          h("span", { class: "us-ver", title: s.meta.version ? `Version ${s.meta.version}` : "No @version in this script" }, s.meta.version || "–"),
           h("span", { class: "actions" },
+            updateBtn(s),
             h("button", { class: "icon-btn small", title: "Edit", "aria-label": `Edit ${s.meta.name}`, onclick: () => edit(`edit=${encodeURIComponent(s.id)}`) }, icon("edit")),
             sw)),
         cmds.length ? h("div", { class: "us-cmds" }, cmds.map((m) => h("button", {
@@ -59,6 +62,35 @@ globalThis.initUserscripts = function (tab) {
           onclick: () => send("usMenuRun", { us: m.us, cid: m.cid, frameId: m.frameId }).then(() => closePopup(), fail),
         }, m.name))) : null);
     }));
+  }
+
+  // Looks for a newer version of this one script now and installs it (or leaves it waiting for
+  // an OK on the userscripts page when it asks for more access, as automatic updates do).
+  function updateBtn(s) {
+    const from = s.meta.updateURL || s.meta.downloadURL || s.source || "";
+    const can = /^https?:/i.test(from);
+    const busy = checking.has(s.id);
+    const b = h("button", {
+      class: `icon-btn small us-update${busy ? " spin" : ""}`, disabled: !can || busy,
+      title: !can ? "No update address (written or changed here)" : s.pending ? "An update is waiting for your OK: check again" : "Check for an update",
+      "aria-label": `Check for an update to ${s.meta.name}`,
+    }, icon("update"));
+    b.onclick = () => checkOne(s);
+    return b;
+  }
+  async function checkOne(s) {
+    if (checking.has(s.id)) return;
+    checking.add(s.id);
+    render();
+    try {
+      const r = await send("usCheckUpdates", { ids: [s.id] });
+      if (r.updated.length) toast(`Updated to ${r.updated[0]}`);
+      else if (r.waiting.length) toast("The update asks for more access: it waits for your OK on the userscripts page");
+      else if (r.failed.length) toast(r.failed[0], true);
+      else toast(`${s.meta.name} is up to date`);
+    } catch (err) { fail(err); }
+    checking.delete(s.id);
+    if (!live.aborted) render();
   }
 
   function icon(name) {
