@@ -412,7 +412,8 @@ async function openBeam() {
 // a level from the panel opens it at that level.
 async function openWordSearch(level) {
   const base = chrome.runtime.getURL("wordsearch/index.html");
-  const url = level ? `${base}#${level}` : base;
+  // A new game at that level (numbered, so asking twice is a change too).
+  const url = level ? `${base}#new-${level}.${Date.now()}` : base;
   const tab = (await chrome.tabs.query({})).find((t) => (t.url || t.pendingUrl || "").startsWith(base));
   if (!tab) return void (await chrome.tabs.create({ url }));
   await chrome.tabs.update(tab.id, { active: true, ...(level ? { url } : {}) });

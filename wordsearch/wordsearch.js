@@ -1,6 +1,6 @@
 // Word search: find the hidden words, in 42 languages and four levels.
 //
-// One copy serves both places it shows: the side panel's backup tab (popup.html, Easy only, the
+// One copy serves both places it shows: its section in the side panel (popup.html, Easy only, the
 // others need more room) and its own tab (wordsearch/index.html). WordSearch.mount() builds it
 // inside the element it's given.
 //
@@ -13,7 +13,7 @@
 "use strict";
 const WORDS_URL = "https://rycpot.github.io/extra-guac/words/";
 const REFRESH_DAYS = 30;                 // a kept list is fetched again (quietly) after this long
-const KEY = "ws";                        // localStorage: settings, stats and the games in progress
+const KEY = "ws";                        // localStorage: settings, stats and the game in progress
 const IDLE_MS = 60000;                   // the clock pauses after this long with no touch
 const TAB_CARD = 500;                    // the tab's puzzle card, px, on every level (less only if the window is small)
 const LIST_KEY = (lang) => `ws-words:${lang}`;
@@ -51,6 +51,7 @@ const ICON = {
   soundOn: '<svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18.2 6.4a8 8 0 0 1 0 11.2"/></svg>',
   soundOff: '<svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>',
   close: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  plus: '<svg viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></svg>',
   stop: '<svg viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2.5"/></svg>',
   open: '<svg viewBox="0 0 24 24"><path d="M14 4.5h5.5V10M19.5 4.5l-8 8M17 14v5.5H4.5V7H10"/></svg>',
   play: '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z"/></svg>',
@@ -72,9 +73,8 @@ function load() {
   let d = {};
   try { d = JSON.parse(localStorage.getItem(KEY)) || {}; } catch {}
   d.stats ||= {};
-  d.games ||= {};
-  // Before each level kept its own puzzle, the tab had one.
-  if (d.game) { d.games[d.game.level] ||= d.game; delete d.game; }
+  // For a while the tab kept a puzzle for each level; now it's one again.
+  if (d.games) { d.game ??= d.games[d.level] || null; delete d.games; }
   if (!LEVELS[d.level]) d.level = "easy";
   if (!LANGS.some((l) => l[0] === d.lang)) d.lang = null;
   return d;
@@ -230,8 +230,6 @@ try { english = new Intl.DisplayNames(["en"], { type: "language" }); } catch {}
 function mount(root, opts = {}) {
   const panel = !!opts.panel;
   const data = load();
-  const wanted = location.hash.slice(1);
-  if (!panel && LEVELS[wanted]) persist((d) => { d.level = data.level = wanted; });
 
   root.classList.add("ws");
   root.classList.toggle("ws-panel", panel);
@@ -254,21 +252,16 @@ function mount(root, opts = {}) {
     soundBtn.innerHTML = ICON[data.mute ? "soundOff" : "soundOn"];
   });
   const hintBtn = ib("bulb", "Hint", hint);
-  const tools = [ib("stop", "Stop", stop), hintBtn, ib("again", "New puzzle", () => newGame()), ib("chart", "Stats", showStats), soundBtn];
+  const tools = [hintBtn, ib("chart", "Stats", showStats), soundBtn];
   bar.append(langBtn, el("div", "ws-grow"), timerEl, ...tools);
-  const seg = el("div", "ws-seg");
-  const thumb = el("div", "ws-thumb");
-  seg.append(thumb);
-  const levelBtns = LEVEL_IDS.map((id) => {
-    const b = el("button", null, LEVELS[id].name);
-    b.dataset.id = id;
-    b.onclick = () => {
-      if (panel && id !== "easy") return needsTab(id);
-      if (data.level !== id) switchLevel(id);
-    };
-    seg.append(b);
-    return b;
-  });
+  // The level being played, and the two ways out of it: Stop, and New game (which asks for a level).
+  const row = el("div", "ws-row");
+  const levelEl = el("div", "ws-level");
+  const stopBtn = el("button", "ws-stop", `${ICON.stop}Stop`);
+  stopBtn.onclick = stop;
+  const newBtn = el("button", "ws-new", `${ICON.plus}New game`);
+  newBtn.onclick = pickLevel;
+  row.append(levelEl, el("div", "ws-grow"), stopBtn, newBtn);
   const play = el("div", "ws-play");
   const card = el("div", "ws-card");
   const gridEl = el("div", "ws-grid");
@@ -278,38 +271,43 @@ function mount(root, opts = {}) {
   gridEl.append(svg, lettersEl);
   card.append(gridEl);
   const wordsEl = el("div", "ws-words");
-  play.append(card, wordsEl);
-  // Each time the panel or the tab opens, the puzzle waits, dimmed, for Start.
+  // Over the card: Start (or Resume) each time the panel or the tab opens, and Start after Stop.
   const start = el("div", "ws-start");
   const startBtn = el("button", "ws-btn");
-  startBtn.onclick = () => { ready = true; setWaiting(); startClock(); };
+  startBtn.onclick = () => {
+    if (game.sample) return pickLevel();
+    ready = true;
+    setState();
+    startClock();
+  };
   start.append(startBtn);
-  card.append(start);
+  play.append(card, wordsEl, start);
   // The word lists' source, as their CC BY-SA 4.0 license asks.
   const credit = el("p", "ws-credit", `<svg class="ws-gh" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>Powered by <a href="https://github.com/rspeer/wordfreq" target="_blank" rel="noopener" title="Word lists made from wordfreq, CC BY-SA 4.0">wordfreq</a>`);
-  root.append(bar, seg, play, credit);
+  root.append(bar, row, play, credit);
 
   let game = null, cells = [], chips = [], startedAt = 0, ticking = null, overlay = null, menu = null, visible = true, lastSave = 0;
   let idle = false, lastActive = 0, ready = false;
   const level = () => (panel ? "easy" : data.level);
-  // The tab's address names its level, so the panel asking for another one is a change.
-  const markLevel = () => { if (!panel) history.replaceState(null, "", `#${data.level}`); };
+  // The tab's address names the level played (#new-<level> is the panel asking for a new game).
+  const markLevel = () => { if (!panel) history.replaceState(null, "", `#${game && !game.sample ? game.level : data.level}`); };
   const done = (g) => g.found.length === g.words.length;
   const isSolved = () => game && done(game);
 
   function updateBar() {
     markLevel();
-    const lang = game?.lang || data.lang;
-    langBtn.innerHTML = `${ICON.globe}<span>${game?.sample ? "Choose a language" : lang ? langName(lang) : "Language"}</span>`;
-    for (const b of levelBtns) b.setAttribute("aria-pressed", String(b.dataset.id === level()));
-    thumb.style.transform = `translateX(${LEVEL_IDS.indexOf(level()) * 100}%)`;
+    const lang = game && !game.sample ? game.lang : data.lang;
+    langBtn.innerHTML = `${ICON.globe}<span>${lang ? langName(lang) : "Choose a language"}</span>`;
+    const lv = LEVELS[game && !game.sample ? game.level : level()];
+    levelEl.textContent = `${lv.name} · ${lv.size}×${lv.size}`;
   }
 
   // A new puzzle, in the language picked last (here or in the other place) or the one given;
   // a language becomes the default once its words are here.
   let pending = null;
   // wait: the puzzle shows dimmed until Start, as when the panel or the tab opens.
-  async function newGame(lang = load().lang || data.lang, wait = false) {
+  // id: the level, when it's a new choice.
+  async function newGame(lang = load().lang || data.lang, wait = false, id = null) {
     ready = !wait;
     stopClock();
     dropOverlay();
@@ -320,70 +318,61 @@ function mount(root, opts = {}) {
       if (!hasList(lang)) showMessage(`Getting ${langName(lang)} words…`);
       words = await wordsFor(lang);
     } catch {
-      if (pending === lang) showMessage(`Couldn't get the ${langName(lang)} words. Check the connection and try again.`, lang);
+      if (pending === lang) showMessage(`Couldn't get the ${langName(lang)} words. Check the connection and try again.`, () => newGame(lang, false, id));
       return;
     }
     if (pending !== lang) return;
     pending = null;
     dropOverlay();
     if (lang !== data.lang) persist((d) => { d.lang = data.lang = lang; });
-    game = generate(words, lang, level());
+    // The tab remembers the level chosen; the panel only plays Easy.
+    if (!panel && id && id !== data.level) persist((d) => { d.level = data.level = id; });
+    game = generate(words, lang, panel ? "easy" : id || data.level);
     saveGame();
     render(true);
   }
-  // The panel keeps one Easy puzzle; the tab keeps one for each level.
-  const keep = (d) => { if (panel) d.panelGame = game; else d.games[game.level] = game; };
+  // One puzzle at a time: the panel's (Easy) and the tab's.
+  const keep = (d) => { if (panel) d.panelGame = game; else d.game = game; };
   const saveGame = () => { if (game && !game.sample) persist(keep); };
   // A kept puzzle worth going back to: unfinished, and still the shape its level has.
-  const usable = (g, id) => g && LANGS.some((l) => l[0] === g.lang) && g.level === id && g.grid?.length === LEVELS[id].size && !done(g);
+  const usable = (g) => g && LANGS.some((l) => l[0] === g.lang) && LEVELS[g.level] && (!panel || g.level === "easy") &&
+    g.grid?.length === LEVELS[g.level].size && !done(g);
 
-  // Another level: its unfinished puzzle when there's one in the current language, or a new one.
-  function switchLevel(id, wait = false) {
-    ready = !wait;
-    stopClock();
-    const d = persist((d) => { d.level = data.level = id; });
-    const g = d.games[id];
-    if (usable(g, id) && g.lang === d.lang) resume(g);
-    else newGame(undefined, wait);
-  }
-  function resume(g) {
-    pending = null;                          // a download still on its way doesn't replace it
-    dropOverlay();
-    game = g;
-    render(true);
-  }
-
-  // Until a language is picked, and after Stop: a puzzle to look at, dimmed, and only the language
-  // button to press. A stopped puzzle stays kept: picking its language again goes back to it,
-  // another language starts a new one in its place.
+  // Stop ends the puzzle: its time isn't counted, and it isn't kept.
   function stop() {
     if (!game || game.sample) return;
-    stopClock();                             // saves it, when the clock was running
+    stopClock(false);
     clearAnchor();
     pending = null;
     dropOverlay();
+    persist((d) => { if (panel) d.panelGame = null; else d.game = null; });
     showSample();
   }
+  // Without a puzzle (the first time, or after Stop): one to look at, all dimmed. The first time
+  // only the language button is there to press; after that, Start in the middle asks for a level.
   function showSample() {
     game = structuredClone(SAMPLE);
     render(false);
   }
 
-  function setWaiting() {
-    const waiting = !ready && !game.sample && !isSolved();
+  function setState() {
+    const sample = !!game.sample, first = sample && !data.lang;
+    const waiting = !ready && !sample && !isSolved();
+    root.classList.toggle("ws-preview", sample);
+    root.classList.toggle("ws-first", first);
     root.classList.toggle("ws-waiting", waiting);
-    gridEl.inert = wordsEl.inert = waiting;
-    hintBtn.inert = waiting || !!game.sample;
-    start.hidden = !waiting;
-    const begun = game.elapsed > 0 || game.found.length > 0;
-    startBtn.innerHTML = begun ? `${ICON.play}Resume · ${fmt(game.elapsed)}` : `${ICON.play}Start`;
+    for (const n of [row, card, wordsEl, credit, timerEl, ...tools]) n.inert = sample;
+    gridEl.inert = waiting;
+    if (!sample) wordsEl.inert = waiting;
+    hintBtn.inert = waiting || sample;
+    start.hidden = first || !(sample || waiting);
+    const begun = !sample && (game.elapsed >= 1000 || game.found.length > 0);
+    startBtn.innerHTML = `${ICON.play}${begun ? `Resume · ${fmt(game.elapsed)}` : "Start"}`;
   }
 
   function render(fresh) {
     updateBar();
-    root.classList.toggle("ws-preview", !!game.sample);
-    for (const n of [seg, play, credit, timerEl, ...tools]) n.inert = !!game.sample;
-    setWaiting();
+    setState();
     const n = game.n;
     root.lang = game.lang;
     wordsEl.dir = RTL.has(game.lang) ? "rtl" : "ltr";
@@ -454,14 +443,15 @@ function mount(root, opts = {}) {
     let size = root.clientWidth - pad;
     if (!panel) {
       const gap = (n) => parseFloat(getComputedStyle(n).rowGap) || 0;
-      const H = root.clientHeight - bar.offsetHeight - seg.offsetHeight - credit.offsetHeight - 3 * gap(root) - Math.max(parseFloat(getComputedStyle(wordsEl).minHeight), wordsEl.offsetHeight) - gap(play);
+      const H = root.clientHeight - bar.offsetHeight - row.offsetHeight - credit.offsetHeight - 3 * gap(root) - Math.max(parseFloat(getComputedStyle(wordsEl).minHeight), wordsEl.offsetHeight) - gap(play);
       size = Math.min(TAB_CARD, size + pad, H) - pad;
     }
     size = Math.max(180, Math.floor(size));
-    // The bar and levels span what's below them.
+    // The bars span what's below them.
     if (!panel) root.style.setProperty("--ws-span", `${size + pad}px`);
     gridEl.style.width = gridEl.style.height = `${size}px`;
     root.style.setProperty("--cell", `${size / game.n}px`);
+    start.style.height = `${size + pad}px`;
   }
   new ResizeObserver(layout).observe(root);
 
@@ -483,12 +473,12 @@ function mount(root, opts = {}) {
     timerEl.textContent = fmt(game.elapsed);
     if (performance.now() - lastSave > 5000) { lastSave = performance.now(); saveGame(); }
   }
-  function stopClock() {
+  function stopClock(save = true) {
     if (!ticking) return;
     tick();
     clearInterval(ticking);
     ticking = null;
-    saveGame();
+    if (save) saveGame();
   }
   // Left alone for a minute, the clock waits for the next touch.
   function setIdle(on) {
@@ -682,13 +672,13 @@ function mount(root, opts = {}) {
   }
   root.addEventListener("keydown", (e) => { if (e.key === "Escape" && overlay?.querySelector(".ws-x")) closeOverlay(); });
 
-  // retry: the language whose download failed.
+  // retry: tries the failed download again.
   function showMessage(text, retry) {
     openOverlay((box) => {
       box.append(el("p", null, text));
       if (retry) {
         const b = el("button", "ws-btn", `${ICON.again}Try again`);
-        b.onclick = () => newGame(retry);
+        b.onclick = retry;
         box.append(b);
         const other = el("button", "ws-link", "Pick another language");
         other.onclick = () => { dropOverlay(); openMenu(); };
@@ -765,13 +755,6 @@ function mount(root, opts = {}) {
   function pick(code) {
     closeMenu(false);
     if (game && !game.sample && code === game.lang && !isSolved()) return startClock();
-    // After Stop: the kept puzzle, when it's in the language picked.
-    const d = load(), g = panel ? d.panelGame : d.games[level()];
-    if (game?.sample && usable(g, level()) && g.lang === code) {
-      if (code !== data.lang) persist((d) => { d.lang = data.lang = code; });
-      ready = true;
-      return resume(g);
-    }
     newGame(code);
   }
   langBtn.setAttribute("aria-haspopup", "listbox");
@@ -800,35 +783,50 @@ function mount(root, opts = {}) {
       box.append(el("div", "ws-big", fmt(game.elapsed)));
       box.append(game.record ? el("p", "ws-best", "New best time") : el("p", null, `Best ${fmt(s.best)} · Average ${fmt(s.total / s.played)}`));
       if (game.hints) box.append(el("p", null, `${game.hints} hint${game.hints === 1 ? "" : "s"} used`));
-      const b = el("button", "ws-btn", `${ICON.again}New puzzle`);
-      b.onclick = () => newGame();
+      const b = el("button", "ws-btn", `${ICON.plus}New game`);
+      b.onclick = pickLevel;
       box.append(b);
     });
   }
 
-  // In the panel, the bigger levels open in their own tab.
-  function needsTab(id) {
+  // New game: a level, then a new puzzle in it. In the panel, the bigger levels open in a tab.
+  function pickLevel() {
     openOverlay((box) => {
-      box.append(el("h2", null, `${LEVELS[id].name} needs more room`));
-      box.append(el("p", null, `Its ${LEVELS[id].size}×${LEVELS[id].size} grid opens in a tab of its own.`));
-      const b = el("button", "ws-btn", `${ICON.open}Open in a tab`);
-      b.onclick = () => { closeOverlay(); opts.onOpenTab?.(id); };
-      box.append(b);
+      box.append(el("h2", null, "Select difficulty"));
+      const list = el("div", "ws-levels");
+      for (const id of LEVEL_IDS) {
+        const lv = LEVELS[id], away = panel && id !== "easy";
+        const b = el("button", null, `<span>${lv.name}</span><small>${away ? "opens in a tab" : `${lv.size}×${lv.size} · ${lv.count} words`}</small>${away ? ICON.open : ""}`);
+        b.onclick = () => {
+          if (away) { closeOverlay(); return opts.onOpenTab?.(id); }
+          newGame(undefined, false, id);
+        };
+        list.append(b);
+      }
+      box.append(list);
     });
   }
 
   // ---- start ----
+  // The panel asks the tab for a new game with #new-<level>.<n>; it waits behind Start like any
+  // opening. Without a language yet, the level is kept for the first puzzle.
+  function takeAsk(hash = location.hash) {
+    const m = /^#new-([a-z]+)/.exec(hash), id = m && LEVELS[m[1]] ? m[1] : null;
+    if (panel || !id) return false;
+    if (id !== data.level) persist((d) => { d.level = data.level = id; });
+    if (load().lang) newGame(undefined, true, id);
+    else { if (game) stop(); else showSample(); }
+    return true;
+  }
+  const hash = location.hash;               // before the bar puts the level there
   updateBar();
-  const g = panel ? data.panelGame : data.games[level()];
-  if (usable(g, level())) { game = g; render(true); }
-  else if (data.lang) newGame(undefined, true);
-  else showSample();
+  const g = panel ? data.panelGame : data.game;
+  if (!takeAsk(hash)) {
+    if (usable(g)) { game = g; render(true); }
+    else showSample();
+  }
 
-  // The panel asked for another level in this tab.
-  if (!panel) addEventListener("hashchange", () => {
-    const id = location.hash.slice(1);
-    if (LEVELS[id] && id !== data.level) switchLevel(id, true);
-  });
+  if (!panel) addEventListener("hashchange", () => takeAsk());
 
 }
 

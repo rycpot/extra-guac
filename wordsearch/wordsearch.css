@@ -21,13 +21,19 @@
 .ws-ib { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; color: var(--text2); }
 .ws-ib:hover { background: var(--hover); color: var(--text); }
 
-.ws-seg { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); padding: 3px; border-radius: 12px; background: var(--field); }
-.ws-seg button { position: relative; z-index: 1; height: 28px; border-radius: 9px; color: var(--text2); font-weight: 600; font-size: 12.5px; transition: color .25s; }
-.ws-seg button[aria-pressed="true"] { color: var(--text); }
-.ws-thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / 4); border-radius: 9px; background: var(--ws-card);
-  box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .35s cubic-bezier(.3,1.3,.5,1); }
+/* The level being played, Stop and New game */
+.ws-row { display: flex; align-items: center; gap: 6px; }
+.ws-level { color: var(--text2); font-weight: 600; font-size: 12.5px; padding-inline-start: 4px; }
+.ws-row button { height: 32px; padding: 0 13px 0 10px; border-radius: 16px; display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 12.5px;
+  transition: transform .15s, filter .2s; }
+.ws-row button:hover { filter: brightness(1.06); }
+.ws-row button:active { transform: scale(.97); }
+.ws-row svg { width: 15px; height: 15px; stroke-width: 2.2; }
+.ws-stop { background: #f6b4b4; color: #7a1f1f; }
+.ws-stop svg { fill: currentColor; stroke: none; }
+.ws-new { background: var(--text); color: var(--bg); }
 
-.ws-play { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.ws-play { position: relative; display: flex; flex-direction: column; align-items: center; gap: 16px; }
 .ws-card { position: relative; padding: 10px; border-radius: 16px; background: var(--ws-card); box-shadow: var(--ws-shadow); }
 .ws-grid { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; }
 .ws-marks { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; stroke-linecap: round; }
@@ -68,13 +74,15 @@
 
 /* Its own tab: at the top, the same 500px card on every level, the list below it. */
 .ws:not(.ws-panel) { height: 100%; }
-.ws:not(.ws-panel) .ws-bar, .ws:not(.ws-panel) .ws-seg { width: 100%; max-width: max(320px, var(--ws-span, 520px)); align-self: center; }
+.ws:not(.ws-panel) .ws-bar, .ws:not(.ws-panel) .ws-row { width: 100%; max-width: max(320px, var(--ws-span, 520px)); align-self: center; }
 .ws:not(.ws-panel) .ws-play { justify-content: center; }
 .ws:not(.ws-panel) .ws-word { font-size: 19px; }
 .ws:not(.ws-panel) .ws-words { width: min(var(--ws-span, 500px), 100%); max-width: none; min-height: 124px; gap: 8px 18px; }
 
 /* Waiting for Start: the puzzle dimmed under the button */
-.ws-start { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; }
+.ws-start { position: absolute; top: 0; left: 0; right: 0; z-index: 2; display: grid; place-items: center; }
+.ws-start .ws-btn { height: 50px; padding: 0 28px; border-radius: 25px; font-size: 16px; color: var(--text); background: color-mix(in srgb, var(--text) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 24%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: 0 10px 30px rgba(0,0,0,.25); }
 .ws-start[hidden] { display: none; }
 .ws-waiting .ws-grid, .ws-waiting .ws-words { opacity: .1; filter: blur(2.5px); }
 .ws-start svg { fill: currentColor; stroke: none; }
@@ -100,9 +108,10 @@
 .ws-none { margin: 0; padding: 10px; color: var(--text3); text-align: center; }
 
 /* Before a language is picked: everything but the language button, dimmed and out of reach */
-.ws-preview .ws-seg, .ws-preview .ws-play, .ws-preview .ws-credit, .ws-preview .ws-timer, .ws-preview .ws-ib { opacity: .1; user-select: none; -webkit-user-select: none; }
-.ws-preview .ws-lang { color: var(--text); box-shadow: inset 0 0 0 1.5px var(--green); animation: ws-call 2.4s ease-in-out infinite; }
-.ws-preview .ws-lang svg { color: var(--green); }
+/* Without a puzzle: everything dimmed but the language button (and Start, after the first time) */
+.ws-preview .ws-row, .ws-preview .ws-card, .ws-preview .ws-words, .ws-preview .ws-credit, .ws-preview .ws-timer, .ws-preview .ws-ib { opacity: .1; user-select: none; -webkit-user-select: none; }
+.ws-first .ws-lang { color: var(--text); box-shadow: inset 0 0 0 1.5px var(--green); animation: ws-call 2.4s ease-in-out infinite; }
+.ws-first .ws-lang svg { color: var(--green); }
 @keyframes ws-call { 50% { box-shadow: inset 0 0 0 1.5px var(--green), 0 0 0 5px color-mix(in srgb, var(--green) 18%, transparent); } }
 
 /* Cards over the game: stats, solved, messages */
@@ -118,6 +127,14 @@
 .ws-box h2 { margin: 0; font-size: 16px; font-weight: 700; }
 .ws-box p { margin: 0; color: var(--text2); }
 .ws-x { position: absolute; top: 8px; right: 8px; }
+.ws-levels { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.ws-levels button { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 16px; border-radius: 12px; background: var(--field); text-align: start;
+  transition: background-color .2s, transform .15s; }
+.ws-levels button:hover { background: var(--hover); }
+.ws-levels button:active { transform: scale(.98); }
+.ws-levels span { font-weight: 700; font-size: 15px; }
+.ws-levels small { margin-inline-start: auto; color: var(--text3); font-size: 11.5px; }
+.ws-levels svg { width: 15px; height: 15px; color: var(--text3); }
 .ws-big { font-size: 38px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
 .ws-box .ws-best { color: var(--yellow); font-weight: 600; }
 .ws-btn { height: 40px; padding: 0 20px; border-radius: 20px; background: var(--text); color: var(--bg); font-weight: 700;
@@ -132,5 +149,5 @@
 .ws-stats tr + tr td { border-top: 1px solid var(--divider); }
 
 @media (prefers-reduced-motion: reduce) {
-  .ws-letters.ws-enter span, .ws-letters.ws-wave span, .ws-marks line.ws-pop, .ws-overlay, .ws-box, .ws-menu, .ws-preview .ws-lang { animation: none; }
+  .ws-letters.ws-enter span, .ws-letters.ws-wave span, .ws-marks line.ws-pop, .ws-overlay, .ws-box, .ws-menu, .ws-first .ws-lang { animation: none; }
 }
