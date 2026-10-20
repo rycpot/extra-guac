@@ -234,7 +234,7 @@ function initTabs() {
     });
     document.querySelectorAll(".panel").forEach((p) => (p.hidden = p.id !== `panel-${name}`));
     try { localStorage.setItem("panel", name); } catch {}
-    if (name === "backup") initBeam();
+    if (name === "backup") { initBeam(); initWordSearch(); }
   };
   tabs.forEach((t) => (t.onclick = () => show(t.dataset.panel)));
   let last = "tools";
@@ -260,6 +260,17 @@ async function initBeam() {
     await Promise.all(["beam/lib/peerjs.min.js", "beam/lib/qrcode.min.js", "beam/lib/jsQR.min.js", "beam/lib/qr-render.js"].map(load));
   } catch { return toast("Beam couldn't start here: open it in a tab", true); }
   Beam.mount($("beam"));
+}
+
+// ---- Word search (backup tab) -----------------------------------------------------
+// Easy plays here; the bigger levels open the game's own tab, at that level.
+let wordSearchStarted = false;
+function initWordSearch() {
+  if (wordSearchStarted || !globalThis.WordSearch) return;
+  wordSearchStarted = true;
+  const openTab = (level) => send("openWordSearch", { level }).then(() => closePopup(), fail);
+  $("wsOpenTab").onclick = () => openTab();
+  WordSearch.mount($("wordSearch"), { panel: true, onOpenTab: openTab });
 }
 
 // ---- QR code ------------------------------------------------------------------

@@ -325,6 +325,8 @@ main:not(.laid-out) .panel { visibility: hidden; }
 .beam-section #beam { margin-top: 4px; }
 .beam-section .beam-card { padding: 14px 12px; }
 .beam-section .beam-code { font-size: 34px; }
+/* Word search (backup tab): wordsearch/wordsearch.css styles the game. */
+.ws-section #wordSearch { margin-top: 8px; }
 
 /* Proxy: the month's data, this site (add it, its country, or the full list to make room). */
 .px-ic { width: 20px; height: 12.5px; flex: none; margin-right: -1px; }

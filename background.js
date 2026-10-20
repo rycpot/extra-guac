@@ -27,6 +27,7 @@ const handlers = {
   openSettings: ({ section }) => openSettings(section),
   openScratch: ({ pad }) => openScratch(pad),
   openBeam: () => openBeam(),
+  openWordSearch: ({ level }) => openWordSearch(level),
   updateSettings: async ({ patch }) => ({ settings: await TT.updateSettings(patch) }),
   stopAll: () => stopAll(),
   ...captureHandlers,
@@ -404,6 +405,17 @@ async function openBeam() {
   const tab = (await chrome.tabs.query({})).find((t) => (t.url || t.pendingUrl || "").startsWith(url));
   if (!tab) return void (await chrome.tabs.create({ url }));
   await chrome.tabs.update(tab.id, { active: true });
+  await chrome.windows.update(tab.windowId, { focused: true });
+}
+
+// Word search in a tab of its own (wordsearch/index.html), the one already open if there is one;
+// a level from the panel opens it at that level.
+async function openWordSearch(level) {
+  const base = chrome.runtime.getURL("wordsearch/index.html");
+  const url = level ? `${base}#${level}` : base;
+  const tab = (await chrome.tabs.query({})).find((t) => (t.url || t.pendingUrl || "").startsWith(base));
+  if (!tab) return void (await chrome.tabs.create({ url }));
+  await chrome.tabs.update(tab.id, { active: true, ...(level ? { url } : {}) });
   await chrome.windows.update(tab.windowId, { focused: true });
 }
 

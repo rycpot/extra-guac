@@ -1,0 +1,105 @@
+/* Word search, in the side panel and in its own tab: big bold letters on a card, the words below
+   (or beside it in a wide tab), soft color bands over the found ones. Uses the colors of the page
+   it sits in (popup.css, page.css). */
+.ws { --ws-card: #161616; --ws-shadow: 0 10px 30px rgba(0,0,0,.45); position: relative; display: flex; flex-direction: column; gap: 10px; }
+@media (prefers-color-scheme: light) { :root[data-theme="auto"] .ws { --ws-card: #fff; --ws-shadow: 0 8px 26px rgba(0,0,0,.09); } }
+:root[data-theme="light"] .ws { --ws-card: #fff; --ws-shadow: 0 8px 26px rgba(0,0,0,.09); }
+:where(.ws) svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+:where(.ws) button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+:where(.ws) button:focus-visible { outline: 1.5px solid var(--stroke); outline-offset: 2px; }
+
+.ws-bar { display: flex; align-items: center; gap: 2px; }
+.ws-grow { flex: 1; }
+.ws-lang { height: 32px; padding: 0 12px 0 9px; display: inline-flex; align-items: center; gap: 7px; border-radius: 16px; background: var(--field);
+  font-weight: 600; max-width: 60%; }
+.ws-lang span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-lang:hover { background: var(--hover); }
+.ws-lang svg { width: 16px; height: 16px; color: var(--text2); }
+.ws-timer { min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 14px; color: var(--text2); }
+.ws-timer.ws-done { color: var(--green); }
+.ws-ib { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; color: var(--text2); }
+.ws-ib:hover { background: var(--hover); color: var(--text); }
+
+.ws-seg { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); padding: 3px; border-radius: 12px; background: var(--field); }
+.ws-seg button { position: relative; z-index: 1; height: 28px; border-radius: 9px; color: var(--text2); font-weight: 600; font-size: 12.5px; transition: color .25s; }
+.ws-seg button[aria-pressed="true"] { color: var(--text); }
+.ws-thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / 4); border-radius: 9px; background: var(--ws-card);
+  box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .35s cubic-bezier(.3,1.3,.5,1); }
+
+.ws-play { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.ws-card { padding: 10px; border-radius: 16px; background: var(--ws-card); box-shadow: var(--ws-shadow); }
+.ws-grid { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; }
+.ws-marks { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; stroke-linecap: round; }
+.ws-marks line { stroke-width: .8; }
+.ws-marks line.ws-sel { stroke: color-mix(in srgb, var(--text) 14%, transparent); }
+.ws-marks line.ws-miss { stroke: color-mix(in srgb, var(--red) 28%, transparent); opacity: 0; transition: opacity .35s .05s; }
+.ws-marks line.ws-found { stroke: hsl(var(--h) 42% 32%); }
+@media (prefers-color-scheme: light) { :root[data-theme="auto"] .ws-marks line.ws-found { stroke: hsl(var(--h) 85% 82%); } }
+:root[data-theme="light"] .ws-marks line.ws-found { stroke: hsl(var(--h) 85% 82%); }
+.ws-marks line.ws-pop { animation: ws-band .5s cubic-bezier(.3,1.5,.5,1); }
+.ws-marks .ws-anchor { fill: color-mix(in srgb, var(--text) 14%, transparent); stroke: none; }
+.ws-marks .ws-flash { fill: none; stroke: var(--yellow); stroke-width: .07; animation: ws-flash 1.8s ease-out forwards; transform-box: fill-box; transform-origin: center; }
+@keyframes ws-band { from { stroke-width: .5; } 60% { stroke-width: .9; } to { stroke-width: .8; } }
+@keyframes ws-flash { 0% { opacity: 0; transform: scale(1.8); } 18% { opacity: 1; transform: scale(1); } 75% { opacity: 1; } 100% { opacity: 0; } }
+
+.ws-letters { position: absolute; inset: 0; display: grid; }
+.ws-letters span { display: grid; place-items: center; font-weight: 700; font-size: calc(var(--cell) * .52); line-height: 1; color: var(--text); transition: transform .18s; }
+.ws-letters span.ws-on { transform: scale(1.14); }
+.ws-letters.ws-enter span { animation: ws-in .45s cubic-bezier(.2,.8,.3,1.2) backwards; animation-delay: calc(var(--d) * 20ms); }
+.ws-letters.ws-wave span { animation: ws-wave .7s ease-in-out; animation-delay: calc(var(--d) * 28ms); }
+@keyframes ws-in { from { opacity: 0; transform: scale(.4); } }
+@keyframes ws-wave { 40% { transform: translateY(calc(var(--cell) * -.22)) scale(1.12); } }
+
+.ws-words { display: flex; flex-wrap: wrap; justify-content: center; align-content: flex-start; gap: 6px 16px; max-width: 520px; padding: 0 4px; }
+.ws-word { font-weight: 700; font-size: 14px; letter-spacing: .02em; color: var(--text); transition: opacity .5s, color .3s; }
+.ws-word.ws-got { opacity: .28; }
+.ws-word.ws-hinted { color: var(--yellow); }
+.ws-left { width: 100%; text-align: center; color: var(--text2); font-weight: 600; }
+.ws-credit { margin: 0; display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text3); }
+.ws-credit a { color: var(--text2); }
+.ws .ws-credit svg.ws-gh { width: 13px; height: 13px; fill: currentColor; stroke: none; }
+.ws:not(.ws-panel) .ws-credit { width: 100%; max-width: max(320px, var(--ws-span, 520px)); align-self: center; }
+
+/* Its own tab: as big as the window, the list beside the grid when there's room. */
+.ws:not(.ws-panel) { height: 100%; }
+.ws:not(.ws-panel) .ws-bar, .ws:not(.ws-panel) .ws-seg { width: 100%; max-width: max(320px, var(--ws-span, 520px)); align-self: center; }
+.ws:not(.ws-panel) .ws-play { flex: 1; min-height: 0; justify-content: center; }
+.ws:not(.ws-panel) .ws-word { font-size: 16px; }
+.ws-play.ws-wide { flex-direction: row; gap: 36px; }
+.ws-play.ws-wide .ws-words { flex-direction: column; flex-wrap: nowrap; align-items: flex-start; width: 200px; max-height: 100%; overflow-y: auto; gap: 9px; }
+.ws-play.ws-wide .ws-left { text-align: start; }
+
+/* Cards over the game: language, stats, solved */
+.ws-overlay { position: absolute; inset: -6px; z-index: 5; display: grid; place-items: center; padding: 10px; border-radius: 16px;
+  background: color-mix(in srgb, var(--bg) 60%, transparent); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: ws-fade .25s; }
+.ws:not(.ws-panel) .ws-overlay { position: fixed; inset: 0; border-radius: 0; }
+@keyframes ws-fade { from { opacity: 0; } }
+.ws-box { position: relative; width: min(100%, 380px); max-height: 100%; overflow-y: auto; background: var(--ws-card); border: 1px solid var(--divider); border-radius: 18px;
+  padding: 22px 18px 18px; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.35);
+  animation: ws-rise .35s cubic-bezier(.2,.9,.3,1.2); }
+.ws-panel .ws-box { max-height: 520px; }
+@keyframes ws-rise { from { transform: translateY(12px) scale(.97); opacity: 0; } }
+.ws-box h2 { margin: 0; font-size: 16px; font-weight: 700; }
+.ws-box p { margin: 0; color: var(--text2); }
+.ws-x { position: absolute; top: 8px; right: 8px; }
+.ws-langs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; width: 100%; }
+.ws-langs button { padding: 9px 10px; border-radius: 10px; background: var(--field); font-weight: 600; text-align: start; transition: background-color .2s, transform .15s; }
+.ws-langs button:hover { background: var(--hover); }
+.ws-langs button:active { transform: scale(.97); }
+.ws-langs button.ws-cur { box-shadow: inset 0 0 0 1.5px var(--green); }
+.ws-big { font-size: 38px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.ws-box .ws-best { color: var(--yellow); font-weight: 600; }
+.ws-btn { height: 40px; padding: 0 20px; border-radius: 20px; background: var(--text); color: var(--bg); font-weight: 700;
+  display: inline-flex; align-items: center; gap: 8px; transition: transform .15s; }
+.ws-btn:hover { transform: scale(1.03); }
+.ws-btn svg { stroke-width: 2.2; }
+.ws-link { color: var(--text2); text-decoration: underline; text-underline-offset: 2px; }
+.ws-stats { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.ws-stats th, .ws-stats td { padding: 6px 10px; text-align: right; }
+.ws-stats th { color: var(--text3); font-weight: 600; font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; }
+.ws-stats td:first-child, .ws-stats th:first-child { text-align: left; }
+.ws-stats tr + tr td { border-top: 1px solid var(--divider); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-letters.ws-enter span, .ws-letters.ws-wave span, .ws-marks line.ws-pop, .ws-overlay, .ws-box { animation: none; }
+}
