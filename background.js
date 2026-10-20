@@ -1,5 +1,5 @@
 importScripts(
-  "pii-rules.js", "shared.js", "warp/places.js", "redirect-rules.js", "pad-store.js", "shot-store.js", "upload-thumbs.js",
+  "pii-rules.js", "shared.js", "endings.js", "warp/places.js", "redirect-rules.js", "pad-store.js", "shot-store.js", "upload-thumbs.js",
   "bg-capture.js", "bg-refresh.js", "bg-shortener.js", "bg-media.js", "bg-pickers.js", "bg-redirect.js", "bg-upload.js",
   "bg-remove.js", "bg-dark.js", "bg-backup.js", "bg-highlight.js", "bg-clip.js", "bg-imgzoom.js", "bg-imgdl.js", "bg-unlock.js", "bg-ocr.js", "bg-newtab.js", "bg-focus.js", "bg-qr.js", "bg-proxy.js", "bg-sessions.js",
   "us-meta.js", "us-gm.js", "bg-userscripts.js",

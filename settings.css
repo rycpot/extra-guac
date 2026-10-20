@@ -435,6 +435,7 @@ dialog.ask .ask-opt + .ask-btns { margin-top: 12px; }
 .px-x:hover { color: var(--error); }
 .px-empty { padding: 12px 14px; margin: 0; }
 .px-ladd { padding: 10px 14px; }
+.px-ladd:not(:last-child) { border-bottom: 1px solid var(--line); }
 .px-ladd .text { width: 100%; box-sizing: border-box; }
 .px-note { padding: 10px 12px; border-radius: 10px; background: var(--field); color: var(--muted); font-size: 12px; margin-top: 10px; }
 .px-note b { color: var(--fg); font-weight: 500; }
@@ -449,7 +450,7 @@ dialog.ask .ask-opt + .ask-btns { margin-top: 12px; }
 .px-radio small { color: var(--muted); }
 .px-mode { margin-bottom: 12px; }
 
-/* Proxy list: sites whose session switch profiles use a proxy, grouped above the user's own */
+/* Proxy list: sites whose session switch profiles use a proxy, the user's own, and the user's on any ending */
 .px-group { display: flex; justify-content: space-between; padding: 7px 14px; font-size: 11px; letter-spacing: .04em; text-transform: uppercase;
   color: var(--muted); background: var(--field); border-bottom: 1px solid var(--line); }
 .px-who { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }

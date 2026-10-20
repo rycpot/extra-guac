@@ -187,7 +187,45 @@
     v = v.replace(/^www\./, "").replace(/[/?#:].*$/, "");
     return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(v) ? v : "";
   }
-  const proxyCovers = (host, site) => host === site || host.endsWith(`.${site}`);
+  // A site on any ending is kept as "name.*" (TT.proxyName): the name followed by any real domain
+  // ending (endings.js), at any depth, and their subdomains: "xmovy.*" covers xmovy.fi,
+  // www.xmovy.co.id and xmovy.solar, not xmovy.github.io or xmovy.someone.com.
+  function proxyName(raw) {
+    let v = String(raw || "").trim().toLowerCase();
+    try { if (/^[a-z]+:\/\//.test(v)) v = new URL(v).hostname; } catch {}
+    v = v.replace(/[/?#:].*$/, "").replace(/\.\*$/, "").replace(/^www\./, "");
+    if (!/^[a-z0-9-]+(\.[a-z0-9-]+)*$/.test(v)) return "";
+    // A whole address (xmovy.co.id, app.xmovy.fi): the name just before its ending.
+    const labels = v.split(".");
+    if (labels.length > 1) {
+      const at = labels.findIndex((_, i) => i && isEnding(labels.slice(i).join(".")));
+      v = at > 0 ? labels[at - 1] : "";
+    }
+    return v ? `${v}.*` : "";
+  }
+  let endingTest = null;
+  const isEnding = (s) => !!globalThis.ENDINGS && (endingTest ||= globalThis.ENDINGS.make(globalThis.ENDINGS.data))(s);
+  const proxyAnyEnding = (site) => site.endsWith(".*");
+  // "xmovy.*" as it's shown: just the name, or with what it means.
+  const proxyLabel = (site, long = false) => (proxyAnyEnding(site) ? (long ? `${site.slice(0, -2)} on any ending` : site.slice(0, -2)) : site);
+  // How closely an entry covers a host, as the routing script walks it (bg-proxy.js): the host's
+  // part it matches (the longer, the closer; exact before any ending at the same part), 0 if not.
+  function proxyMatch(host, site) {
+    if (!proxyAnyEnding(site)) return host === site || host.endsWith(`.${site}`) ? site.length * 2 + 1 : 0;
+    const name = site.slice(0, -2);
+    for (let h = host, i; (i = h.indexOf(".")) > 0; h = h.slice(i + 1)) {
+      if (h.slice(0, i) === name && isEnding(h.slice(i + 1))) return h.length * 2;
+    }
+    return 0;
+  }
+  const proxyCovers = (host, site) => proxyMatch(host, site) > 0;
+  // The entry of a list that a host goes by: the closest one.
+  const proxyBest = (host, list) => list.reduce((best, e) => (proxyMatch(host, e.site) > (best ? proxyMatch(host, best.site) : 0) ? e : best), null);
+  // The part of a host that "name.*" matches (xmovy.co.id for www.xmovy.co.id), "" if none.
+  function proxyDomain(host, site) {
+    const n = proxyAnyEnding(site) ? proxyMatch(host, site) / 2 : 0;
+    return n ? host.slice(host.length - n) : "";
+  }
   // The country a listed site uses now: its own (or the main one), or, when the account has no
   // proxy there, the first backup it has ("*": any). ok: whether it's the one asked for.
   function proxyCountry(cfg, proxies, entry) {
@@ -375,5 +413,5 @@
   const hostName = (h) => (h === "x02" ? "X02" : h);
   const uploadChoices = (u) => { const on = uploadHosts(u); return on.includes(u.menu) ? [u.menu] : on; };
 
-  globalThis.TT = { when, settingsTask, uploadHosts, uploadChoices, hostName, focusNew, focusPattern, focusMatches, focusAddress, focusExpiresAt, focusState, focusThresholdMs, DEFAULTS, MAX_KEYWORDS, HL_LIMITS, HL_COLORS, HL_LOOKS, hlLookRule, hlOf, hlSiteKey, PROXY_LIMITS, proxyOf, proxySite, proxyCovers, proxyCountry, proxySlots, countryName, SHORTENERS, SHORTENER_LABEL, shortQuota, shortDay, keyTag, PANELS, SECTIONS, layoutOf, merge, getSettings, updateSettings, monthKey, cleanFolder, applyTheme };
+  globalThis.TT = { when, settingsTask, uploadHosts, uploadChoices, hostName, focusNew, focusPattern, focusMatches, focusAddress, focusExpiresAt, focusState, focusThresholdMs, DEFAULTS, MAX_KEYWORDS, HL_LIMITS, HL_COLORS, HL_LOOKS, hlLookRule, hlOf, hlSiteKey, PROXY_LIMITS, proxyOf, proxySite, proxyName, proxyAnyEnding, proxyLabel, proxyCovers, proxyBest, proxyDomain, proxyCountry, proxySlots, countryName, SHORTENERS, SHORTENER_LABEL, shortQuota, shortDay, keyTag, PANELS, SECTIONS, layoutOf, merge, getSettings, updateSettings, monthKey, cleanFolder, applyTheme };
 })();

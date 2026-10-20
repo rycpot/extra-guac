@@ -874,7 +874,8 @@
     }
 
     // The sites: "use the proxy" (or, in full mode, "skip the proxy"), each with its switch,
-    // its country when chosen per site, and × to remove it; a box at the foot adds one.
+    // its country when chosen per site, and × to remove it; a box at the foot of each group
+    // adds one. Sites on any ending ("name.*", TT.proxyName) have a group of their own.
     function siteList() {
       const key = full() ? "skip" : "sites";
       const list = cfg[key];
@@ -886,45 +887,57 @@
         t.style.background = `hsl(${h} 45% 42%)`;
         return t;
       };
-      const rows = list.map((s, i) => {
-        const name = el("span", { className: "px-name" }, el("span", { textContent: s.site }));
+      const row = (s, i) => {
+        const name = el("span", { className: "px-name" }, el("span", { textContent: TT.proxyLabel(s.site) }));
         if (!full()) {
           const c = TT.proxyCountry(cfg, st.proxies, s);
           if (!c.ok && st.proxies) name.append(el("small", { textContent: c.use ? `${TT.countryName(c.want)} unavailable · using ${TT.countryName(c.use)}` : `${TT.countryName(c.want)} unavailable · waiting for it` }));
           else if (i >= max() && s.on) name.append(el("small", { textContent: `over the ${max()}-site limit of this plan: not used` }));
           else if (ss.some((e) => e.domains.includes(s.site))) name.append(el("small", { className: "px-note", textContent: "while a session switch profile with a proxy is in use, its country goes first" }));
         }
-        const x = el("button", { type: "button", className: "px-x", textContent: "×", title: `Remove ${s.site}` });
+        const label = TT.proxyLabel(s.site, true);
+        const x = el("button", { type: "button", className: "px-x", textContent: "×", title: `Remove ${label}` });
         x.onclick = () => save((p) => (p[key] = p[key].filter((e) => e.site !== s.site)));
-        const row = el("div", { className: `px-site${s.on ? "" : " off"}` }, tile(s.site), name);
+        const r = el("div", { className: `px-site${s.on ? "" : " off"}` }, tile(s.site), name);
         // A site without a country of its own shows the one it uses (the one last chosen for
         // every site); picking one keeps it for that site.
-        if (perSite) row.append(countryMenu(s.country === "*" ? "" : s.country || cfg.country, (v) => save((p) => { const e = p.sites.find((e) => e.site === s.site); if (e) e.country = v || "*"; }), { cls: "sm" }));
-        row.append(x, sw(s.on, `${s.site} ${full() ? "skips the proxy" : "uses the proxy"}`, (on) => save((p) => { const e = p[key].find((e) => e.site === s.site); if (e) e.on = on; })));
-        return row;
-      });
-      const add = el("input", { type: "text", className: "text", placeholder: "+ add a site, e.g. example.com", spellcheck: false });
-      add.dataset.focus = "add";
-      add.onkeydown = (e) => {
-        if (e.key !== "Enter") return;
-        const site = TT.proxySite(add.value);
-        if (!site) return void (add.value.trim() && alert("That doesn't look like a site, e.g. example.com"));
-        if (list.some((e) => e.site === site)) return void (add.value = "");
-        // Already going through that country for a session switch profile: no new place taken.
-        const country = full() ? "" : TT.proxyCountry(cfg, [], { country: "" }).want;
-        if (slots().used >= total() && !slots().has(site, country)) return void alert(free()
-          ? `The free plan takes up to ${total()} sites (one per site and country, session switch profiles included). Remove one to add ${site}.`
-          : `Up to ${total()} sites (one per site and country, session switch profiles included). Remove one to add ${site}.`);
-        refocus = "add";
-        save((p) => p[key].push({ site, on: true, country: "" }));
+        if (perSite) r.append(countryMenu(s.country === "*" ? "" : s.country || cfg.country, (v) => save((p) => { const e = p.sites.find((e) => e.site === s.site); if (e) e.country = v || "*"; }), { cls: "sm" }));
+        r.append(x, sw(s.on, `${label} ${full() ? "skips the proxy" : "uses the proxy"}`, (on) => save((p) => { const e = p[key].find((e) => e.site === s.site); if (e) e.on = on; })));
+        return r;
       };
+      const rows = [], nameRows = [];
+      list.forEach((s, i) => (TT.proxyAnyEnding(s.site) ? nameRows : rows).push(row(s, i)));
+      // A box that adds what parse makes of what's typed ("" when it isn't one).
+      const adder = (focus, placeholder, parse, bad) => {
+        const add = el("input", { type: "text", className: "text", placeholder, spellcheck: false });
+        add.dataset.focus = focus;
+        add.onkeydown = (e) => {
+          if (e.key !== "Enter") return;
+          const site = parse(add.value);
+          if (!site) return void (add.value.trim() && alert(bad));
+          if (list.some((e) => e.site === site)) return void (add.value = "");
+          const label = TT.proxyLabel(site, true);
+          // Already going through that country for a session switch profile: no new place taken.
+          const country = full() ? "" : TT.proxyCountry(cfg, [], { country: "" }).want;
+          if (slots().used >= total() && !slots().has(site, country)) return void alert(free()
+            ? `The free plan takes up to ${total()} sites (one per site and country, session switch profiles included). Remove one to add ${label}.`
+            : `Up to ${total()} sites (one per site and country, session switch profiles included). Remove one to add ${label}.`);
+          refocus = focus;
+          save((p) => p[key].push({ site, on: true, country: "" }));
+        };
+        return el("div", { className: "px-ladd" }, add);
+      };
+      // "xmovy.*" typed with the sites: the same as in its own box.
+      const add = adder("add", "+ add a site, e.g. example.com", (v) => TT.proxySite(v) || (/\.\*\s*$/.test(v) ? TT.proxyName(v) : ""), "That doesn't look like a site, e.g. example.com");
+      const addName = adder("addName", "+ add a name, e.g. google", TT.proxyName, "Enter just the site's name, without its ending: google, for google.com");
       const head = el("div", { className: "px-lhead" }, el("span", { textContent: full() ? "Sites that skip the proxy" : "Sites that use the proxy" }), el("span", { textContent: `${slots().used} / ${total()}` }));
       // Sites whose session switch profiles use a proxy: a group of their own above the sites
       // here (who and which country), counted with them, changed in the popup's session switch section (each profile's
       // proxy), which "change in popup" opens on the site.
+      const group = (title, n) => el("div", { className: "px-group" }, el("span", { textContent: title }), el("span", { textContent: String(n) }));
+      const profileRows = [];
       if (!full() && ss.length) {
-        const group = (title, n) => el("div", { className: "px-group" }, el("span", { textContent: title }), el("span", { textContent: String(n) }));
-        const profileRows = ss.map((e) => {
+        profileRows.push(group("Session switch profiles", ss.length), ...ss.map((e) => {
           const countries = [...new Set(e.profiles.map((p) => (p.country ? TT.countryName(p.country) : "any country")))].join(", ");
           const open = el("button", { type: "button", className: "px-open", textContent: "change in popup", title: `Opens ${e.site}; each profile's proxy is set in the popup's session switch section` });
           open.onclick = async () => {
@@ -935,11 +948,13 @@
             el("span", { className: "px-name" }, el("span", { textContent: e.domains.join(" + ") })),
             el("span", { className: "px-who", textContent: `${e.profiles.map((p) => p.name).join(", ")} · ${countries}` }),
             open);
-        });
-        rows.unshift(group("Session switch profiles", ss.length), ...profileRows, group("Your sites", list.length));
+        }));
       }
       const empty = el("p", { className: "hint px-empty", textContent: full() ? "none: every site goes through the proxy" : "none yet: add a site below, or use add this site in the panel" });
-      const kids = [el("div", { className: "px-list" }, head, ...(rows.length ? rows : [empty]), el("div", { className: "px-ladd" }, add))];
+      const hint = el("p", { className: "hint px-empty", textContent: `Some sites change their ending every now and then, or have one per country. Enter just the name to match it on every real domain ending${full() ? " and keep it off the proxy" : ""}. For example, google covers google.com, google.co.uk and google.co.id, plus their subdomains.` });
+      const kids = [el("div", { className: "px-list" }, head,
+        ...profileRows, group("Your sites", rows.length), ...(rows.length ? rows : [empty]), add,
+        group("Sites on any ending", nameRows.length), ...nameRows, hint, addName)];
       if (full()) kids.push(el("p", { className: "hint", textContent: "Everything goes through the proxy except these, which use your own connection (banks, or sites that block proxies). Webshare's own site always does." }));
       else if (free()) kids.push(el("div", { className: "px-note" }, "Only these sites use the proxy; everything else uses your own connection, so the data lasts. ", el("b", { textContent: "Every site through the proxy" }), " comes with Webshare's paid plans."));
       return section("", ...kids);

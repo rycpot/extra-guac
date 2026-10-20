@@ -10,6 +10,10 @@
 // moves to the next when one doesn't answer), never straight out; everything else goes
 // direct. On a paid plan, mode "full" turns it around. The script carries no logins: they're
 // given when a proxy asks (onAuthRequired). Free plans: up to 20 sites, "only these sites".
+// A site on any ending ("xmovy.*", TT.proxyName) is its name followed by any real domain ending
+// (endings.js): the script carries the endings for it. Page scripts (WebRTC, the proxy's place)
+// can only be given whole addresses, so each such site's addresses are learned as they're opened
+// (proxySeen), and a page opened on one for the first time gets them as it opens.
 // Session Switch profiles with a proxy (bg-sessions.js) add their sites to the same script, ahead
 // of everything here: whenever a key is set, even with the proxy switched off, and never straight
 // out. While the script is being replaced, or the setting is held elsewhere, those sites are blocked.
@@ -236,15 +240,25 @@ function proxyRules(cfg, st, own = true, profiles = {}) {
 
 function proxyScript({ rules, fallback }) {
   // Walks up the host's labels (a.b.example.com, b.example.com, example.com) to the first
-  // listed one. This computer and its network always go direct.
-  return `var R = ${JSON.stringify(rules)};
+  // listed one, or the first whose name is listed on any ending and is followed by a real
+  // ending (xmovy.co.id for "xmovy.*"). This computer and its network always go direct.
+  const exact = {}, names = {};
+  for (const [site, answer] of Object.entries(rules)) {
+    if (TT.proxyAnyEnding(site)) names[site.slice(0, -2)] = answer;
+    else exact[site] = answer;
+  }
+  const any = Object.keys(names).length > 0;
+  return `var R = ${JSON.stringify(exact)};${any ? `
+var N = ${JSON.stringify(names)};
+var ending = (${ENDINGS.make})(${JSON.stringify(ENDINGS.data)});` : ""}
 function FindProxyForURL(url, host) {
   host = host.toLowerCase();
   if (isPlainHostName(host) || host === "localhost" || /^(127\\.|10\\.|192\\.168\\.|169\\.254\\.|172\\.(1[6-9]|2\\d|3[01])\\.)/.test(host) || host.indexOf(":") >= 0) return "DIRECT";
   for (var h = host; ; ) {
     if (Object.prototype.hasOwnProperty.call(R, h)) return R[h];
     var i = h.indexOf(".");
-    if (i < 0) break;
+    if (i < 0) break;${any ? `
+    if (Object.prototype.hasOwnProperty.call(N, h.slice(0, i)) && ending(h.slice(i + 1))) return N[h.slice(0, i)];` : ""}
     h = h.slice(i + 1);
   }
   return ${JSON.stringify(fallback)};
@@ -267,6 +281,7 @@ async function applyProxyNow() {
     await editLocal(["proxyState"], ({ proxyState }) => (proxyState ? { proxyState: { ...proxyState, blocked } } : null));
   }
   sessionOwnLimit = TT.proxySlots(cfg, st, (await chrome.storage.local.get("ssProxySites")).ssProxySites).own;
+  await readEndings(cfg, st, true);
   const profiles = await sessionProxyRoutes(cfg, st);
   const domains = Object.keys(profiles);
   sessionRouted = domains;
@@ -310,7 +325,7 @@ async function applyProxyNow() {
 // but the skipped ones) and Session Switch profiles' sites, only while their proxy is in use.
 // Everywhere else it works as usual.
 const GUARD_ID = "webrtc-guard";
-const guardPatterns = (sites) => sites.flatMap((d) => (/^[\d.]+$/.test(d) || d.includes(":") ? [`*://${d}/*`] : [`*://${d}/*`, `*://*.${d}/*`]));
+const guardPatterns = (sites) => expandSites(sites).flatMap((d) => (/^[\d.]+$/.test(d) || d.includes(":") ? [`*://${d}/*`] : [`*://${d}/*`, `*://*.${d}/*`]));
 async function proxyGuard(cfg, st, own, profileDomains) {
   let matches = [], excludeMatches = [];
   if (cfg.webrtc) {
@@ -318,7 +333,7 @@ async function proxyGuard(cfg, st, own, profileDomains) {
       matches = ["<all_urls>"];
       // Skipped sites go direct, unless a profile's proxy takes them.
       const skipped = [...cfg.skip.filter((s) => s.on).map((s) => s.site), "webshare.io"];
-      excludeMatches = guardPatterns(skipped.filter((s) => !profileDomains.some((d) => TT.proxyCovers(s, d))));
+      excludeMatches = guardPatterns(expandSites(skipped).filter((s) => !profileDomains.some((d) => TT.proxyCovers(s, d))));
     } else {
       matches = guardPatterns([...new Set([...(own ? proxySites(cfg, st).map((s) => s.site) : []), ...profileDomains])]);
     }
@@ -397,11 +412,13 @@ async function proxyWarp(cfg, st, routed) {
     // The sites inside its own that go another way (for the place every other site has, all of them).
     const others = listed.filter((s) => !p.sites.includes(s));
     const away = p.all ? others : others.filter((s) => p.sites.some((d) => s !== d && TT.proxyCovers(s, d)));
-    scripts.push({ id: WARP_ID + p.key, js: [`warp/${p.key}.js`, ...features, "warp.js"], matches: p.all ? ["<all_urls>"] : guardPatterns(p.sites), excludeMatches: guardPatterns(away) });
+    const matches = p.all ? ["<all_urls>"] : guardPatterns(p.sites);
+    if (!matches.length) continue; // only sites on any ending, none of their addresses opened yet
+    scripts.push({ id: WARP_ID + p.key, js: [`warp/${p.key}.js`, ...features, "warp.js"], matches, excludeMatches: guardPatterns(away) });
     if (!cfg.language || rules.length === 100) continue; // the rule ids it has
     const condition = { resourceTypes: WARP_TYPES };
-    if (!p.all) condition.requestDomains = p.sites;
-    const skip = p.all ? [...away, "localhost"] : away;
+    if (!p.all) condition.requestDomains = expandSites(p.sites);
+    const skip = expandSites(p.all ? [...away, "localhost"] : away);
     if (skip.length) condition.excludedRequestDomains = skip;
     rules.push({
       id: WARP_RULES + rules.length, priority: p.all ? 1 : 2, condition,
@@ -414,6 +431,78 @@ async function proxyWarp(cfg, st, routed) {
     await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: have.map((r) => r.id), addRules: rules });
   }
 }
+
+// ---- Sites on any ending ------------------------------------------------------------------
+// Their addresses as they're opened, for the page scripts (Chrome takes only whole addresses
+// there): storage.local "proxySeen", { "xmovy.*": ["xmovy.fi", "xmovy.co.id"] }, the latest 50
+// of each, forgotten when the site's taken off the lists. The routing script needs none of it.
+
+let anyEndings = []; // the sites on any ending in use (listed for the mode, switched on), as last routed
+let seenDomains = {};
+// tidy: the addresses of sites no longer on either list are forgotten.
+async function readEndings(cfg, st, tidy = false) {
+  const { proxySeen } = await chrome.storage.local.get("proxySeen");
+  const listed = new Set([...cfg.sites, ...cfg.skip].map((s) => s.site).filter(TT.proxyAnyEnding));
+  anyEndings = cfg.key ? (proxyMode(cfg, st) === "full" ? cfg.skip : proxySites(cfg, st)).filter((s) => s.on && TT.proxyAnyEnding(s.site)).map((s) => s.site) : [];
+  seenDomains = proxySeen && typeof proxySeen === "object" ? proxySeen : {};
+  if (tidy && Object.keys(seenDomains).some((s) => !listed.has(s))) {
+    await editLocal(["proxySeen"], ({ proxySeen }) => {
+      seenDomains = Object.fromEntries(Object.entries(proxySeen || {}).filter(([s]) => listed.has(s)));
+      return { proxySeen: seenDomains };
+    });
+  }
+}
+// After the service worker starts again, before the first routing.
+const endingsRead = getProxy().then(({ cfg, st }) => readEndings(cfg, st)).catch(() => {});
+const expandSites = (sites) => [...new Set(sites.flatMap((s) => (TT.proxyAnyEnding(s) ? seenDomains[s] || [] : [s])))];
+// Addresses learned since a page began opening on them, with the routing then put in place:
+// that page gets the scripts as it opens, in case it opened before they were registered.
+const freshDomains = new Map();
+// One navigation after another, so a page's commit (below) waits for what its start learned.
+let learning = Promise.resolve();
+
+chrome.webNavigation.onBeforeNavigate.addListener(({ url }) => {
+  learning = learning.then(() => learnFrom(url)).catch(() => {});
+});
+async function learnFrom(url) {
+  await endingsRead;
+  if (!anyEndings.length) return;
+  let host = "";
+  try { const u = new URL(url); if (/^https?:$/.test(u.protocol)) host = u.hostname.toLowerCase(); } catch {}
+  if (!host || proxyLocalHost(host)) return;
+  const learn = anyEndings.map((site) => [site, TT.proxyDomain(host, site)]).filter(([site, d]) => d && !seenDomains[site]?.includes(d));
+  if (!learn.length) return;
+  const applied = editLocal(["proxySeen"], ({ proxySeen }) => {
+    const seen = proxySeen && typeof proxySeen === "object" ? { ...proxySeen } : {};
+    for (const [site, d] of learn) seen[site] = [...(seen[site] || []).filter((x) => x !== d), d].slice(-50);
+    seenDomains = seen;
+    return { proxySeen: seen };
+  }).then(() => applyProxy());
+  for (const [, d] of learn) freshDomains.set(d, { at: Date.now(), applied });
+}
+
+chrome.webNavigation.onCommitted.addListener(async ({ url, tabId, frameId }) => {
+  await learning;
+  if (!freshDomains.size) return;
+  let host = "";
+  try { host = new URL(url).hostname.toLowerCase(); } catch {}
+  for (const [d, f] of freshDomains) {
+    if (Date.now() - f.at > 60e3) { freshDomains.delete(d); continue; }
+    if (host !== d && !host.endsWith(`.${d}`)) continue;
+    await f.applied.catch(() => {});
+    const covers = (pattern) => {
+      const [, sub, h] = /^\*:\/\/(\*\.)?([^/]+)\/\*$/.exec(pattern) || [];
+      return pattern === "<all_urls>" || (h ? host === h || (!!sub && host.endsWith(`.${h}`)) : false);
+    };
+    const scripts = (await chrome.scripting.getRegisteredContentScripts())
+      .filter((s) => (s.id === GUARD_ID || s.id.startsWith(WARP_ID)) && s.matches.includes(`*://${d}/*`) && !(s.excludeMatches || []).some(covers));
+    // Each runs once on a page, so one that was in place in time isn't run twice.
+    for (const s of scripts) {
+      await chrome.scripting.executeScript({ target: { tabId, frameIds: [frameId] }, files: s.js, world: "MAIN", injectImmediately: true }).catch(() => {});
+    }
+    return;
+  }
+});
 
 // ---- Proxy logins ---------------------------------------------------------------------
 // Chrome asks when a proxy wants its login. Two tries per request at most: a proxy that keeps

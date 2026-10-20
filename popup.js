@@ -1210,13 +1210,13 @@ function initProxy(isWeb) {
   function thisSite() {
     if (!host) return null;
     if (full()) {
-      const skip = cfg.skip.filter((s) => s.on && TT.proxyCovers(host, s.site)).sort((a, b) => b.site.length - a.site.length)[0]; // the most specific
+      const skip = TT.proxyBest(host, cfg.skip.filter((s) => s.on)); // the most specific
       // Switching it back on takes this site's own entry out; one skipped as part of a wider
       // entry (google.com for mail.google.com) is changed in settings, not here.
-      return subRow(el("span", { className: "px-site" }, el("span", { textContent: skip?.site || host }), el("small", { textContent: skip ? "skips the proxy" : "goes through the proxy" })),
+      return subRow(el("span", { className: "px-site" }, el("span", { textContent: skip ? TT.proxyLabel(skip.site, true) : host }), el("small", { textContent: skip ? "skips the proxy" : "goes through the proxy" })),
         sw(!skip, `${host} through the proxy`, (on) => {
           if (on && skip && skip.site !== host) {
-            toast(`Skipped as part of ${skip.site}; change it in settings → proxy`, true);
+            toast(`Skipped as part of ${TT.proxyLabel(skip.site, true)}; change it in settings → proxy`, true);
             return render();
           }
           save((p) => {
@@ -1229,7 +1229,7 @@ function initProxy(isWeb) {
     // A site whose session switch profiles use a proxy goes the way the active profile says.
     const viaProfiles = ss.find((e) => e.profiles.some((p) => p.inUse) && e.domains.some((d) => TT.proxyCovers(host, d)));
     if (viaProfiles) return subRow(el("span", { className: "px-site" }, el("span", { textContent: viaProfiles.site }), el("small", { textContent: "proxy set by its session switch profiles" })));
-    const entry = cfg.sites.find((s) => TT.proxyCovers(host, s.site));
+    const entry = TT.proxyBest(host, cfg.sites);
     if (!entry) {
       const add = el("button", { className: "text-btn", innerHTML: '<svg><use href="#i-plus"/></svg>add this site' });
       add.onclick = () => {
@@ -1241,7 +1241,7 @@ function initProxy(isWeb) {
     // Past the plan's limit (left from a paid plan): kept, but not used.
     if (cfg.sites.indexOf(entry) >= max()) {
       const note = el("small", { className: "warn", textContent: `over the ${max()}-site limit: not used` });
-      return subRow(el("span", { className: "px-site" }, el("span", { textContent: entry.site }), note));
+      return subRow(el("span", { className: "px-site" }, el("span", { textContent: TT.proxyLabel(entry.site, true) }), note));
     }
     const c = TT.proxyCountry(cfg, st.proxies, entry);
     const end = el("span", { className: "px-end" });
@@ -1249,7 +1249,7 @@ function initProxy(isWeb) {
     if (!c.ok) note.className = "warn";
     if (cfg.countryMode === "each") {
       const sel = el("select", { className: "mini-sel" });
-      sel.setAttribute("aria-label", `Country for ${entry.site}`);
+      sel.setAttribute("aria-label", `Country for ${TT.proxyLabel(entry.site, true)}`);
       const have = [...new Set((st.proxies || []).map((p) => p.c).filter(Boolean))].sort((a, b) => TT.countryName(a).localeCompare(TT.countryName(b)));
       const now = entry.country === "*" ? "" : entry.country || cfg.country; // without its own: the one it uses
       sel.append(el("option", { value: "", textContent: "any country" }));
@@ -1260,15 +1260,15 @@ function initProxy(isWeb) {
       end.append(sel);
       if (c.ok) note.textContent = "";
     }
-    end.append(sw(entry.on, `${entry.site} through the proxy`, (on) => save((p) => { const e = p.sites.find((e) => e.site === entry.site); if (e) e.on = on; })));
-    return subRow(el("span", { className: "px-site" }, el("span", { textContent: entry.site }), note), end);
+    end.append(sw(entry.on, `${TT.proxyLabel(entry.site, true)} through the proxy`, (on) => save((p) => { const e = p.sites.find((e) => e.site === entry.site); if (e) e.on = on; })));
+    return subRow(el("span", { className: "px-site" }, el("span", { textContent: TT.proxyLabel(entry.site, true) }), note), end);
   }
 
   // The plan's sites are all taken: remove one, and this site takes its place.
   function makeRoom() {
     const pills = el("div", { className: "px-pills" });
     for (const s of cfg.sites) {
-      const b = el("button", { title: `Remove ${s.site} and add ${host}` }, s.site, el("i", { textContent: "×" }));
+      const b = el("button", { title: `Remove ${TT.proxyLabel(s.site, true)} and add ${host}` }, TT.proxyLabel(s.site, true), el("i", { textContent: "×" }));
       b.onclick = () => { making = false; save((p) => { p.sites = p.sites.filter((e) => e.site !== s.site); p.sites.push({ site: host, on: true, country: "" }); }); };
       pills.append(b);
     }
