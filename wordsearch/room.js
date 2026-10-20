@@ -925,7 +925,10 @@ function results(box) {
     const again = btn("ws-btn ws-go", "again", "Rematch", startRound);
     again.disabled = !others || pendingStart;
     acts.append(again, btn("ws-btn ws-ghost", null, "Back to room", toLobby));
-  } else if (done) acts.append(el("p", "ws-shint", `Waiting for ${hostName()} to start the next round`), btn("ws-btn ws-ghost", "leave", "Leave room", leave));
+  } else if (done) {
+    box.append(el("p", "ws-shint", `Waiting for ${hostName()} to start the next round`));
+    acts.append(btn("ws-btn ws-ghost", "leave", "Leave room", leave));
+  }
   if (acts.childNodes.length) box.append(acts);
   if (startNote && hosting) box.append(el("p", "ws-snote", startNote));
 }
