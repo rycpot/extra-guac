@@ -152,7 +152,7 @@ const narrow = matchMedia("(max-width: 879px)");
 
 // ---- Play with others: make a room, or join one ------------------------------------------
 let menuEl = null;
-function menu(btn) {
+function menu(btn, fromPanel) {
   if (menuEl) return closeMenu();
   if (beam) return;
   menuEl = el("div", "ws-roommenu");
@@ -193,7 +193,10 @@ function menu(btn) {
   btn.closest(".ws-bar").append(menuEl);
   btn.setAttribute("aria-expanded", "true");
   menuEl._btn = btn;
-  create.focus({ preventScroll: true });
+  // Opened from the panel, nobody has used the keyboard here yet: focus the card itself, so Tab
+  // and Escape work but the button doesn't wear a keyboard focus ring.
+  if (fromPanel) { menuEl.tabIndex = -1; menuEl.focus({ preventScroll: true }); }
+  else create.focus({ preventScroll: true });
 }
 function closeMenu() {
   if (!menuEl) return;
@@ -976,7 +979,7 @@ function init(a, pageEl) {
 function askedFromPanel() {
   if (!/^#room\b/.test(location.hash)) return;
   history.replaceState(null, "", location.href.split("#")[0]);
-  if (!beam && !menuEl && api.room.button) menu(api.room.button);
+  if (!beam && !menuEl && api.room.button) menu(api.room.button, true);
 }
 
 globalThis.WordSearchRoom = { init, menu };

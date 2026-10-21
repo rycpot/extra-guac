@@ -48,6 +48,7 @@ const handlers = {
   ...qrHandlers,
   ...proxyHandlers,
   ...usHandlers,
+  offscreenIdle: () => closeOffscreenIfIdle(),
 };
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
@@ -184,11 +185,26 @@ async function ensureOffscreen() {
   await offscreenCreating;
 }
 
+let offscreenBusy = 0; // requests on their way to the document or waiting for its answer
+
 async function toOffscreen(msg) {
-  await ensureOffscreen();
-  const res = await chrome.runtime.sendMessage({ target: "offscreen", ...msg });
-  if (res && res.ok === false) throw new Error(res.error);
-  return res;
+  offscreenBusy++;
+  try {
+    await ensureOffscreen();
+    const res = await chrome.runtime.sendMessage({ target: "offscreen", ...msg });
+    if (res && res.ok === false) throw new Error(res.error);
+    return res;
+  } finally {
+    offscreenBusy--;
+  }
+}
+
+// The document says when it has had nothing to do for a while (no auto-refresh ticking, no tab
+// volume, nothing playing): it's closed then, so it doesn't sit in memory until Chrome quits, and
+// made again by the next request. A request that came in meanwhile keeps it open.
+async function closeOffscreenIfIdle() {
+  if (offscreenBusy || offscreenCreating) return;
+  await chrome.offscreen.closeDocument().catch(() => {});
 }
 
 // ---- Nuke ------------------------------------------------------------------

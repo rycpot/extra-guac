@@ -26,6 +26,7 @@
 
 .ws-roommenu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 6; width: min(100%, 300px); display: flex; flex-direction: column; gap: 12px; padding: 16px;
   border-radius: 14px; background: var(--ws-card); border: 1px solid var(--divider); box-shadow: 0 16px 44px rgba(0,0,0,.35); animation: ws-drop .22s cubic-bezier(.2,.9,.3,1.15); }
+.ws-roommenu:focus { outline: none; }
 .ws-roommenu > b { font-size: 15px; }
 .ws-rm-hint { margin: -6px 0 0; color: var(--text2); font-size: 12px; }
 .ws-rm-name { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text2); }

@@ -1,6 +1,7 @@
 // Hidden page owned by the background worker. It
 // - sends a "tick" every second while an auto-refresh is running (a service worker's
 //   own timers stop when Chrome suspends it; a message from here wakes it up),
+// - asks the background worker to close it once it has had nothing to do for a minute,
 // - plays the keyword alert sound,
 // - copies text to the clipboard (uploaded image links),
 // - reads font files for "what font?" (font-names.js, loaded on first use),
@@ -38,9 +39,13 @@ const actions = {
   },
 
   async play({ url }) {
-    if (url === "chime") return playChime();
+    playing++;
+    let ended = false;
+    const done = () => { if (ended) return; ended = true; playing--; idleCheck(); };
+    if (url === "chime") return playChime().finally(done);
     const audio = new Audio(url);
-    await audio.play();
+    audio.onended = audio.onerror = done;
+    await audio.play().catch((e) => { done(); throw e; });
   },
 
   async volumeStart({ tabId, streamId, gain }) {
@@ -79,10 +84,24 @@ const actions = {
   },
 };
 
+// Idle: no ticker, no tab volume, nothing playing and no request being worked on. A minute of
+// that and the background worker is asked to close this page (it checks nothing new is on the way).
+const IDLE_MS = 60000;
+let working = 0, playing = 0, idleTimer = 0;
+function idleCheck() {
+  clearTimeout(idleTimer);
+  if (ticker || graphs.size || working || playing) return;
+  idleTimer = setTimeout(() => chrome.runtime.sendMessage({ type: "offscreenIdle" }).catch(() => {}), IDLE_MS);
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg?.target !== "offscreen" || !actions[msg.type]) return;
+  working++;
+  clearTimeout(idleTimer);
   Promise.resolve()
     .then(() => actions[msg.type](msg))
-    .then((result) => reply({ ok: true, result }), (err) => reply({ ok: false, error: err?.message || String(err) }));
+    .then((result) => reply({ ok: true, result }), (err) => reply({ ok: false, error: err?.message || String(err) }))
+    .finally(() => { working--; idleCheck(); });
   return true;
 });
+idleCheck();

@@ -293,6 +293,7 @@ async function listSnapshots() {
       keepUntil: Number(f.appProperties?.keepUntil) || 0,
       hash: f.appProperties?.hash || "", // what's in it (older snapshots don't say)
       scripts: f.appProperties?.scripts ? Number(f.appProperties.scripts) : null, // userscripts in it (older ones don't say)
+      profiles: f.appProperties?.profiles ? Number(f.appProperties.profiles) : null, // session switch profiles sealed in it (older ones don't say)
     }))
     .sort((a, b) => b.at - a.at);
 }
@@ -341,7 +342,12 @@ async function uploadSnapshot(snap, props = {}) {
     name: `${prefix}-${stamp(new Date(at))}.json.gz`,
     parents: [folder],
     mimeType: "application/gzip",
-    appProperties: { at: String(at), tt: "1", device: await deviceId(), ...(Array.isArray(snap.data.usScripts) ? { scripts: String(snap.data.usScripts.length) } : {}), ...props },
+    appProperties: {
+      at: String(at), tt: "1", device: await deviceId(),
+      ...(Array.isArray(snap.data.usScripts) ? { scripts: String(snap.data.usScripts.length) } : {}),
+      ...(snap.data.ssProfiles?.profiles ? { profiles: String(snap.data.ssProfiles.profiles) } : {}),
+      ...props,
+    },
   };
   const b = `tt${crypto.randomUUID()}`;
   const gz = await gzip(JSON.stringify(snap));

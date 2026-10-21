@@ -1284,8 +1284,10 @@
           tr.querySelector("b").textContent = when(snap.at);
           const tags = [];
           if (snap.kind === "pre-restore") tags.push("before a restore");
+          // A browser's id goes with its install: one removed and added again counts as another.
           if (backupDevice && snap.device === backupDevice) tags.push("this browser");
-          else if (snap.device) tags.push("another browser");
+          else if (snap.device) tags.push("earlier install or another browser");
+          if (snap.profiles) tags.push(`+ ${snap.profiles} profile${snap.profiles === 1 ? "" : "s"}`);
           for (const t of tags) {
             const tag = document.createElement("span");
             tag.className = "tag";

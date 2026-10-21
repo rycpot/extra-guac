@@ -2445,7 +2445,9 @@ addEventListener('storage', e => { if (e.key === NAME_KEY && !GAME) announceMe()
 $('compose').addEventListener('submit', e => { e.preventDefault(); sayChat($('chatInput').value); $('chatInput').value = '' })
 if (!GAME) {
   // The chat's height follows what's above it and the window (the panel's tab shown, a device added).
-  const ro = new ResizeObserver(() => sizeChat())
+  // On the next frame, not inside the observer: the chat's new height can change what it observes.
+  let chatFrame = 0
+  const ro = new ResizeObserver(() => { cancelAnimationFrame(chatFrame); chatFrame = requestAnimationFrame(sizeChat) })
   ro.observe(root)
   addEventListener('resize', sizeChat, {signal: life.signal})
   life.signal.addEventListener('abort', () => ro.disconnect())

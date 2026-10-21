@@ -482,7 +482,13 @@ function mount(root, opts = {}) {
     start.style.height = `${size + pad}px`;
     root.style.setProperty("--ws-card-h", `${size + pad}px`);
   }
-  new ResizeObserver(layout).observe(root);
+  // Laid out on the next frame, not inside the observer: the grid's new size changes the page's
+  // height, and resizing again within the same round leaves Chrome with sizes it can't deliver.
+  let layoutFrame = 0;
+  new ResizeObserver(() => {
+    cancelAnimationFrame(layoutFrame);
+    layoutFrame = requestAnimationFrame(layout);
+  }).observe(root);
   const narrowRoom = matchMedia("(max-width: 879px)");
 
   // ---- clock: runs only while the puzzle is on screen ----
