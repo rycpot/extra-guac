@@ -1,0 +1,29 @@
+/* Word search in a tab of its own: the same colors as Extra Guac's popup, following its theme
+   setting (page.js sets data-theme). */
+@font-face { font-family: "Inter"; font-weight: 100 900; font-display: swap; src: url("../fonts/InterVariable.woff2") format("woff2"); } /* Inter, SIL Open Font License */
+:root {
+  --bg: #0b0b0b; --text: rgba(255,255,255,.92); --text2: rgba(255,255,255,.66); --text3: rgba(255,255,255,.44);
+  --divider: rgba(255,255,255,.08); --field: rgba(255,255,255,.07); --hover: rgba(255,255,255,.07); --stroke: rgba(255,255,255,.2);
+  --green: #30d158; --yellow: #ffd60a; --red: #ff453a; --grain: .05; color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="auto"] {
+    --bg: #f8f7f4; --text: rgba(0,0,0,.88); --text2: rgba(0,0,0,.68); --text3: rgba(0,0,0,.52);
+    --divider: rgba(0,0,0,.1); --field: rgba(0,0,0,.06); --hover: rgba(0,0,0,.06); --stroke: rgba(0,0,0,.28);
+    --green: #28a745; --yellow: #b8860b; --red: #d70015; --grain: .035; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #f8f7f4; --text: rgba(0,0,0,.88); --text2: rgba(0,0,0,.68); --text3: rgba(0,0,0,.52);
+  --divider: rgba(0,0,0,.1); --field: rgba(0,0,0,.06); --hover: rgba(0,0,0,.06); --stroke: rgba(0,0,0,.28);
+  --green: #28a745; --yellow: #b8860b; --red: #d70015; --grain: .035; color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--text); font: 400 13px/1.4 "Inter", system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased;
+  overflow: hidden; padding: 14px 16px 12px; }
+body::after { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: var(--grain);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+/* The game, and in a room the players and chat beside it (room.css) */
+.ws-page { height: 100%; display: flex; justify-content: center; gap: 20px; }
+#ws { flex: 0 1 1000px; min-width: 0; max-width: 1000px; height: 100%; }

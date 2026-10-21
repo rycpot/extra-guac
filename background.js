@@ -27,6 +27,7 @@ const handlers = {
   openSettings: ({ section }) => openSettings(section),
   openScratch: ({ pad }) => openScratch(pad),
   openBeam: () => openBeam(),
+  openWordSearch: ({ level }) => openWordSearch(level),
   updateSettings: async ({ patch }) => ({ settings: await TT.updateSettings(patch) }),
   stopAll: () => stopAll(),
   ...captureHandlers,
@@ -47,6 +48,7 @@ const handlers = {
   ...qrHandlers,
   ...proxyHandlers,
   ...usHandlers,
+  offscreenIdle: () => closeOffscreenIfIdle(),
 };
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
@@ -183,11 +185,26 @@ async function ensureOffscreen() {
   await offscreenCreating;
 }
 
+let offscreenBusy = 0; // requests on their way to the document or waiting for its answer
+
 async function toOffscreen(msg) {
-  await ensureOffscreen();
-  const res = await chrome.runtime.sendMessage({ target: "offscreen", ...msg });
-  if (res && res.ok === false) throw new Error(res.error);
-  return res;
+  offscreenBusy++;
+  try {
+    await ensureOffscreen();
+    const res = await chrome.runtime.sendMessage({ target: "offscreen", ...msg });
+    if (res && res.ok === false) throw new Error(res.error);
+    return res;
+  } finally {
+    offscreenBusy--;
+  }
+}
+
+// The document says when it has had nothing to do for a while (no auto-refresh ticking, no tab
+// volume, nothing playing): it's closed then, so it doesn't sit in memory until Chrome quits, and
+// made again by the next request. A request that came in meanwhile keeps it open.
+async function closeOffscreenIfIdle() {
+  if (offscreenBusy || offscreenCreating) return;
+  await chrome.offscreen.closeDocument().catch(() => {});
 }
 
 // ---- Nuke ------------------------------------------------------------------
@@ -404,6 +421,18 @@ async function openBeam() {
   const tab = (await chrome.tabs.query({})).find((t) => (t.url || t.pendingUrl || "").startsWith(url));
   if (!tab) return void (await chrome.tabs.create({ url }));
   await chrome.tabs.update(tab.id, { active: true });
+  await chrome.windows.update(tab.windowId, { focused: true });
+}
+
+// Word search in a tab of its own (wordsearch/index.html), the one already open if there is one;
+// a level from the panel opens it at that level, "room" with Play with others open.
+async function openWordSearch(level) {
+  const base = chrome.runtime.getURL("wordsearch/index.html");
+  // A new game at that level (numbered, so asking twice is a change too).
+  const url = level === "room" ? `${base}#room.${Date.now()}` : level ? `${base}#new-${level}.${Date.now()}` : base;
+  const tab = (await chrome.tabs.query({})).find((t) => (t.url || t.pendingUrl || "").startsWith(base));
+  if (!tab) return void (await chrome.tabs.create({ url }));
+  await chrome.tabs.update(tab.id, { active: true, ...(level ? { url } : {}) });
   await chrome.windows.update(tab.windowId, { focused: true });
 }
 

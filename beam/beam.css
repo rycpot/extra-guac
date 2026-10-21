@@ -121,6 +121,32 @@
 .beam-xfer .stats b { color: var(--text); font-weight: 500; }
 .beam-xfer.failed .pct { color: var(--red); } .beam-xfer.warn .pct { color: var(--yellow); }
 .beam-xfer > .actions { gap: 6px; }
+/* Chat: a gray bar until a device is connected, then as tall as the window allows (beam.js sizeChat) */
+.beam-chat { grid-template-rows: auto 1fr auto; gap: 10px; padding: 12px; min-height: 0; }
+.beam-chat.off { grid-template-rows: auto; }
+.beam-chat.off .beam-eyebrow, .beam-chat.off .beam-hint { opacity: .55; }
+.beam-chat-head { flex-wrap: nowrap; }
+.beam-chat-who { flex: 0 1 auto; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.beam-chat-who .beam-eyebrow { flex: none; white-space: nowrap; }
+.beam-me { display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; padding: 2px 8px; border: 0; border-radius: 8px; background: var(--field);
+  color: var(--text); font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; }
+.beam-me:hover { background: var(--hover); }
+.beam-me span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.beam-me svg { width: 12px; height: 12px; color: var(--text3); }
+.beam .beam-me-edit { width: 11em; padding: 2px 8px; font-family: inherit; font-size: 11.5px; font-weight: 600; }
+.beam-chat-head .beam-hint { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.beam-chat.off .beam-msgs, .beam-chat.off .beam-compose { display: none; }
+.beam-msgs { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 0 2px; }
+.beam-msgs > :first-child { margin-top: auto; }
+.beam-m { max-width: 85%; align-self: flex-start; padding: 6px 10px; border-radius: 12px 12px 12px 4px; background: var(--field); line-height: 1.35; overflow-wrap: anywhere; }
+.beam-m small { display: block; margin-bottom: 1px; font-size: 10.5px; font-weight: 600; color: var(--text3); }
+.beam-m.mine { align-self: flex-end; border-radius: 12px 12px 4px 12px; background: color-mix(in srgb, var(--green) 22%, transparent); }
+.beam-compose { display: flex; align-items: center; gap: 6px; padding: 0 4px 0 2px; border-radius: 20px; background: var(--field); }
+.beam .beam-compose input[type=text] { flex: 1; height: 36px; padding: 0 10px; background: none; border: 0; font-family: inherit; font-size: 13px; font-weight: 400; }
+.beam-send { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--text); color: var(--bg); cursor: pointer; }
+.beam-send svg { width: 14px; height: 14px; stroke-width: 2.2; }
+@media (pointer: coarse) { .beam .beam-compose input[type=text] { font-size: 16px; } } /* phones don't zoom in on it */
+
 .beam-xfer-sec { display: grid; gap: 8px; }
 .beam-xfer-sec > .beam-row { padding: 0 2px; }
 #beam-clearDone.armed { color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); }

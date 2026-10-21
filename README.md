@@ -33,7 +33,6 @@ A Chrome extension. Click its icon to open the side panel (or a popup, in settin
 | **Awake** | Keeps the screen on for a set time, or until you stop it. |
 | **Highlight words** | Neon marks for your words, on every site or per site. Several sites can share one list. |
 | **Clipboard history** | Once on, keeps text you copy on web pages to search, pin and paste again. Password and card fields are never saved. |
-| **Enable copy & right-click** | Unlocks selecting, copying and right-clicking on sites that block them, one site at a time. |
 
 **Tab 2**
 
@@ -50,6 +49,7 @@ A Chrome extension. Click its icon to open the side panel (or a popup, in settin
 | **Open other site URLs in new tab** | On the sites you pick, links that leave the site open in a new tab. |
 | **URL auto redirect** | Rewrites addresses with your own find-and-replace rules, per domain. |
 | **Refresh on focus** | Reloads a page when you come back to it, if it's on your list. Normal or hard, until a date you choose. |
+| **Enable copy & right-click** | Unlocks selecting, copying and right-clicking on sites that block them, one site at a time. |
 
 **Tab 3**
 
@@ -57,16 +57,17 @@ A Chrome extension. Click its icon to open the side panel (or a popup, in settin
 |---|---|
 | **Session switch** | Several logins for the same site, and one click to switch between them. Each profile keeps the site's cookies, page storage and app data and stays up to date while you use it, with its login's expiry date shown. A profile can open its site through one of your Webshare proxies, in a country you pick. A login already saved in a profile is recognized by itself. A login changed from outside never overwrites a profile: a card on the page asks once what to do with it. Encrypted backups to a file, or into Drive backups if you turn that on. |
 | **Userscripts** | Runs your own userscripts (.user.js) on the sites they name. Off until you turn it on. Everything is on one page with tabs: your scripts (newest first, each with edit, check for update, download and delete), settings, and an editor tab for each open script (with undo, redo, go to row, find and replace and kept indentation). Open a .user.js link to install a script, or write one in the editor. Scripts get the GM\_\* and GM.\* functions (saved values, requests to other sites, styles, menu commands, notifications, downloads and more) and update themselves on the schedule you pick, asking first when an update wants more access. Import a .zip, a userscript backup text file or .user.js files; export all as a .zip. Part of Drive backups, and can be restored from one on their own. Needs Chrome 131 or later, and Chrome's "Allow User Scripts" switch for Extra Guac (the userscripts page shows how). |
+| **Word search** | Find the hidden words, in 42 languages, with hints and best times (Expert shows only each word's length until it's found). New game asks for a level and starts one puzzle with its own clock; Stop ends it. The puzzle waits behind a Start button each time it opens, and the timer pauses when you look away or leave the puzzle alone for a minute. Easy plays right in the panel; Medium, Hard and Expert open in a tab of their own. Each language's word list (made from [wordfreq](https://github.com/rspeer/wordfreq), CC BY-SA 4.0) downloads the first time you pick it. **Play with others** (its people button opens it in the tab): make a room and up to 5 others join with its code or invite link, from Extra Guac or [rycpot.github.io/wordsearch](https://rycpot.github.io/wordsearch) in any browser. The host picks the level and language and starts; after a 10-second countdown everyone races on the same puzzle, sees the others' progress and finishing times, and can chat. It connects the same way Beam does. |
 
 **Backup tab**
 
 | Tool | What it does |
 |---|---|
 | **Drive backup** | Snapshots of your settings, data and bookmarks to your own Google Drive, by hand or every 1 to 24 hours. Restore any snapshot from the list. |
-| **Beam** | Send files between your devices with a 6-digit code or a QR code, encrypted end to end. The other device uses Extra Guac too, or just [rycpot.github.io/beam](https://rycpot.github.io/beam) in any browser. |
+| **Beam** | Send files between your devices with a 6-digit code or a QR code, encrypted end to end. The other device uses Extra Guac too, or just [rycpot.github.io/beam](https://rycpot.github.io/beam) in any browser. Once connected, the devices can also chat. |
 | **Settings file** | Export everything as a .json file, or import one to replace it. |
 
-**Layout:** drag tools between tabs, or reorder them, in settings → general. Tab 3 holds session switch and userscripts at first, and anything you drag there.
+**Layout:** drag tools between tabs, or reorder them, in settings → general. Tab 3 holds session switch, userscripts and word search at first, and anything you drag there.
 
 ## Install
 
@@ -81,5 +82,5 @@ Download the zip from [Releases](../../releases) and unzip it, then:
 ## Notes
 
 - Privacy: everything stays in your browser unless a tool you use needs an outside service, and then it goes only there. See [PRIVACY.md](PRIVACY.md).
-- The interface font is [Inter](https://github.com/rsms/inter) (SIL Open Font License).
+- The interface font is [Inter](https://github.com/rsms/inter) (SIL Open Font License), trimmed to the characters Extra Guac shows (`tools/inter-trim.py`).
 - License: [0BSD](LICENSE), use it for anything. The bundled libraries keep their own licenses, next to them in `vendor/` and `beam/lib/`.

@@ -115,6 +115,8 @@ function applyLayout(saved) {
       box.insertAdjacentHTML("beforeend", `<p class="empty-panel">Nothing here yet. Drag sections into this tab in settings → general.</p>`);
     }
   }
+  // The word search starts when the tab it's in is first shown (here, if it moved into the open one).
+  if (tabsShown && document.querySelector(".panel:not([hidden])")?.contains($("wordSearch"))) initWordSearch();
 }
 
 // Side panel: moves on to the tab you switch to, or this tab's new page. The per-tab parts
@@ -223,7 +225,9 @@ function initTopBar() {
 }
 
 // Remembers which tab of the popup was open last.
+let tabsShown = false;
 function initTabs() {
+  tabsShown = true;
   const tabs = document.querySelectorAll(".tab[data-panel]");
   const show = (name) => {
     tabs.forEach((t) => {
@@ -235,6 +239,7 @@ function initTabs() {
     document.querySelectorAll(".panel").forEach((p) => (p.hidden = p.id !== `panel-${name}`));
     try { localStorage.setItem("panel", name); } catch {}
     if (name === "backup") initBeam();
+    if ($(`panel-${name}`).contains($("wordSearch"))) initWordSearch();
   };
   tabs.forEach((t) => (t.onclick = () => show(t.dataset.panel)));
   let last = "tools";
@@ -260,6 +265,17 @@ async function initBeam() {
     await Promise.all(["beam/lib/peerjs.min.js", "beam/lib/qrcode.min.js", "beam/lib/jsQR.min.js", "beam/lib/qr-render.js"].map(load));
   } catch { return toast("Beam couldn't start here: open it in a tab", true); }
   Beam.mount($("beam"));
+}
+
+// ---- Word search (tab 3 at first, movable) --------------------------------------------
+// Easy plays here; the bigger levels open the game's own tab, with a new game at that level.
+let wordSearchStarted = false;
+function initWordSearch() {
+  if (wordSearchStarted || !globalThis.WordSearch) return;
+  wordSearchStarted = true;
+  const openTab = (level) => send("openWordSearch", { level }).then(() => closePopup(), fail);
+  $("wsOpenTab").onclick = () => openTab();
+  WordSearch.mount($("wordSearch"), { panel: true, onOpenTab: openTab, onRoom: () => openTab("room") });
 }
 
 // ---- QR code ------------------------------------------------------------------
