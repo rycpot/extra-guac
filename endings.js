@@ -1,5 +1,5 @@
 // The real domain endings, from the main part of the Public Suffix List (publicsuffix.org),
-// written by tools/endings.js on 2026-10-21 (6949 rules). Each group is a last part and the
+// written by tools/endings.js on 2026-10-20 (6949 rules). Each group is a last part and the
 // endings before it: "" the last part itself, "*.x" anything before x, "!a.x" not a.x after all.
 // ENDINGS.make is also written into the proxy's routing script (bg-proxy.js), so it keeps to
 // what that script can run.
