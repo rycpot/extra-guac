@@ -79,6 +79,7 @@ const backupHandlers = {
     const snap = await readSnapshot(id);
     if (what === "bookmarks") return { folder: await restoreBookmarks(snap) };
     if (what === "userscripts") return restoreUserscripts(snap);
+    if (what === "profiles") return restoreProfiles(snap);
     assertHasData(snap.data);
     return locked(async () => {
       const saved = await savePreRestore();
@@ -494,6 +495,13 @@ function restoreUserscripts(snap) {
     await editLocal([], () => ({ usScripts: snap.data.usScripts, usValues }));
     return { ...saved, scripts: snap.data.usScripts.length };
   });
+}
+
+// Session switch profiles only: added next to the ones here, every setting stays (so there's
+// nothing to undo).
+async function restoreProfiles(snap) {
+  if (!snap.data?.ssProfiles) throw new Error("This snapshot has no session switch profiles");
+  return (await sessionDriveRestore(snap.data.ssProfiles)) || {};
 }
 
 // Bookmarks come back next to the current ones, in a new folder under "Other bookmarks".

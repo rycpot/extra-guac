@@ -111,6 +111,12 @@
         restoring that snapshot on another browser brings your profiles back too. They aren't encrypted: anyone who gets
         into your Drive could sign in as you on these sites. App data copies are left out, so it stays small: a few KB to a
         few hundred KB per profile, depending on how much the site keeps in its pages.</p>
+      <div class="row"><label for="ssSnap">restore from Drive</label>
+        <select id="ssSnap"><option value="">connect Google Drive in backup first</option></select>
+        <button type="button" class="btn" id="ssSnapRestore" disabled>restore profiles only</button></div>
+      <p class="hint">Profiles from the snapshot are added next to the ones here, inactive. Profiles already here, and every
+        other setting, stay as they are.</p>
+      <p class="hint" id="ssSnapStatus" role="status" aria-live="polite"></p>
     </section>
     <section>
       <h2>Encrypted backup file</h2>
@@ -127,7 +133,8 @@
       <h2>Restore</h2>
       <p class="hint">Profiles from the backup are added next to the ones here, inactive. Profiles already here are left as they are.</p>
       <form id="ssImport">
-        <div class="row"><input id="ssFile" type="file" accept=".json,application/json" required aria-label="Backup file"></div>
+        <label class="ss-drop" id="ssDrop"><input id="ssFile" type="file" accept=".json,application/json" required aria-label="Backup file">
+          <span id="ssDropText">Drop the backup file here, or <u>choose a file</u></span></label>
         <div class="row"><input class="text" id="ssPass" type="password" autocomplete="current-password" required placeholder="passphrase" aria-label="Passphrase"></div>
         <div class="row"><button class="btn" type="submit">restore profiles</button></div>
       </form>

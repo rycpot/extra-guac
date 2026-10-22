@@ -465,6 +465,14 @@ dialog.ask .ask-opt + .ask-btns { margin-top: 12px; }
 .ss-site .rm-pills.wrap:empty::after { content: "no linked sites"; }
 .px-name small.px-note { color: var(--muted); }
 
+/* Settings → session switch: the backup file to restore, dropped or chosen */
+.ss-drop { position: relative; display: flex; align-items: center; justify-content: center; min-height: 64px; margin: 6px 0; padding: 12px;
+  border: 1.5px dashed var(--line); border-radius: 12px; color: var(--muted); text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+.ss-drop:hover, .ss-drop:focus-within { border-color: var(--muted); }
+.ss-drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--fg); }
+.ss-drop.picked { color: var(--fg); }
+.ss-drop input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+
 /* Userscripts: getting started, the scripts table (a row opens its details), the radios
    drawn as a segmented choice. */
 .us-notice { display: flex; gap: 14px; padding: 14px 16px; margin: 6px 0; border-radius: 12px;
