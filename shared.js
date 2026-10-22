@@ -349,9 +349,13 @@
   }
 
   // Applies the theme setting to a page: sets data-theme on <html>. Pages are dark
-  // until this runs; "auto" follows the system.
+  // until this runs; "auto" follows the system. The popup reads the copy kept in
+  // localStorage before it paints (popup-boot.js).
   async function applyTheme() {
-    const apply = (t) => (document.documentElement.dataset.theme = t);
+    const apply = (t) => {
+      document.documentElement.dataset.theme = t;
+      try { localStorage.setItem("theme", t); } catch {}
+    };
     apply((await getSettings()).theme);
     chrome.storage.onChanged.addListener((c, area) => {
       if (area === "local" && c.tt) apply(merge(DEFAULTS, c.tt.newValue).theme);

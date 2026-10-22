@@ -3,11 +3,19 @@
 <head>
   <meta charset="utf-8">
   <title>Extra Guac</title>
-  <link rel="stylesheet" href="popup.css">
-  <link rel="stylesheet" href="beam/beam.css">
-  <link rel="stylesheet" href="wordsearch/wordsearch.css">
+  <!-- The page loads near-empty in the theme's background: Chrome shows the side panel blank
+       (white in a light Chrome) until it has loaded. popup-boot.js adds the styles, the UI
+       below and the scripts right after. -->
+  <style>
+    html { background: #0b0b0b; color-scheme: dark; }
+    html[data-theme="light"] { background: #f8f7f4; color-scheme: light; }
+    @media (prefers-color-scheme: light) { html[data-theme="auto"] { background: #f8f7f4; color-scheme: light; } }
+    body { margin: 0; width: 380px; height: 600px; } /* the popup opens at its full size */
+  </style>
+  <script src="popup-boot.js"></script>
 </head>
 <body>
+<template id="ui">
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
       <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h5v-5h4v5h5V9.5"/></symbol>
@@ -613,17 +621,6 @@
   <aside class="sheet ss-sheet" id="ssSheet" hidden></aside>
   <div class="toast" id="toast" role="status" hidden></div>
   <div class="toast ss-toast" id="ssToast" role="status" aria-live="polite" hidden></div>
-
-  <script src="shared.js"></script>
-  <script src="endings.js"></script>
-  <script src="pad-store.js"></script>
-  <script src="shot-store.js"></script>
-  <script src="upload-thumbs.js"></script>
-  <script src="beam/beam.js"></script>
-  <script src="wordsearch/wordsearch.js"></script>
-  <script src="popup.js"></script>
-  <script src="popup-sessions.js"></script>
-  <script src="us-meta.js"></script>
-  <script src="popup-userscripts.js"></script>
+</template>
 </body>
 </html>
