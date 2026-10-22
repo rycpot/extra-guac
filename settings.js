@@ -52,10 +52,11 @@
     showPane();
     // Userscripts have a page of their own, in one tab.
     $("usPageLink").onclick = (e) => { e.preventDefault(); chrome.runtime.sendMessage({ type: "usOpen" }).catch(() => {}); };
-    // So do the QR page and the scratch pads (each brought to the front if it's open), and image
+    // So do the QR page, the scratch pads and word search (each brought to the front if it's open), and image
     // annotate (the screenshot editor with no image yet, in a new tab).
     $("qrPageLink").onclick = (e) => { e.preventDefault(); openPageTab("qr.html").catch(() => {}); };
     $("scratchPageLink").onclick = (e) => { e.preventDefault(); openPageTab("scratch.html").catch(() => {}); };
+    $("wordSearchPageLink").onclick = (e) => { e.preventDefault(); openPageTab("wordsearch/index.html").catch(() => {}); };
     $("annotatePageLink").onclick = (e) => { e.preventDefault(); openPageTab("shot-view.html#annotate", true).catch(() => {}); };
     addEventListener("hashchange", showPane);
     // Footer: buttons rather than links, so hovering doesn't show the address bubble.
@@ -1305,8 +1306,9 @@
             b.disabled = true;
             try {
               const res = await send("backupRestore", { id: snap.id, what: b.dataset.what });
-              const profiles = res.profiles?.pending ? " This backup also holds session switch profiles: enter their passphrase next, at the top of this page."
-                : res.profiles?.added ? ` ${res.profiles.added} session switch profile${res.profiles.added === 1 ? "" : "s"} added.` : "";
+              const n = (count) => `${count} session switch profile${count === 1 ? "" : "s"}`;
+              const profiles = res.profiles?.locked ? ` Its ${n(res.profiles.locked)} were locked with a passphrase by an older version, so they weren't added: restore a newer snapshot from the browser they came from.`
+                : res.profiles?.added ? ` ${n(res.profiles.added)} added.` : "";
               alert(settingsToo ? `Settings restored.${profiles} ${savedNote(res)}` : `Bookmarks restored to “${res.folder}” in Other bookmarks.`);
               if (settingsToo) location.reload();
             } catch (err) { alert(err.message); }

@@ -31,6 +31,7 @@
     <a href="qr.html" id="qrPageLink" title="Opens the QR code page in a tab">QR codes ↗</a>
     <a href="scratch.html" id="scratchPageLink" title="Opens the scratch pads in a tab">scratch pads ↗</a>
     <a href="shot-view.html#annotate" id="annotatePageLink" title="Opens image annotate in a tab">image annotate ↗</a>
+    <a href="wordsearch/index.html" id="wordSearchPageLink" title="Opens word search in a tab">word search ↗</a>
     <a href="#backup">backup</a>
   </nav>
 
@@ -105,25 +106,11 @@
         can't be used, the site doesn't open rather than open without it.</p>
     </section>
     <section>
-      <h2>Google Drive backup <span class="hint" id="ssDriveState"></span></h2>
-      <p class="hint">Off unless you turn it on here. Then, when Drive backup (in <a href="#backup">backup</a>) uploads a
-        snapshot, every profile goes with it, sealed with a passphrase you choose: Drive only gets ciphertext, and anyone
-        who gets into your Drive still can't sign in as you. App data copies are left out, so it stays small: a few KB to a
-        few hundred KB per profile, depending on how much the site keeps in its pages. This browser keeps the key, so
-        backups run without asking; the passphrase isn't stored. Restoring a snapshot on another browser asks for it.</p>
-      <form id="ssDriveOnForm">
-        <div class="row"><input class="text" id="ssDrivePass1" type="password" autocomplete="new-password" minlength="10" required placeholder="passphrase, at least 10 characters" aria-label="Passphrase for Drive backups"></div>
-        <div class="row"><input class="text" id="ssDrivePass2" type="password" autocomplete="new-password" minlength="10" required placeholder="passphrase again" aria-label="Passphrase again"></div>
-        <div class="row"><button class="btn" type="submit">include profiles in Drive backups</button>
-          <label><input type="checkbox" id="ssDriveSave"> download passphrase to local folder</label></div>
-      </form>
-      <div class="row" id="ssDriveOffRow" hidden><button class="btn" type="button" id="ssDriveOff">stop including profiles</button></div>
-      <form id="ssDriveOpenForm" hidden>
-        <p class="hint" id="ssDrivePending"></p>
-        <div class="row"><input class="text" id="ssDrivePass" type="password" autocomplete="current-password" required placeholder="passphrase" aria-label="Passphrase of the restored backup"></div>
-        <div class="row"><button class="btn" type="submit">add the profiles</button></div>
-      </form>
-      <p class="hint" id="ssDriveStatus" role="status" aria-live="polite"></p>
+      <h2>Google Drive backup</h2>
+      <p class="hint">When Drive backup (in <a href="#backup">backup</a>) uploads a snapshot, every profile goes with it, so
+        restoring that snapshot on another browser brings your profiles back too. They aren't encrypted: anyone who gets
+        into your Drive could sign in as you on these sites. App data copies are left out, so it stays small: a few KB to a
+        few hundred KB per profile, depending on how much the site keeps in its pages.</p>
     </section>
     <section>
       <h2>Encrypted backup file</h2>
@@ -646,15 +633,6 @@ Card 4111 1111 1111 1111</textarea>
 
   <div class="pane" id="backup">
     <header class="pane-head"><h1>backup</h1></header>
-    <section class="ss-waiting" id="ssRestorePanel" hidden>
-      <h2>Session switch profiles</h2>
-      <p class="hint" id="ssRestoreText"></p>
-      <form id="ssRestoreForm">
-        <div class="row"><input class="text" id="ssRestorePass" type="password" autocomplete="current-password" required placeholder="passphrase" aria-label="Passphrase of the restored profiles">
-          <button class="btn" type="submit">add them</button><button class="btn ghost" type="button" id="ssRestoreLater">later</button></div>
-      </form>
-      <p class="hint" id="ssRestoreStatus" role="status" aria-live="polite"></p>
-    </section>
     <section>
       <h2>Google Drive <span class="hint" id="driveState"></span></h2>
       <div class="row">
@@ -700,8 +678,8 @@ Card 4111 1111 1111 1111</textarea>
       </div>
       <p class="hint">Extra Guac's settings and data as a .json file, API keys included (not the Google sign-in) — keep it somewhere private.
         Import takes such a file or a Drive snapshot (.json.gz) and replaces the current settings and data.
-        Session switch profiles aren't in this file: they come back from a Drive snapshot (when included there) or from
-        session switch's encrypted backup file.</p>
+        Session switch profiles aren't in this file: they come back from a Drive snapshot or from session switch's
+        encrypted backup file.</p>
     </section>
   </div>
   </main>

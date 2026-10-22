@@ -184,12 +184,6 @@ function drawList() {
   if (!state) return null;
   if (!state.supported) return h("p", { class: "hint" }, state.reason || "Profiles work on http and https pages only.");
   const out = [];
-  // Profiles from a restored Drive backup that wait for their passphrase (asked in Settings → Backup).
-  if (state.drivePending) {
-    out.push(h("div", { class: "notice", id: "ssDrivePendingNote" },
-      h("p", {}, `${state.drivePending} restored profile${state.drivePending === 1 ? "" : "s"} wait for their passphrase.`),
-      h("button", { class: "text-btn primary", type: "button", onclick: () => openSettings("backup") }, "enter it")));
-  }
   if (state.paused) {
     // The login was swapped or cleared from outside; the profile that was active kept its login.
     const paused = state.profiles.find((p) => p.id === state.paused.id);
@@ -603,11 +597,6 @@ function newSheet(view) {
         proxies && info.countries.filter((c) => c.code).map((c) => option(countryName(c.code), { country: c.code }, count(c.count)))),
     ],
     foot: [
-      // Profiles are logins: until a passphrase seals them, Drive backups leave them out.
-      state.drive === false && h("div", { class: "ss-ask", id: "ssDriveNote" },
-        h("p", {}, h("b", {}, "Drive backup"), " of profiles is off"),
-        h("button", { type: "button", class: "ss-btn primary", onclick: () => openSettings("sessions") }, "Turn on"),
-        h("p", { class: "ss-ask-hint" }, "Turn it on by adding a passphrase: your logins are encrypted before they go to Drive.")),
       !proxies && h("button", { type: "button", class: "text-btn", onclick: () => openSettings("proxy") }, icon("gear"), "proxy settings"),
       h("button", { type: "button", class: "text-btn primary", id: "ssStartBtn", onclick: start }, icon("plus"), "start profile"),
     ].filter(Boolean),

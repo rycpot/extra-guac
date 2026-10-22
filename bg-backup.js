@@ -19,7 +19,8 @@
 // Connecting a browser whose Drive folder already has snapshots from elsewhere doesn't
 // back up straight away (that would make a fresh, empty install the "newest"): it waits
 // until the user restores one or presses sync now.
-// Snapshots include API keys (shorteners, upload hosts), like the settings themselves.
+// Snapshots include API keys (shorteners, upload hosts), like the settings themselves, and
+// session switch profiles (saved logins).
 // Scratch pads and the screenshot history are in them too. Their images go up once each,
 // as files of their own in folders inside the backup folder ("pad images", "screenshots");
 // snapshots only name the ones they use, and a file goes when no kept snapshot names it
@@ -244,14 +245,14 @@ function trimBookmarks(node) {
   return out;
 }
 
-// With profiles, Session Switch's saved logins come along, sealed, when turned on (ssProfiles,
-// see bg-sessions.js): only in the snapshots uploaded to Drive.
+// With profiles, Session Switch's saved logins come along (ssProfiles, see bg-sessions.js): only in
+// the snapshots uploaded to Drive.
 async function buildSnapshot(withBookmarks = true, { profiles = false } = {}) {
   const data = withoutWriters(await chrome.storage.local.get(BACKUP_KEYS));
   data.clips = await clipExport(); // clipboard history: one key per entry (bg-clip.js)
   if (profiles) {
-    const sealed = await sessionDriveSeal().catch((err) => console.error("[backup] profiles", err));
-    if (sealed) data.ssProfiles = sealed;
+    const copy = await sessionDriveCopy().catch((err) => console.error("[backup] profiles", err));
+    if (copy) data.ssProfiles = copy;
   }
   const snap = { app: "Extra Guac", format: 1, version: chrome.runtime.getManifest().version, createdAt: new Date().toISOString(), data };
   if (withBookmarks) snap.bookmarks = (await chrome.bookmarks.getTree())[0].children.map(trimBookmarks);
@@ -375,7 +376,8 @@ async function doBackup({ manual = false } = {}) {
   if (backupState.awaitingChoice && !manual) return { uploaded: false, awaitingChoice: true };
   try {
     const snap = await buildSnapshot(true, { profiles: true });
-    const hash = await sha256(JSON.stringify([snap.data, snap.bookmarks]));
+    // Profiles by their own hash, which leaves out when they were last saved or used.
+    const hash = await sha256(JSON.stringify([{ ...snap.data, ssProfiles: snap.data.ssProfiles?.hash }, snap.bookmarks]));
     let snaps = await listSnapshots();
     let uploaded = false;
     // Unchanged = the same as this browser's newest snapshot in Drive (so disconnecting and
@@ -476,8 +478,7 @@ async function applyDataNow(data) {
     if (remove.length) await chrome.storage.local.remove(remove);
   });
   if (Array.isArray(data.clips)) await clipImport(data.clips); // older backups have none: keep what's there
-  // Saved logins sealed in the snapshot: added next to the ones here, now if this browser has
-  // their key, else once their passphrase is given in settings (bg-sessions.js).
+  // Saved logins in the snapshot: added next to the ones here (bg-sessions.js).
   if (data.ssProfiles) return { profiles: await sessionDriveRestore(data.ssProfiles).catch((err) => console.error("[backup] profiles", err)) };
   // Backups from 191 have a single QR icon ("qrIcon"): it becomes the first of yours.
   if (typeof data.qrIcon === "string" && data.qrIcons === undefined) await chrome.storage.local.set({ qrIcon: data.qrIcon });
@@ -722,3 +723,10 @@ chrome.runtime.onInstalled.addListener(async () => {
   }
 });
 chrome.runtime.onStartup.addListener(syncBackupAlarm);
+// From 297 session switch profiles go into Drive snapshots without a passphrase: updating from an
+// older version backs up once right away, so Drive has a copy any browser can restore them from.
+chrome.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
+  if (reason !== "update" || Number(previousVersion) >= 297) return;
+  const { backupState = {} } = await chrome.storage.local.get("backupState");
+  if (backupState.connected && !backupState.needsSignIn) runBackup().catch(() => {});
+});

@@ -777,7 +777,6 @@ const POPUP = {
   "login-cookie": (m) => setGroup(m.groupId, (group) => (group.loginCookie = m.name || null)),
   sites: () => sitesInfo(),
   open: (m) => openSite(m.site),
-  "drive-info": () => driveInfo(),
   link: (m) => link(m.groupId, m.domain),
   unlink: (m) => unlink(m.groupId, m.domain),
   "proxy-profile": (m) => setProfileProxy(m.profileId, m.proxy),
@@ -787,11 +786,8 @@ const POPUP = {
 // Settings-page requests that don't wait in the queue with switches and saves.
 const UNQUEUED = {
   "proxy-info": () => proxyInfo(),
-  // Deriving the key takes a moment; it doesn't hold up switches.
-  "drive-on": (m) => driveOn(m.passphrase),
-  "drive-off": () => chrome.storage.local.remove(["ssDriveKey", "ssDriveCache"]).then(notify).then(driveInfo),
-  "drive-open": (m) => driveOpen(null, m.passphrase, false),
-  // The encrypted backup file (settings): made and opened here, with the same sealing.
+  // The encrypted backup file (settings): made and opened here; deriving the key takes a moment,
+  // so it doesn't hold up switches.
   "file-seal": (m) => sealFile(m.passphrase),
   "file-open": (m) => openFile(m.text, m.passphrase),
 };
@@ -867,7 +863,7 @@ async function describe(tabId) {
   const profiles = group ? await getProfiles(group.order) : [];
   const proxies = await proxyStatuses(profiles);
   return {
-    supported: true, host, domains, proxy: await proxyInfo(), ...((d) => ({ drive: d.on, drivePending: d.pending?.profiles || 0 }))(await driveInfo()),
+    supported: true, host, domains, proxy: await proxyInfo(),
     group: group && { id: group.id, loginCookie: group.loginCookie, activeId: group.activeId },
     paused: ((paused) => paused && { id: paused.id, name: paused.name })(group?.paused && profiles.find((p) => p.id === group.paused)),
     unsaved: !group?.activeId && await holdsSiteLogin(group, jar, profiles),
@@ -1378,16 +1374,13 @@ async function importBackup(payload) {
 }
 
 // ---- Drive backups ----
-// Off unless turned on in Settings → session switch, with a passphrase. Then every profile, without
-// its app data (IndexedDB) copies, goes into Extra Guac's Drive snapshots (bg-backup.js), sealed with a key
-// derived from the passphrase (PBKDF2, AES-GCM): Drive only gets ciphertext. The key stays in this
-// browser (ssDriveKey: { salt, iterations, key }) so scheduled backups can seal without asking; the
-// passphrase itself isn't kept. The same sealed copy is used again while the profiles haven't
-// changed (ssDriveCache), so an unchanged snapshot stays unchanged. Restoring a snapshot adds its
-// profiles next to the ones here: right away when this browser has the key, else it waits in
-// ssDrivePending until the passphrase is given in settings.
+// Every profile, without its app data (IndexedDB) copies, goes into Extra Guac's Drive snapshots
+// (bg-backup.js) as it is: { format: "session-switch-drive", version 2, profiles (how many), hash,
+// data }. hash leaves out when profiles were last saved or used (they change all the time), and the
+// backup compares that instead of the profiles, so a snapshot is only new when they really changed.
+// Restoring a snapshot adds its profiles next to the ones here. Versions before 297 sealed them with
+// a passphrase (version 1); those can't be opened any more, and are counted as left out.
 
-const DRIVE_ITERATIONS = 600000;
 const b64 = (bytes) => {
   let text = "";
   for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
@@ -1395,31 +1388,15 @@ const b64 = (bytes) => {
 };
 const unb64 = (text) => Uint8Array.from(atob(text), (ch) => ch.charCodeAt(0));
 
+// The encrypted backup file's key (below).
+const KDF_ITERATIONS = 600000;
 async function deriveKey(passphrase, salt, iterations) {
   const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(passphrase), "PBKDF2", false, ["deriveKey"]);
   return crypto.subtle.deriveKey({ name: "PBKDF2", hash: "SHA-256", salt, iterations }, base, { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
 }
 
-async function driveInfo() {
-  const { ssDriveKey, ssDrivePending } = await chrome.storage.local.get(["ssDriveKey", "ssDrivePending"]);
-  return { on: !!ssDriveKey, pending: ssDrivePending ? { profiles: ssDrivePending.profiles || 0, at: ssDrivePending.at || 0 } : null };
-}
-
-async function driveOn(passphrase) {
-  if (typeof passphrase !== "string" || passphrase.length < 10) throw new Error("Use a passphrase of at least 10 characters.");
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const key = await deriveKey(passphrase, salt, DRIVE_ITERATIONS);
-  const raw = new Uint8Array(await crypto.subtle.exportKey("raw", key));
-  await chrome.storage.local.set({ ssDriveKey: { salt: b64(salt), iterations: DRIVE_ITERATIONS, key: b64(raw) } });
-  await chrome.storage.local.remove("ssDriveCache");
-  notify();
-  return driveInfo();
-}
-
-// The profiles, sealed for a snapshot, or null when it's off.
-async function driveSeal() {
-  const { ssDriveKey, ssDriveCache } = await chrome.storage.local.get(["ssDriveKey", "ssDriveCache"]);
-  if (!ssDriveKey) return null;
+// The profiles, for a snapshot.
+async function driveCopy() {
   await getGroups();
   const payload = { groups: {}, profiles: {}, data: {} };
   for (const group of allGroups()) {
@@ -1431,57 +1408,18 @@ async function driveSeal() {
       payload.data[profile.id] = data;
     }
   }
-  const text = JSON.stringify(payload);
-  // When profiles were last saved or used doesn't make a snapshot new (they change all the time).
+  const count = Object.keys(payload.profiles).length;
+  if (!count) return null;
   const lasting = JSON.stringify(payload, (k, v) => (["syncedAt", "lastUsed", "savedAt"].includes(k) ? undefined : v));
-  const hash = b64(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ssDriveKey.salt + lasting))));
-  if (ssDriveCache?.hash === hash) return ssDriveCache.sealed;
-  const key = await crypto.subtle.importKey("raw", unb64(ssDriveKey.key), "AES-GCM", false, ["encrypt"]);
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const data = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(text)));
-  const sealed = {
-    format: "session-switch-drive", version: 1, profiles: Object.keys(payload.profiles).length, at: Date.now(),
-    kdf: { name: "PBKDF2", hash: "SHA-256", iterations: ssDriveKey.iterations, salt: ssDriveKey.salt },
-    cipher: { name: "AES-GCM", iv: b64(iv) }, data: b64(data),
-  };
-  await chrome.storage.local.set({ ssDriveCache: { hash, sealed } });
-  // As stored (storage orders its keys its own way), so the next unchanged snapshot reads the same.
-  return (await chrome.storage.local.get("ssDriveCache")).ssDriveCache.sealed;
+  const hash = b64(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(lasting))));
+  return { format: "session-switch-drive", version: 2, profiles: count, hash, data: payload };
 }
 
-// Opens sealed profiles (from a restored snapshot, or the one waiting) and adds them. With no
-// passphrase, only this browser's own key is tried, and the profiles wait if it doesn't fit.
-// queued: called from the message queue already (adding them mustn't queue behind itself).
-async function driveOpen(sealed, passphrase, queued = true) {
-  const { ssDrivePending } = await chrome.storage.local.get("ssDrivePending");
-  const fromPending = !sealed;
-  sealed ||= ssDrivePending;
-  if (sealed?.format !== "session-switch-drive" || sealed.version !== 1) throw new Error("There are no profiles waiting to be restored.");
-  const iterations = Number(sealed.kdf?.iterations);
-  if (!(iterations >= 100000 && iterations <= 5000000)) throw new Error("This backup uses settings that are not supported.");
-  let key = null;
-  if (passphrase) key = await deriveKey(passphrase, unb64(sealed.kdf.salt), iterations);
-  else {
-    const { ssDriveKey } = await chrome.storage.local.get("ssDriveKey");
-    if (ssDriveKey?.salt === sealed.kdf.salt) key = await crypto.subtle.importKey("raw", unb64(ssDriveKey.key), "AES-GCM", false, ["decrypt"]);
-  }
-  let payload = null;
-  if (key) {
-    try {
-      const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(sealed.cipher.iv) }, key, unb64(sealed.data));
-      payload = JSON.parse(new TextDecoder().decode(plain));
-    } catch {
-      if (passphrase) throw new Error("The passphrase is wrong, or the backup is damaged.");
-    }
-  }
-  if (!payload) {
-    await chrome.storage.local.set({ ssDrivePending: sealed });
-    notify();
-    return { ok: true, pending: true };
-  }
-  const result = queued ? await importBackup(payload) : await serial(() => getGroups().then(() => importBackup(payload)));
-  if (fromPending || ssDrivePending?.data === sealed.data) await chrome.storage.local.remove("ssDrivePending");
-  return result;
+// Adds the profiles from a restored snapshot.
+async function driveRestore(copy) {
+  if (copy?.format !== "session-switch-drive") return null;
+  if (copy.version !== 2) return { ok: true, added: 0, locked: Number(copy.profiles) || 0 };
+  return serial(() => getGroups().then(() => importBackup(copy.data)));
 }
 
 // ---- The encrypted backup file (Settings → session switch) ----
@@ -1501,12 +1439,12 @@ async function sealFile(passphrase) {
   }
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await deriveKey(passphrase, salt, DRIVE_ITERATIONS);
+  const key = await deriveKey(passphrase, salt, KDF_ITERATIONS);
   const data = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(JSON.stringify(payload))));
   return {
     file: {
       format: "session-switch-backup", version: 1, created: new Date().toISOString(),
-      kdf: { name: "PBKDF2", hash: "SHA-256", iterations: DRIVE_ITERATIONS, salt: b64(salt) },
+      kdf: { name: "PBKDF2", hash: "SHA-256", iterations: KDF_ITERATIONS, salt: b64(salt) },
       cipher: { name: "AES-GCM", iv: b64(iv) }, data: b64(data),
     },
     count: Object.keys(payload.profiles).length,
@@ -1533,8 +1471,8 @@ async function openFile(text, passphrase) {
   return serial(() => getGroups().then(() => importBackup(payload)));
 }
 
-globalThis.sessionDriveSeal = driveSeal;
-globalThis.sessionDriveRestore = (sealed) => driveOpen(sealed, null, false);
+globalThis.sessionDriveCopy = driveCopy;
+globalThis.sessionDriveRestore = driveRestore;
 
 // ---- Proxy ----
 // A profile's proxy uses Extra Guac's Webshare account (getProxy in bg-proxy.js): its key, its
@@ -1810,6 +1748,9 @@ async function start() {
     if (ssWebrtc === false) await chrome.storage.local.set({ proxy: { ...TT.proxyOf(proxy), webrtc: false } });
     await chrome.storage.local.remove("ssWebrtc");
   }
+  // Before 297, profiles went into Drive backups only sealed with a passphrase: its key, the last
+  // sealed copy and profiles waiting for their passphrase are gone with it.
+  await chrome.storage.local.remove(["ssDriveKey", "ssDriveCache", "ssDrivePending"]);
   await saveProxySites();
   applyProxy();
   await registerPageScript(allGroups().flatMap((g) => g.domains)).catch((e) => console.warn("Page script:", e));

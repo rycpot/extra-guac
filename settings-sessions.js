@@ -1,4 +1,4 @@
-// Settings → session switch: Drive backups of profiles, linked sites, and encrypted
+// Settings → session switch: linked sites, and encrypted
 // backups of every profile (a key is derived from the passphrase with PBKDF2 and the data is sealed
 // with AES-GCM; restoring hands the opened backup to the background, bg-sessions.js, to add).
 (() => {
@@ -16,7 +16,6 @@
     $(where).textContent = text;
   }
   const saySites = (text, bad = false) => say(text, bad, "ssSitesStatus");
-  const sayDrive = (text, bad = false) => say(text, bad, "ssDriveStatus");
 
   // ---- Sites and their linked sites ----
 
@@ -74,96 +73,6 @@
   $("ssSites").addEventListener("focusout", () => setTimeout(() => later && !typing() && ((later = false), sites())));
 
   const added = (r) => `Added ${r.added} profile${r.added === 1 ? "" : "s"}.${r.skipped ? ` ${r.skipped} were already here.` : ""}${r.noRoom ? ` ${r.noRoom} came without their proxy: all the plan's proxy sites are in use.` : ""}`;
-
-  // ---- Google Drive backup ----
-
-  async function drive(info) {
-    try {
-      info ||= await call("drive-info");
-    } catch (err) {
-      return sayDrive(err.message, true);
-    }
-    $("ssDriveState").textContent = info.on ? "on" : "off";
-    $("ssDriveOnForm").hidden = info.on;
-    $("ssDriveOffRow").hidden = !info.on;
-    $("ssDriveOpenForm").hidden = !info.pending;
-    // The same question at the top of Settings → Backup, where a restore happens (it reloads the page).
-    $("ssRestorePanel").hidden = !info.pending || restoreLater;
-    if (info.pending) {
-      const n = info.pending.profiles;
-      $("ssRestoreText").textContent = `The restored backup also holds ${n} session switch profile${n === 1 ? "" : "s"}, sealed with the passphrase chosen when they were backed up. Enter it to add them next to the ones here.`;
-    }
-    if (info.pending) {
-      const n = info.pending.profiles;
-      $("ssDrivePending").textContent = `The restored Drive backup holds ${n} profile${n === 1 ? "" : "s"} sealed with another passphrase. Enter it to add them next to the ones here.`;
-    }
-  }
-  $("ssDriveOnForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    if ($("ssDrivePass1").value !== $("ssDrivePass2").value) return sayDrive("The passphrases don't match.", true);
-    sayDrive("Turning it on…");
-    try {
-      const passphrase = $("ssDrivePass1").value;
-      await drive(await call("drive-on", { passphrase }));
-      // Asked for: the passphrase as a text file in the downloads folder, to keep somewhere safe.
-      if ($("ssDriveSave").checked) {
-        const text = `Extra Guac · Session Switch\n\nPassphrase for the profiles in your Google Drive backups:\n\n${passphrase}\n\n`
-          + `Saved ${new Date().toLocaleString()}. You need it to restore your profiles on another browser. Keep this file somewhere safe:\n`
-          + `with it and access to your Google Drive, someone could sign in to the sites your profiles are for.\n`;
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
-        link.download = "Extra Guac - Session Switch - Passphrase.txt";
-        link.click();
-        setTimeout(() => URL.revokeObjectURL(link.href), 10000);
-      }
-      e.target.reset();
-      sayDrive("Profiles go into the next Drive backups, sealed. Keep the passphrase somewhere safe: without it they can't be restored elsewhere.");
-    } catch (err) {
-      sayDrive(err.message, true);
-    }
-  });
-  $("ssDriveOff").addEventListener("click", async () => {
-    try {
-      await drive(await call("drive-off"));
-      sayDrive("Profiles are left out of the next Drive backups.");
-    } catch (err) {
-      sayDrive(err.message, true);
-    }
-  });
-  $("ssDriveOpenForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    sayDrive("Opening the profiles…");
-    try {
-      const result = await call("drive-open", { passphrase: $("ssDrivePass").value });
-      e.target.reset();
-      await drive();
-      sayDrive(added(result));
-    } catch (err) {
-      sayDrive(err.message, true);
-    }
-  });
-  let restoreLater = false; // "later": not asked again on this page until it's opened again
-  $("ssRestoreLater").addEventListener("click", () => {
-    restoreLater = true;
-    $("ssRestorePanel").hidden = true;
-  });
-  $("ssRestoreForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const status = $("ssRestoreStatus");
-    status.classList.remove("bad");
-    status.textContent = "Opening the profiles…";
-    try {
-      const result = await call("drive-open", { passphrase: $("ssRestorePass").value });
-      e.target.reset();
-      status.textContent = added(result);
-      setTimeout(() => drive(), 2500);
-    } catch (err) {
-      status.classList.add("bad");
-      status.textContent = err.message;
-    }
-  });
-  drive();
-  chrome.storage.onChanged.addListener((c, area) => area === "local" && (c.ssDriveKey || c.ssDrivePending) && drive());
 
   // ---- Backup file (sealed and opened by bg-sessions.js) ----
 

@@ -465,9 +465,6 @@ dialog.ask .ask-opt + .ask-btns { margin-top: 12px; }
 .ss-site .rm-pills.wrap:empty::after { content: "no linked sites"; }
 .px-name small.px-note { color: var(--muted); }
 
-/* Settings → Backup: restored session switch profiles waiting for their passphrase */
-.ss-waiting { border: 1px solid color-mix(in srgb, #ffd60a 40%, transparent); background: color-mix(in srgb, #ffd60a 8%, transparent); border-radius: 12px; padding: 12px 14px; }
-
 /* Userscripts: getting started, the scripts table (a row opens its details), the radios
    drawn as a segmented choice. */
 .us-notice { display: flex; gap: 14px; padding: 14px 16px; margin: 6px 0; border-radius: 12px;
