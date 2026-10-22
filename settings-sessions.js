@@ -151,9 +151,9 @@
       sel.replaceChildren(...list.map((snap) => {
         const o = document.createElement("option");
         o.value = snap.id;
-        o.dataset.cloud = snap.cloud;
+        o.dataset.copies = JSON.stringify(snap.copies);
         const where = snap.kind === "pre-restore" ? "before a restore" : backupDevice && snap.device === backupDevice ? "this browser" : snap.device ? "another browser" : "";
-        const cloud = live > 1 ? TT.cloudShort(snap.cloud) : "";
+        const cloud = live > 1 ? snap.clouds.map(TT.cloudShort).join(" · ") : "";
         o.textContent = [TT.when(snap.at), cloud, where, `${snap.profiles} profile${snap.profiles === 1 ? "" : "s"}`].filter(Boolean).join(" · ");
         return o;
       }));
@@ -170,7 +170,7 @@
     $("ssSnapRestore").disabled = true;
     sayDrive("Adding the profiles…");
     try {
-      const reply = await chrome.runtime.sendMessage({ type: "backupRestore", cloud: opt.dataset.cloud, id: opt.value, what: "profiles" });
+      const reply = await chrome.runtime.sendMessage({ type: "backupRestore", copies: JSON.parse(opt.dataset.copies), what: "profiles" });
       if (!reply?.ok) throw new Error(reply?.error || "Something went wrong");
       sayDrive(reply.locked
         ? `This snapshot's ${reply.locked} profile${reply.locked === 1 ? " was" : "s were"} locked with a passphrase by an older version, so nothing was added. Pick a newer snapshot.`

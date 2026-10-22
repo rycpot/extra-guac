@@ -1307,7 +1307,7 @@
             <td><button type="button" class="btn ghost" data-json>.json</button></td>`;
           tr.querySelector("b").textContent = when(snap.at);
           const tags = [];
-          if (live.length > 1) tags.push(TT.cloudShort(snap.cloud));
+          if (live.length > 1) tags.push(snap.clouds.map(TT.cloudShort).join(" · "));
           if (snap.kind === "pre-restore") tags.push("before a restore");
           // A browser's id goes with its install: one removed and added again counts as another.
           if (backupDevice && snap.device === backupDevice) tags.push("this browser");
@@ -1322,7 +1322,7 @@
           tr.querySelector(".when .hint").textContent = age(snap.at);
           tr.cells[1].querySelector(".hint").textContent = size(snap.size);
           tr.title = snap.name;
-          const ref = { cloud: snap.cloud, id: snap.id };
+          const ref = { copies: snap.copies };
           tr.querySelectorAll("[data-what]").forEach((b) => (b.onclick = async () => {
             const settingsToo = b.dataset.what === "settings";
             if (!confirm(settingsToo

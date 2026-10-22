@@ -83,8 +83,9 @@ const backupHandlers = {
   },
   // Every connected cloud, or the one asked for.
   backupNow: async ({ cloud } = {}) => runBackup({ manual: true, clouds: cloud ? [cloudOf(cloud)] : await connectedClouds() }),
-  // Every connected cloud's snapshots, newest first, each saying which cloud it's in. One
-  // that can't be listed is left out (and named in "failed") unless none could be.
+  // Every connected cloud's snapshots, newest first. One sync puts the same snapshot in each
+  // cloud: those are one entry, with a copy per cloud ("copies", "clouds"). A cloud that
+  // can't be listed is left out (and named in "failed") unless none could be.
   backupList: async ({ cloud } = {}) => {
     const clouds = cloud ? [cloudOf(cloud)] : await connectedClouds(true);
     // Connected, but every one needs signing in again: say so rather than list nothing.
@@ -99,11 +100,10 @@ const backupHandlers = {
       }
     }
     if (clouds.length && failed.length === clouds.length) throw new Error(failed.map((f) => `${f.name}: ${f.error}`).join(" · "));
-    return { snapshots: snapshots.sort((a, b) => b.at - a.at), failed };
+    return { snapshots: mergeCopies(snapshots).sort((a, b) => b.at - a.at), failed };
   },
-  backupRestore: async ({ cloud, id, what }) => {
-    const c = cloudOf(cloud);
-    const snap = await readSnapshot(c, id);
+  backupRestore: async ({ what, ...ref }) => {
+    const { c, snap } = await readAnyCopy(ref);
     if (what === "bookmarks") return { folder: await restoreBookmarks(snap) };
     if (what === "userscripts") return restoreUserscripts(snap);
     if (what === "profiles") return restoreProfiles(snap);
@@ -118,12 +118,12 @@ const backupHandlers = {
       return { ...saved, profiles: applied?.profiles };
     });
   },
-  backupBookmarksHtml: async ({ cloud, id }) => {
-    const snap = await readSnapshot(cloudOf(cloud), id);
+  backupBookmarksHtml: async (ref) => {
+    const { snap } = await readAnyCopy(ref);
     await saveFile(`bookmarks-${stamp(new Date(snap.createdAt))}.html`, "text/html", bookmarksHtml(snap.bookmarks));
   },
-  backupDownload: async ({ cloud, id }) => {
-    const snap = await readSnapshot(cloudOf(cloud), id);
+  backupDownload: async (ref) => {
+    const { snap } = await readAnyCopy(ref);
     await saveFile(`extra-guac-${stamp(new Date(snap.createdAt))}.json`, "application/json", JSON.stringify(snap, null, 1));
   },
   // Local file: settings and data, no bookmarks (Chrome exports those itself).
@@ -446,6 +446,38 @@ function snapshotsToKeep(snaps, now = Date.now()) {
     if (inWindow.length) keep.add(inWindow.reduce((a, b) => (b.at < a.at ? b : a)).id);
   }
   return keep;
+}
+
+// The same snapshot in several clouds: same time, browser, kind, size and content.
+function mergeCopies(snaps) {
+  const byKey = new Map();
+  for (const s of snaps) {
+    const key = [s.at, s.device, s.kind, s.size, s.hash].join("|");
+    const copy = { cloud: s.cloud, id: s.id };
+    const have = byKey.get(key);
+    if (have && !have.clouds.includes(s.cloud)) {
+      have.copies.push(copy);
+      have.clouds.push(s.cloud);
+    } else if (!have) byKey.set(key, { ...s, copies: [copy], clouds: [s.cloud] });
+    else byKey.set(`${key}|${s.id}`, { ...s, copies: [copy], clouds: [s.cloud] }); // two in one cloud: both stay
+  }
+  return [...byKey.values()];
+}
+
+// A list entry's snapshot, from the first of its copies that can be read ({ copies }, or
+// { cloud, id } for one copy), with the cloud it came from.
+async function readAnyCopy({ copies, cloud, id }) {
+  copies = Array.isArray(copies) && copies.length ? copies : [{ cloud, id }];
+  let error;
+  for (const copy of copies) {
+    const c = cloudOf(copy.cloud);
+    try {
+      return { c, snap: await readSnapshot(c, copy.id) };
+    } catch (err) {
+      error ??= err;
+    }
+  }
+  throw error;
 }
 
 async function readSnapshot(c, id) {

@@ -544,9 +544,9 @@
       for (const snap of snapshots) {
         const o = document.createElement("option");
         o.value = snap.id;
-        o.dataset.cloud = snap.cloud;
+        o.dataset.copies = JSON.stringify(snap.copies);
         const where = snap.kind === "pre-restore" ? "before a restore" : backupDevice && snap.device === backupDevice ? "this browser" : snap.device ? "another browser" : "";
-        const cloud = live > 1 ? TT.cloudShort(snap.cloud) : "";
+        const cloud = live > 1 ? snap.clouds.map(TT.cloudShort).join(" · ") : "";
         o.textContent = [TT.when(snap.at), cloud, where, snap.scripts != null ? `${snap.scripts} script${snap.scripts === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
         sel.append(o);
       }
@@ -565,7 +565,7 @@
     $("usRestore").disabled = true;
     say("usBackupStatus", "restoring…");
     try {
-      const r = await send("backupRestore", { cloud: opt.dataset.cloud, id: opt.value, what: "userscripts" });
+      const r = await send("backupRestore", { copies: JSON.parse(opt.dataset.copies), what: "userscripts" });
       say("usBackupStatus", `${r.scripts} script${r.scripts === 1 ? "" : "s"} restored. Undo last restore (in backup) puts back what was here before.`);
     } catch (err) { say("usBackupStatus", err.message, true); }
     $("usRestore").disabled = false;
