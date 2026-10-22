@@ -1,5 +1,8 @@
 // Backup: snapshots of the bookmarks and of Extra Guac's settings and data, to Google
-// Drive (on a schedule or on demand) and to a local file (settings and data only).
+// Drive and Dropbox (on a schedule or on demand) and to a local file (settings and data only).
+// Both clouds can be connected at once: each sync goes to every connected one, and each keeps
+// its own snapshots by the same rules. What's the same for both is here; CLOUDS.drive is
+// below, CLOUDS.dropbox is in bg-dropbox.js.
 //
 // Drive: signing in uses Extra Guac's own OAuth client (DRIVE_CLIENT_ID; its redirect
 // addresses are the Web Store copy's and the developer's unpacked copy's). It uses the
@@ -16,7 +19,8 @@
 //     previous snapshot whenever a new one is less than half its size — for 30 days;
 //   - the oldest one in each age window (under a week, 1–2 weeks, 2 weeks–1 month, 1–2
 //     months, 2–6 months, 6–12 months, over a year).
-// Connecting a browser whose Drive folder already has snapshots from elsewhere doesn't
+// (Dropbox keeps them in its app folder the same way, see bg-dropbox.js.)
+// Connecting a browser whose Drive folder (or Dropbox app folder) already has snapshots from elsewhere doesn't
 // back up straight away (that would make a fresh, empty install the "newest"): it waits
 // until the user restores one or presses sync now.
 // Snapshots include API keys (shorteners, upload hosts), like the settings themselves, and
@@ -26,7 +30,7 @@
 // snapshots only name the ones they use, and a file goes when no kept snapshot names it
 // any more.
 
-// "backup" is the Drive setup (auto-sync interval); the sign-in itself isn't saved.
+// "backup" is the auto-sync interval, for both clouds; the sign-ins themselves aren't saved.
 const BACKUP_KEYS = ["tt", "pii", "removed", "shortHistory", "shortCounts", "uploadHistory", "colorHistory", "selectorHistory", "fontHistory", "hl", "proxy", ...PADS.PAD_KEYS, "shotHistory", "qrHistory", "qrIcons", "myColors", "usScripts", "usValues", "backup"];
 const BACKUP_FOLDER = "Extra Guac backups";
 const FOLDER_TYPE = "application/vnd.google-apps.folder";
@@ -41,42 +45,65 @@ const DEVICE_KEEP = 90 * DAY; // a browser's newest snapshot is kept while it's 
 const PROTECT_FOR = 30 * DAY; // pre-restore copies and big-before-shrink snapshots
 const SHRINK_RATIO = 0.5;
 
+const cloudOf = (cloud) => CLOUDS[cloud || "drive"] || CLOUDS.drive;
+
 const backupHandlers = {
-  backupConnect: async () => {
-    const { backupState: before = {} } = await chrome.storage.local.get("backupState");
-    await driveToken(true);
-    const about = await drive("/about?fields=user(emailAddress)");
-    await setBackupState({ connected: true, email: about.user?.emailAddress || "", needsSignIn: false, lastError: "", folderId: "" });
+  backupConnect: async ({ cloud } = {}) => {
+    const c = cloudOf(cloud);
+    const before = await cloudState(c);
+    const { backupState: { chosenAt } = {} } = await chrome.storage.local.get("backupState");
+    await c.signIn();
+    const email = await c.account();
+    await setCloudState(c, { connected: true, email, needsSignIn: false, lastError: "", ...c.reset });
     // A browser that has never backed up here, connecting to a folder that already has
     // other snapshots, is most likely a reinstall or a new computer still waiting to be
     // restored. Backing it up now would make its fresh settings the newest snapshot.
     // Unless its settings were already brought in on purpose (a settings file imported or
     // a snapshot restored before connecting), or the folder already has snapshots from
     // this very browser (it was disconnected and is connecting again): then it carries on.
-    if (!before.lastHash && !before.chosenAt) {
+    if (!before.lastHash && !chosenAt) {
       const device = await deviceId();
-      const snaps = await listSnapshots();
+      const snaps = await c.list();
       const others = snaps.filter((s) => s.device !== device);
       if (others.length && !snaps.some((s) => s.device === device)) {
-        await setBackupState({ awaitingChoice: true, lastCheck: Date.now() });
+        await setCloudState(c, { awaitingChoice: true, lastCheck: Date.now() });
         return { uploaded: false, awaitingChoice: true };
       }
     }
-    return runBackup({ manual: true });
+    return runBackup({ manual: true, clouds: [c] });
   },
-  backupDisconnect: async () => {
-    const { driveToken: t } = await chrome.storage.session.get("driveToken");
-    if (t?.token) fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(t.token)}`, { method: "POST" }).catch(() => {});
-    await chrome.storage.session.remove("driveToken");
-    await chrome.storage.local.remove("driveNoticeHidden");
-    // Forget the connection, but not that this browser's settings were chosen on purpose.
-    const { backupState: st = {} } = await chrome.storage.local.get("backupState");
-    await chrome.storage.local.set({ backupState: st.chosenAt ? { chosenAt: st.chosenAt } : {} });
+  backupDisconnect: async ({ cloud } = {}) => {
+    const c = cloudOf(cloud);
+    await c.signOut();
+    await chrome.storage.local.remove(`${c.id}NoticeHidden`);
+    // Forget the connection, but not that this browser's settings were chosen on purpose
+    // (kept with Drive's state, where it has always been).
+    const st = await cloudState(c);
+    await chrome.storage.local.set({ [c.stateKey]: st.chosenAt ? { chosenAt: st.chosenAt } : {} });
   },
-  backupNow: () => runBackup({ manual: true }),
-  backupList: async () => ({ snapshots: await listSnapshots() }),
-  backupRestore: async ({ id, what }) => {
-    const snap = await readSnapshot(id);
+  // Every connected cloud, or the one asked for.
+  backupNow: async ({ cloud } = {}) => runBackup({ manual: true, clouds: cloud ? [cloudOf(cloud)] : await connectedClouds() }),
+  // Every connected cloud's snapshots, newest first, each saying which cloud it's in. One
+  // that can't be listed is left out (and named in "failed") unless none could be.
+  backupList: async ({ cloud } = {}) => {
+    const clouds = cloud ? [cloudOf(cloud)] : await connectedClouds(true);
+    // Connected, but every one needs signing in again: say so rather than list nothing.
+    if (!clouds.length) for (const c of await connectedClouds()) throw new Error(`Sign in to ${c.name} again`);
+    const snapshots = [], failed = [];
+    for (const c of clouds) {
+      try {
+        snapshots.push(...(await c.list()).map((s) => ({ ...s, cloud: c.id })));
+      } catch (err) {
+        if (clouds.length === 1) throw err;
+        failed.push({ cloud: c.id, name: c.name, error: err.message });
+      }
+    }
+    if (clouds.length && failed.length === clouds.length) throw new Error(failed.map((f) => `${f.name}: ${f.error}`).join(" · "));
+    return { snapshots: snapshots.sort((a, b) => b.at - a.at), failed };
+  },
+  backupRestore: async ({ cloud, id, what }) => {
+    const c = cloudOf(cloud);
+    const snap = await readSnapshot(c, id);
     if (what === "bookmarks") return { folder: await restoreBookmarks(snap) };
     if (what === "userscripts") return restoreUserscripts(snap);
     if (what === "profiles") return restoreProfiles(snap);
@@ -85,18 +112,18 @@ const backupHandlers = {
       const saved = await savePreRestore();
       await keepPadsBefore(snap.data);
       const applied = await applyData(snap.data);
-      await setBackupState({ awaitingChoice: false, chosenAt: Date.now() });
-      await fetchAttachments(snap.data).catch(() => {});
+      await markChosen();
+      await fetchAttachments(c, snap.data).catch(() => {});
       await tidyShots().catch(() => {});
       return { ...saved, profiles: applied?.profiles };
     });
   },
-  backupBookmarksHtml: async ({ id }) => {
-    const snap = await readSnapshot(id);
+  backupBookmarksHtml: async ({ cloud, id }) => {
+    const snap = await readSnapshot(cloudOf(cloud), id);
     await saveFile(`bookmarks-${stamp(new Date(snap.createdAt))}.html`, "text/html", bookmarksHtml(snap.bookmarks));
   },
-  backupDownload: async ({ id }) => {
-    const snap = await readSnapshot(id);
+  backupDownload: async ({ cloud, id }) => {
+    const snap = await readSnapshot(cloudOf(cloud), id);
     await saveFile(`extra-guac-${stamp(new Date(snap.createdAt))}.json`, "application/json", JSON.stringify(snap, null, 1));
   },
   // Local file: settings and data, no bookmarks (Chrome exports those itself).
@@ -112,7 +139,7 @@ const backupHandlers = {
       await keepPadsBefore(snapshot.data);
       await applyData(snapshot.data);
       await tidyShots().catch(() => {});
-      await setBackupState({ awaitingChoice: false, chosenAt: Date.now() }); // counts as a choice, see backupConnect
+      await markChosen(); // counts as a choice, see backupConnect
       return saved;
     });
   },
@@ -132,11 +159,32 @@ const backupHandlers = {
 
 // ---- State -----------------------------------------------------------------------------
 
-async function setBackupState(patch) {
-  const { backupState = {} } = await chrome.storage.local.get("backupState");
-  const next = { ...backupState, ...patch };
-  await chrome.storage.local.set({ backupState: next });
+// Each cloud's connection and last sync, under its own key (Drive's is "backupState").
+async function cloudState(c) {
+  return (await chrome.storage.local.get(c.stateKey))[c.stateKey] || {};
+}
+async function setCloudState(c, patch) {
+  const next = { ...(await cloudState(c)), ...patch };
+  await chrome.storage.local.set({ [c.stateKey]: next });
   return next;
+}
+const setBackupState = (patch) => setCloudState(CLOUDS.drive, patch);
+
+// The connected clouds; with signedIn, only those that don't need signing in again.
+async function connectedClouds(signedIn = false) {
+  const out = [];
+  for (const c of Object.values(CLOUDS)) {
+    const st = await cloudState(c);
+    if (st.connected && !(signedIn && st.needsSignIn)) out.push(c);
+  }
+  return out;
+}
+
+// This browser's settings were brought in on purpose (a restore or an import): no cloud
+// waits for a choice any more, and one connected later backs up straight away.
+async function markChosen() {
+  await setBackupState({ chosenAt: Date.now(), awaitingChoice: false });
+  for (const c of await connectedClouds()) if (c !== CLOUDS.drive) await setCloudState(c, { awaitingChoice: false });
 }
 
 const stamp = (d) => d.toISOString().slice(0, 19).replace(/:/g, "-"); // 2026-10-02T09-00-00
@@ -236,6 +284,81 @@ async function findBackupFolder() {
   return id;
 }
 
+// Drive as one of the clouds (see CLOUDS.dropbox in bg-dropbox.js for the other).
+const DRIVE_UPLOAD = "https://www.googleapis.com/upload/drive/v3";
+async function driveMultipart(meta, blob) {
+  const b = `tt${crypto.randomUUID()}`;
+  const body = new Blob([
+    `--${b}\r\ncontent-type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\ncontent-type: ${meta.mimeType}\r\n\r\n`,
+    blob,
+    `\r\n--${b}--`,
+  ]);
+  await drive("/files?uploadType=multipart&fields=id", { method: "POST", body, headers: { "content-type": `multipart/related; boundary=${b}` }, base: DRIVE_UPLOAD });
+}
+
+const CLOUDS = {
+  drive: {
+    id: "drive", name: "Google Drive", short: "Drive", stateKey: "backupState",
+    reset: { folderId: "" }, // looked up again on connecting (it may be another account)
+    signIn: () => driveToken(true),
+    account: async () => (await drive("/about?fields=user(emailAddress)")).user?.emailAddress || "",
+    async signOut() {
+      const { driveToken: t } = await chrome.storage.session.get("driveToken");
+      if (t?.token) fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(t.token)}`, { method: "POST" }).catch(() => {});
+      await chrome.storage.session.remove("driveToken");
+    },
+    list: () => driveList(),
+    read: async (id) => (await drive(`/files/${id}?alt=media`, { raw: true })).blob(),
+    async upload(props, gz) {
+      await driveMultipart({
+        name: `${snapshotBaseName(props)}.json.gz`,
+        parents: [await backupFolder()],
+        mimeType: "application/gzip",
+        appProperties: { tt: "1", ...props },
+      }, gz);
+    },
+    protect: (snap, until) =>
+      drive(`/files/${snap.id}?fields=id`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ appProperties: { keepUntil: String(until) } }),
+      }),
+    remove: (id) => drive(`/files/${id}`, { method: "DELETE" }),
+    async attFolder(kind, create) {
+      const { backupState = {} } = await chrome.storage.local.get("backupState");
+      const known = backupState[kind.stateKey];
+      if (known) {
+        const f = await drive(`/files/${known}?fields=id,trashed`).catch(() => null);
+        if (f && !f.trashed) return f.id;
+      }
+      const parent = await backupFolder();
+      const q = `name='${kind.folder}' and '${parent}' in parents and mimeType='${FOLDER_TYPE}' and trashed=false`;
+      let id = (await drive(`/files?q=${encodeURIComponent(q)}&fields=files(id)&spaces=drive`)).files?.[0]?.id;
+      if (!id && !create) return "";
+      id ||= (await drive("/files?fields=id", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: kind.folder, mimeType: FOLDER_TYPE, parents: [parent] }),
+      })).id;
+      await setBackupState({ [kind.stateKey]: id });
+      return id;
+    },
+    async attList(folder) {
+      const files = [];
+      let page = "";
+      do {
+        const q = `'${folder}' in parents and trashed=false`;
+        const res = await drive(`/files?q=${encodeURIComponent(q)}&fields=nextPageToken,files(id,name,mimeType,createdTime)&pageSize=1000&spaces=drive${page ? `&pageToken=${page}` : ""}`);
+        for (const f of res.files || []) files.push({ fileId: f.id, name: f.name, mimeType: f.mimeType, created: Date.parse(f.createdTime) || 0 });
+        page = res.nextPageToken || "";
+      } while (page);
+      return attachmentEntries(files);
+    },
+    attUpload: (folder, { name, blob, type }) => driveMultipart({ name, parents: [folder], mimeType: type, appProperties: { attachment: "1" } }, blob),
+    attGet: async (f) => (await drive(`/files/${f.fileId}?alt=media`, { raw: true })).blob(),
+  },
+};
+
 // ---- Snapshots -------------------------------------------------------------------------
 
 function trimBookmarks(node) {
@@ -247,7 +370,7 @@ function trimBookmarks(node) {
 }
 
 // With profiles, Session Switch's saved logins come along (ssProfiles, see bg-sessions.js): only in
-// the snapshots uploaded to Drive.
+// the snapshots uploaded to Drive and Dropbox.
 async function buildSnapshot(withBookmarks = true, { profiles = false } = {}) {
   const data = withoutWriters(await chrome.storage.local.get(BACKUP_KEYS));
   data.clips = await clipExport(); // clipboard history: one key per entry (bg-clip.js)
@@ -280,24 +403,31 @@ async function sha256(text) {
 const gzip = (text) => new Response(new Blob([text]).stream().pipeThrough(new CompressionStream("gzip"))).blob();
 const gunzip = (blob) => new Response(blob.stream().pipeThrough(new DecompressionStream("gzip"))).text();
 
-async function listSnapshots() {
+async function driveList() {
   const folder = await backupFolder();
   const q = `'${folder}' in parents and trashed=false and mimeType!='${FOLDER_TYPE}'`;
   const res = await drive(`/files?q=${encodeURIComponent(q)}&fields=files(id,name,size,createdTime,appProperties)&pageSize=1000&spaces=drive`);
   return (res.files || [])
-    .map((f) => ({
-      id: f.id,
-      name: f.name,
-      size: Number(f.size) || 0,
-      at: Number(f.appProperties?.at) || Date.parse(f.createdTime),
-      device: f.appProperties?.device || "", // "" = made before devices were recorded
-      kind: f.appProperties?.kind || "auto",
-      keepUntil: Number(f.appProperties?.keepUntil) || 0,
-      hash: f.appProperties?.hash || "", // what's in it (older snapshots don't say)
-      scripts: f.appProperties?.scripts ? Number(f.appProperties.scripts) : null, // userscripts in it (older ones don't say)
-      profiles: f.appProperties?.profiles ? Number(f.appProperties.profiles) : null, // session switch profiles sealed in it (older ones don't say)
-    }))
+    .map((f) => snapshotEntry({ id: f.id, name: f.name, size: Number(f.size) || 0, at: Date.parse(f.createdTime) }, f.appProperties || {}))
     .sort((a, b) => b.at - a.at);
+}
+
+// "extra-guac-2026-10-02T09-00-00", or "extra-guac-before-restore-…" for the copy before a restore.
+const snapshotBaseName = (props) => `${props.kind === "pre-restore" ? "extra-guac-before-restore" : "extra-guac"}-${stamp(new Date(Number(props.at)))}`;
+
+// A list entry from what a cloud keeps beside the file (Drive's appProperties, the tags in a
+// Dropbox file's name): all strings, and older snapshots don't have all of them.
+function snapshotEntry(file, p) {
+  return {
+    ...file,
+    at: Number(p.at) || file.at,
+    device: p.device || "", // "" = made before devices were recorded
+    kind: p.kind || "auto",
+    keepUntil: Number(p.keepUntil) || 0,
+    hash: p.hash || "", // what's in it (older snapshots don't say)
+    scripts: p.scripts ? Number(p.scripts) : null, // userscripts in it (older ones don't say)
+    profiles: p.profiles ? Number(p.profiles) : null, // session switch profiles in it (older ones don't say)
+  };
 }
 
 // Which snapshots to keep — see the comment at the top of this file.
@@ -318,99 +448,95 @@ function snapshotsToKeep(snaps, now = Date.now()) {
   return keep;
 }
 
-async function readSnapshot(id) {
-  const res = await drive(`/files/${id}?alt=media`, { raw: true });
-  const blob = await res.blob();
+async function readSnapshot(c, id) {
+  const blob = await c.read(id);
   // Drive may hand the file back already unpacked.
   const text = new Uint8Array(await blob.slice(0, 2).arrayBuffer())[0] === 0x1f ? await gunzip(blob) : await blob.text();
   return JSON.parse(text);
 }
 
-let backupRun = null;
-// Scheduled runs share one in-flight backup; "sync now" (manual) always runs its own.
-function runBackup({ manual = false } = {}) {
-  if (manual) return locked(() => doBackup({ manual: true }));
-  backupRun ??= locked(() => doBackup()).finally(() => (backupRun = null));
-  return backupRun;
+// Scheduled runs share one in-flight backup per cloud; "sync now" (manual) always runs its
+// own. One snapshot is built for all the clouds a run goes to. A cloud that fails doesn't stop
+// the others; the run fails only when every one did.
+const backupRuns = new Map();
+async function runBackup({ manual = false, clouds } = {}) {
+  clouds ??= await connectedClouds();
+  if (!clouds.length) throw new Error("Connect Google Drive or Dropbox first");
+  let built = null;
+  const build = () => (built ??= buildSnapshot(true, { profiles: true }));
+  const runs = clouds.map((c) => {
+    if (manual) return locked(() => doBackup(c, { manual: true, build }));
+    if (!backupRuns.has(c.id)) backupRuns.set(c.id, locked(() => doBackup(c, { build })).finally(() => backupRuns.delete(c.id)));
+    return backupRuns.get(c.id);
+  });
+  const results = await Promise.allSettled(runs);
+  const failed = results.flatMap((r, i) => (r.status === "rejected" ? [{ cloud: clouds[i].id, name: clouds[i].name, error: r.reason?.message || String(r.reason) }] : []));
+  if (failed.length === clouds.length) throw results.find((r) => r.status === "rejected").reason;
+  const ok = results.flatMap((r, i) => (r.status === "fulfilled" ? [{ cloud: clouds[i], ...r.value }] : []));
+  return {
+    uploaded: ok.some((r) => r.uploaded),
+    savedTo: ok.filter((r) => r.uploaded).map((r) => r.cloud.short), // "Drive", "Dropbox"
+    awaitingChoice: ok.some((r) => r.awaitingChoice),
+    failed,
+  };
 }
 
-// Uploads one snapshot; returns its size in Drive.
-async function uploadSnapshot(snap, props = {}) {
-  await syncAttachments(snap.data);
-  const folder = await backupFolder();
+// Uploads one snapshot; returns its size in the cloud.
+async function uploadSnapshot(c, snap, props = {}) {
+  await syncAttachments(c, snap.data);
   const at = Date.parse(snap.createdAt) || Date.now();
-  const prefix = props.kind === "pre-restore" ? "extra-guac-before-restore" : "extra-guac";
-  const meta = {
-    name: `${prefix}-${stamp(new Date(at))}.json.gz`,
-    parents: [folder],
-    mimeType: "application/gzip",
-    appProperties: {
-      at: String(at), tt: "1", device: await deviceId(),
-      ...(Array.isArray(snap.data.usScripts) ? { scripts: String(snap.data.usScripts.length) } : {}),
-      ...(snap.data.ssProfiles?.profiles ? { profiles: String(snap.data.ssProfiles.profiles) } : {}),
-      ...props,
-    },
-  };
-  const b = `tt${crypto.randomUUID()}`;
   const gz = await gzip(JSON.stringify(snap));
-  const body = new Blob([
-    `--${b}\r\ncontent-type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\ncontent-type: application/gzip\r\n\r\n`,
-    gz,
-    `\r\n--${b}--`,
-  ]);
-  await drive("/files?uploadType=multipart&fields=id", { method: "POST", body, headers: { "content-type": `multipart/related; boundary=${b}` }, base: "https://www.googleapis.com/upload/drive/v3" });
+  await c.upload({
+    at: String(at), device: await deviceId(),
+    ...(Array.isArray(snap.data.usScripts) ? { scripts: String(snap.data.usScripts.length) } : {}),
+    ...(snap.data.ssProfiles?.profiles ? { profiles: String(snap.data.ssProfiles.profiles) } : {}),
+    ...props,
+  }, gz);
   return { at, size: gz.size };
 }
 
-const protectSnapshot = (id, until) =>
-  drive(`/files/${id}?fields=id`, {
-    method: "PATCH",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ appProperties: { keepUntil: String(until) } }),
-  });
-
-async function doBackup({ manual = false } = {}) {
-  const { backupState = {} } = await chrome.storage.local.get("backupState");
-  if (!backupState.connected) throw new Error("Connect Google Drive first");
+async function doBackup(c, { manual = false, build = () => buildSnapshot(true, { profiles: true }) } = {}) {
+  const st = await cloudState(c);
+  if (!st.connected) throw new Error(`Connect ${c.name} first`);
   // Waiting for the user to restore or confirm after connecting (see backupConnect):
-  // scheduled runs leave Drive alone; "sync now" means "back this browser up".
-  if (backupState.awaitingChoice && !manual) return { uploaded: false, awaitingChoice: true };
+  // scheduled runs leave the cloud alone; "sync now" means "back this browser up".
+  if (st.awaitingChoice && !manual) return { uploaded: false, awaitingChoice: true };
   try {
-    const snap = await buildSnapshot(true, { profiles: true });
+    const snap = await build();
     // Profiles by their own hash, which leaves out when they were last saved or used.
     const hash = await sha256(JSON.stringify([{ ...snap.data, ssProfiles: snap.data.ssProfiles?.hash }, snap.bookmarks]));
-    let snaps = await listSnapshots();
+    let snaps = await c.list();
     let uploaded = false;
-    // Unchanged = the same as this browser's newest snapshot in Drive (so disconnecting and
+    // Unchanged = the same as this browser's newest snapshot there (so disconnecting and
     // connecting again, even to another account, saves nothing new unless something
     // changed). Snapshots from before the content was recorded fall back on the last
     // upload remembered here.
     const device = await deviceId();
     const mine = snaps.filter((s) => s.device === device && s.kind !== "pre-restore").sort((a, b) => b.at - a.at)[0];
-    const lastHash = mine?.hash || (mine ? backupState.lastHash : "");
+    const lastHash = mine?.hash || (mine ? st.lastHash : "");
     if (hash !== lastHash) {
       // Compare with this browser's own previous snapshot (another browser's can be any size).
       const before = snaps.find((s) => s.device === device) || snaps.find((s) => !s.device);
-      const { at, size } = await uploadSnapshot(snap, { hash });
+      const { at, size } = await uploadSnapshot(c, snap, { hash });
       uploaded = true;
       // Much smaller than the snapshot before it: probably data went missing. Keep the
       // bigger one around for a month whatever the age windows say.
       if (before && before.size && size < before.size * SHRINK_RATIO) {
-        await protectSnapshot(before.id, Date.now() + PROTECT_FOR).catch(() => {});
+        await c.protect(before, Date.now() + PROTECT_FOR).catch(() => {});
       }
-      await setBackupState({ lastHash: hash, lastSnapshot: at, awaitingChoice: false });
-      snaps = await listSnapshots();
-    } else if (backupState.awaitingChoice) {
-      await setBackupState({ awaitingChoice: false });
+      await setCloudState(c, { lastHash: hash, lastSnapshot: at, awaitingChoice: false });
+      snaps = await c.list();
+    } else if (st.awaitingChoice) {
+      await setCloudState(c, { awaitingChoice: false });
     }
     const keep = snapshotsToKeep(snaps);
     let deleted = 0;
-    for (const s of snaps) if (!keep.has(s.id)) await drive(`/files/${s.id}`, { method: "DELETE" }).then(() => deleted++, () => {});
-    if (deleted) await pruneAttachments(snaps.filter((s) => keep.has(s.id))).catch(() => {});
-    await setBackupState({ lastCheck: Date.now(), lastError: "", needsSignIn: false });
+    for (const s of snaps) if (!keep.has(s.id)) await c.remove(s.id).then(() => deleted++, () => {});
+    if (deleted) await pruneAttachments(c, snaps.filter((s) => keep.has(s.id))).catch(() => {});
+    await setCloudState(c, { lastCheck: Date.now(), lastError: "", needsSignIn: false });
     return { uploaded };
   } catch (err) {
-    await setBackupState({ lastError: err.message, lastCheck: Date.now() });
+    await setCloudState(c, { lastError: err.message, lastCheck: Date.now() });
     throw err;
   }
 }
@@ -429,19 +555,20 @@ function assertHasData(data) {
   }
 }
 
-// Before a restore or import: keep what's there now, locally (for "undo") and, when Drive
-// is connected, as a snapshot protected from clean-up for 30 days.
+// Before a restore or import: keep what's there now, locally (for "undo") and, in each
+// connected cloud, as a snapshot protected from clean-up for 30 days. savedTo names the
+// clouds it went to ("Drive", "Dropbox").
 async function savePreRestore() {
   const snap = await buildSnapshot();
   await chrome.storage.local.set({ preRestore: { at: Date.now(), data: snap.data } });
-  const { backupState = {} } = await chrome.storage.local.get("backupState");
-  if (!backupState.connected || backupState.needsSignIn) return { preRestore: "local" };
-  try {
-    await uploadSnapshot(snap, { kind: "pre-restore", keepUntil: String(Date.now() + PROTECT_FOR) });
-    return { preRestore: "drive" };
-  } catch {
-    return { preRestore: "local" };
+  const savedTo = [];
+  for (const c of await connectedClouds(true)) {
+    try {
+      await uploadSnapshot(c, snap, { kind: "pre-restore", keepUntil: String(Date.now() + PROTECT_FOR) });
+      savedTo.push(c.short);
+    } catch {}
   }
+  return { preRestore: savedTo.length ? "cloud" : "local", savedTo };
 }
 
 // Settings and data are replaced by the snapshot's. The Drive setup is only taken when the
@@ -573,7 +700,7 @@ const ATTACHMENTS = [
     async restore(id, files, data) {
       const meta = data.shotHistory.find((s) => s.id === id);
       files = [...new Map(files.map((f) => [f.index, f])).values()];
-      if (files.length < (meta?.parts || 1)) throw new Error("parts missing on Drive"); // left out, not restored half
+      if (files.length < (meta?.parts || 1)) throw new Error("parts missing in the backup"); // left out, not restored half
       const parts = files.sort((a, b) => a.index - b.index).map((f, i) => ({ name: meta?.names?.[i] || meta?.name || f.name, blob: f.blob }));
       const { thumb } = await SHOTS.thumbOf(parts[0].blob);
       await SHOTS.put({ id, items: parts, thumb });
@@ -581,68 +708,33 @@ const ATTACHMENTS = [
   },
 ];
 
-async function attachmentFolder(kind, create) {
-  const { backupState = {} } = await chrome.storage.local.get("backupState");
-  const known = backupState[kind.stateKey];
-  if (known) {
-    const f = await drive(`/files/${known}?fields=id,trashed`).catch(() => null);
-    if (f && !f.trashed) return f.id;
-  }
-  const parent = await backupFolder();
-  const q = `name='${kind.folder}' and '${parent}' in parents and mimeType='${FOLDER_TYPE}' and trashed=false`;
-  let id = (await drive(`/files?q=${encodeURIComponent(q)}&fields=files(id)&spaces=drive`)).files?.[0]?.id;
-  if (!id && !create) return "";
-  id ||= (await drive("/files?fields=id", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name: kind.folder, mimeType: FOLDER_TYPE, parents: [parent] }),
-  })).id;
-  await setBackupState({ [kind.stateKey]: id });
-  return id;
-}
-
-// id -> [{ fileId, name, index, mimeType, created }]
-async function listAttachments(folder) {
+// Each cloud gives a folder for a kind (attFolder; "" when there's none and create isn't
+// set), what's in it (attList: id -> [{ fileId, name, index, mimeType, created }]), and
+// uploads (attUpload), downloads (attGet) and deletes (remove) single files.
+function attachmentEntries(files) {
   const out = new Map();
-  let page = "";
-  do {
-    const q = `'${folder}' in parents and trashed=false`;
-    const res = await drive(`/files?q=${encodeURIComponent(q)}&fields=nextPageToken,files(id,name,mimeType,createdTime)&pageSize=1000&spaces=drive${page ? `&pageToken=${page}` : ""}`);
-    for (const f of res.files || []) {
-      const m = /^([0-9a-f]{32})(?:-(\d+))?\./.exec(f.name);
-      if (!m) continue;
-      if (!out.has(m[1])) out.set(m[1], []);
-      out.get(m[1]).push({ fileId: f.id, name: f.name, index: Number(m[2] || 0), mimeType: f.mimeType, created: Date.parse(f.createdTime) || 0 });
-    }
-    page = res.nextPageToken || "";
-  } while (page);
+  for (const f of files) {
+    const m = /^([0-9a-f]{32})(?:-(\d+))?\./.exec(f.name);
+    if (!m) continue;
+    if (!out.has(m[1])) out.set(m[1], []);
+    out.get(m[1]).push({ ...f, index: Number(m[2] || 0) });
+  }
   return out;
 }
 
-async function uploadAttachment(folder, { name, blob, type }) {
-  const meta = { name, parents: [folder], mimeType: type, appProperties: { attachment: "1" } };
-  const b = `tt${crypto.randomUUID()}`;
-  const body = new Blob([
-    `--${b}\r\ncontent-type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\ncontent-type: ${type}\r\n\r\n`,
-    blob,
-    `\r\n--${b}--`,
-  ]);
-  await drive("/files?uploadType=multipart&fields=id", { method: "POST", body, headers: { "content-type": `multipart/related; boundary=${b}` }, base: "https://www.googleapis.com/upload/drive/v3" });
-}
-
-// Before a snapshot goes up: only the files Drive doesn't have yet.
-async function syncAttachments(data) {
+// Before a snapshot goes up: only the files the cloud doesn't have yet.
+async function syncAttachments(c, data) {
   for (const kind of ATTACHMENTS) {
     const ids = kind.ids(data);
     if (!ids.size) continue;
-    const folder = await attachmentFolder(kind, true);
-    const have = await listAttachments(folder);
+    const folder = await c.attFolder(kind, true);
+    const have = await c.attList(folder);
     for (const id of ids) {
       // Every file of it, so a shot whose parts stopped half-way up gets the rest next time.
       const files = await kind.files(id);
       if (!files) continue; // not on this computer (it came from another browser)
       const up = new Set((have.get(id) || []).map((f) => f.name));
-      for (const f of files) if (!up.has(f.name)) await uploadAttachment(folder, f);
+      for (const f of files) if (!up.has(f.name)) await c.attUpload(folder, f);
     }
   }
 }
@@ -650,37 +742,37 @@ async function syncAttachments(data) {
 // After old snapshots were deleted: files none of the kept ones use go too (only ones over
 // a day old, so another browser's upload in progress is safe). Any snapshot that can't be
 // read stops the clean-up, so nothing still in use is deleted.
-async function pruneAttachments(kept) {
+async function pruneAttachments(c, kept) {
   const datas = [];
-  for (const s of kept) datas.push((await readSnapshot(s.id)).data || {});
+  for (const s of kept) datas.push((await readSnapshot(c, s.id)).data || {});
   for (const kind of ATTACHMENTS) {
-    const folder = await attachmentFolder(kind, false);
+    const folder = await c.attFolder(kind, false);
     if (!folder) continue;
-    const have = await listAttachments(folder);
+    const have = await c.attList(folder);
     if (!have.size) continue;
     const used = new Set(datas.flatMap((d) => [...kind.ids(d)]));
     for (const [id, files] of have) {
       if (used.has(id)) continue;
-      for (const f of files) if (Date.now() - f.created > DAY) await drive(`/files/${f.fileId}`, { method: "DELETE" }).catch(() => {});
+      for (const f of files) if (Date.now() - f.created > DAY) await c.remove(f.fileId).catch(() => {});
     }
   }
 }
 
 // After a restore: the files the restored data uses that aren't on this computer.
-async function fetchAttachments(data) {
+async function fetchAttachments(c, data) {
   for (const kind of ATTACHMENTS) {
     const missing = [];
     for (const id of kind.ids(data)) if (!(await kind.has(id))) missing.push(id);
     if (!missing.length) continue;
-    const folder = await attachmentFolder(kind, false);
+    const folder = await c.attFolder(kind, false);
     if (!folder) continue;
-    const have = await listAttachments(folder);
+    const have = await c.attList(folder);
     for (const id of missing) {
       const found = have.get(id);
       if (!found) continue;
       const files = [];
       for (const f of found) {
-        const blob = await (await drive(`/files/${f.fileId}?alt=media`, { raw: true })).blob();
+        const blob = await c.attGet(f);
         files.push({ ...f, blob, type: f.mimeType || blob.type });
       }
       await kind.restore(id, files, data).catch(() => {});
@@ -705,13 +797,15 @@ async function keepPadsBefore(data) {
 
 // ---- Schedule --------------------------------------------------------------------------
 
+// One alarm for every connected cloud, due from the one checked longest ago.
 async function syncBackupAlarm() {
-  const { backup = {}, backupState = {} } = await chrome.storage.local.get(["backup", "backupState"]);
+  const { backup = {} } = await chrome.storage.local.get("backup");
   const hours = BACKUP_INTERVALS.includes(Number(backup.interval ?? 24)) ? Number(backup.interval ?? 24) : 24;
   const have = await chrome.alarms.get(BACKUP_ALARM);
-  if (!hours || !backupState.connected) return void (have && chrome.alarms.clear(BACKUP_ALARM));
+  const states = await Promise.all((await connectedClouds()).map(cloudState));
+  if (!hours || !states.length) return void (have && chrome.alarms.clear(BACKUP_ALARM));
   if (have?.periodInMinutes === hours * 60) return;
-  const due = (backupState.lastCheck || Date.now()) + hours * 3600e3;
+  const due = Math.min(...states.map((st) => st.lastCheck || Date.now())) + hours * 3600e3;
   chrome.alarms.create(BACKUP_ALARM, { when: Math.max(Date.now() + 60e3, due), periodInMinutes: hours * 60 });
 }
 
@@ -719,7 +813,8 @@ chrome.alarms.onAlarm.addListener((alarm) => alarm.name === BACKUP_ALARM && runB
 chrome.storage.onChanged.addListener((c, area) => {
   if (area !== "local") return;
   const connected = (v) => !!v?.connected;
-  if (c.backup || (c.backupState && connected(c.backupState.oldValue) !== connected(c.backupState.newValue))) syncBackupAlarm();
+  const flipped = Object.values(CLOUDS).some(({ stateKey: k }) => c[k] && connected(c[k].oldValue) !== connected(c[k].newValue));
+  if (c.backup || flipped) syncBackupAlarm();
 });
 chrome.runtime.onInstalled.addListener(syncBackupAlarm);
 // Older versions kept the user's own OAuth client ID here; sign-in no longer uses one.
@@ -736,5 +831,5 @@ chrome.runtime.onStartup.addListener(syncBackupAlarm);
 chrome.runtime.onInstalled.addListener(async ({ reason, previousVersion }) => {
   if (reason !== "update" || Number(previousVersion) >= 297) return;
   const { backupState = {} } = await chrome.storage.local.get("backupState");
-  if (backupState.connected && !backupState.needsSignIn) runBackup().catch(() => {});
+  if (backupState.connected && !backupState.needsSignIn) runBackup({ clouds: [CLOUDS.drive] }).catch(() => {});
 });

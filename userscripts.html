@@ -97,11 +97,11 @@
       </div>
       <p class="hint">Import takes a .zip export, a userscript backup text file (.txt or .json) or .user.js files, with what the scripts saved
         when the file has it. A script with the same name and namespace as one here takes its place; anything else is added.</p>
-      <div class="row"><label>restore from Drive</label>
-        <select id="usSnap" aria-label="Drive snapshot"><option value="">connect Google Drive in backup first</option></select>
+      <div class="row"><label>restore from a snapshot</label>
+        <select id="usSnap" aria-label="Cloud backup snapshot"><option value="">connect Google Drive or Dropbox in backup first</option></select>
         <button type="button" class="btn" id="usRestore" disabled>restore userscripts only</button></div>
       <p class="hint">Only the scripts and what they saved change; every other setting stays as it is. Scripts are also part of every
-        Drive backup and full restore, and <a href="settings.html#backup" target="_blank">undo last restore</a> (in settings → backup) puts back what was here before.</p>
+        cloud backup and full restore, and <a href="settings.html#backup" target="_blank">undo last restore</a> (in settings → backup) puts back what was here before.</p>
       <p class="hint" id="usBackupStatus" role="status" aria-live="polite"></p>
     </section>
   </main>

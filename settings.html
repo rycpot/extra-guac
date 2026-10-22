@@ -106,13 +106,13 @@
         can't be used, the site doesn't open rather than open without it.</p>
     </section>
     <section>
-      <h2>Google Drive backup</h2>
-      <p class="hint">When Drive backup (in <a href="#backup">backup</a>) uploads a snapshot, every profile goes with it, so
-        restoring that snapshot on another browser brings your profiles back too. They aren't encrypted: anyone who gets
-        into your Drive could sign in as you on these sites. App data copies are left out, so it stays small: a few KB to a
+      <h2>Cloud backup</h2>
+      <p class="hint">When cloud backup (Google Drive or Dropbox, in <a href="#backup">backup</a>) uploads a snapshot, every
+        profile goes with it, so restoring that snapshot on another browser brings your profiles back too. They aren't
+        encrypted: anyone who gets into your Drive or Dropbox could sign in as you on these sites. App data copies are left out, so it stays small: a few KB to a
         few hundred KB per profile, depending on how much the site keeps in its pages.</p>
-      <div class="row"><label for="ssSnap">restore from Drive</label>
-        <select id="ssSnap"><option value="">connect Google Drive in backup first</option></select>
+      <div class="row"><label for="ssSnap">restore from a snapshot</label>
+        <select id="ssSnap"><option value="">connect Google Drive or Dropbox in backup first</option></select>
         <button type="button" class="btn" id="ssSnapRestore" disabled>restore profiles only</button></div>
       <p class="hint">Profiles from the snapshot are added next to the ones here, inactive. Profiles already here, and every
         other setting, stay as they are.</p>
@@ -317,7 +317,7 @@
       <h2>History</h2>
       <label class="row"><input type="checkbox" data-path="shot.history"> Keep the last 10 screenshots</label>
       <p class="hint">Every screenshot (area, tab or full page) goes in, whether you save it, upload it or just preview it, and the eleventh pushes out the oldest.
-        Open them from ⤢ next to screenshot in the tools: edit, copy, upload or delete each one. They stay in this browser and are included in Drive backups,
+        Open them from ⤢ next to screenshot in the tools: edit, copy, upload or delete each one. They stay in this browser and are included in cloud backups (Drive, Dropbox),
         where each screenshot is uploaded once. Turning this off deletes the ones kept.</p>
     </section>
     <section>
@@ -577,7 +577,7 @@ Card 4111 1111 1111 1111</textarea>
       <h2>History <span class="hint" id="clipCount"></span> <button type="button" class="btn ghost" id="clipClearAll">clear (keeps pinned)</button></h2>
       <p class="hint">Saved: text you copy or cut on web pages with the keyboard, the right-click menu or a site's copy button.
         Not saved: copies in other apps or on Chrome's own pages, anything from password and one-time-code fields, and copies on the sites above.
-        The history stays in this browser and is part of Drive backups and the settings file. Browse, search, pin and copy it from the tools.</p>
+        The history stays in this browser and is part of cloud backups and the settings file. Browse, search, pin and copy it from the tools.</p>
     </section>
   </div>
 
@@ -641,15 +641,31 @@ Card 4111 1111 1111 1111</textarea>
   <div class="pane" id="backup">
     <header class="pane-head"><h1>backup</h1></header>
     <section>
-      <h2>Google Drive <span class="hint" id="driveState"></span></h2>
-      <div class="row">
-        <span class="drive-on" id="driveOn" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Google Drive connected</span>
-        <button type="button" class="btn" id="driveConnect">connect Google Drive</button>
-        <button type="button" class="btn ghost" id="driveDisconnect" hidden>disconnect</button>
+      <h2>Cloud backup</h2>
+      <div class="clouds">
+        <div class="cloud">
+          <h3>Google Drive</h3>
+          <div class="row">
+            <span class="drive-on" id="driveOn" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Google Drive connected</span>
+            <button type="button" class="btn" id="driveConnect">connect Google Drive</button>
+            <button type="button" class="btn ghost" id="driveDisconnect" hidden>disconnect</button>
+          </div>
+          <p class="hint cloud-state" id="driveState"></p>
+        </div>
+        <div class="cloud">
+          <h3>Dropbox</h3>
+          <div class="row">
+            <span class="drive-on" id="dropboxOn" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Dropbox connected</span>
+            <button type="button" class="btn" id="dropboxConnect">connect Dropbox</button>
+            <button type="button" class="btn ghost" id="dropboxDisconnect" hidden>disconnect</button>
+          </div>
+          <p class="hint cloud-state" id="dropboxState"></p>
+        </div>
       </div>
-      <p class="hint">Sign in with Google and allow access, that's all. Extra Guac only gets access to the files it creates
-        itself, kept in a folder named “Extra Guac backups” in your own Drive; nothing goes anywhere else. If Google says it
-        hasn't verified the app, click <b>Advanced → Go to Extra Guac</b>.</p>
+      <p class="hint">Sign in and allow access, that's all. Connect one or both: each sync goes to every connected one.
+        Extra Guac only gets access to the files it creates itself, kept in a folder named “Extra Guac backups” in your
+        Drive, or in its own folder inside Apps in your Dropbox; nothing goes anywhere else. If Google says it hasn't
+        verified the app, click <b>Advanced → Go to Extra Guac</b>.</p>
     </section>
     <section>
       <h2>Auto-sync</h2>
@@ -669,7 +685,7 @@ Card 4111 1111 1111 1111</textarea>
     </section>
     <section>
       <h2>Snapshots <button type="button" class="btn" id="driveNow">sync now</button></h2>
-      <div id="driveSnaps"><p class="rm-empty">Connect Google Drive to see your snapshots.</p></div>
+      <div id="driveSnaps"><p class="rm-empty">Connect Google Drive or Dropbox to see your snapshots.</p></div>
       <p class="hint"><b>restore settings</b> replaces Extra Guac's settings and data with the snapshot's.
         <b>restore bookmarks</b> adds the snapshot's bookmarks in a new folder under Other bookmarks, next to the ones you have now.
         <b>.html</b> saves them as a bookmarks file any browser can import.
@@ -683,10 +699,10 @@ Card 4111 1111 1111 1111</textarea>
         <button type="button" class="btn ghost" id="undoRestore" hidden>undo last restore</button>
         <input type="file" id="importFile" accept=".json,.gz,application/json,application/gzip" hidden>
       </div>
-      <p class="hint">Extra Guac's settings and data as a .json file, API keys included (not the Google sign-in) — keep it somewhere private.
-        Import takes such a file or a Drive snapshot (.json.gz) and replaces the current settings and data.
-        Session switch profiles aren't in this file: they come back from a Drive snapshot or from session switch's
-        encrypted backup file.</p>
+      <p class="hint">Extra Guac's settings and data as a .json file, API keys included (not the Google or Dropbox sign-in) — keep it somewhere private.
+        Import takes such a file or a Drive or Dropbox snapshot (.json.gz) and replaces the current settings and data.
+        Session switch profiles aren't in this file: they come back from a Drive or Dropbox snapshot or from session
+        switch's encrypted backup file.</p>
     </section>
   </div>
   </main>

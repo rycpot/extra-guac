@@ -1542,30 +1542,44 @@ const ago = (t) => {
 };
 
 function initBackup() {
+  const BACKUP_CLOUDS = TT.BACKUP_CLOUDS;
   const row = $("driveRow"), now = $("driveNow"), seg = $("driveInterval");
   let busy = false;
+  const clouds = async () => {
+    const got = await chrome.storage.local.get(BACKUP_CLOUDS.map((c) => c.key));
+    return BACKUP_CLOUDS.map((c) => ({ c, st: got[c.key] || {} })).filter(({ st }) => st.connected);
+  };
   async function render() {
-    const { backup = {}, backupState: st = {} } = await chrome.storage.local.get(["backup", "backupState"]);
+    const { backup = {} } = await chrome.storage.local.get("backup");
     const interval = Number(backup.interval ?? 24);
     seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(Number(b.dataset.h) === interval)));
-    const problem = !st.connected || st.needsSignIn || !!st.lastError || !!st.awaitingChoice;
-    row.classList.toggle("problem", problem);
-    now.textContent = !st.connected ? "set up" : st.needsSignIn ? "sign in" : "sync now";
-    now.hidden = !!st.awaitingChoice; // the choice is made in settings (⚙ beside it)
+    const on = await clouds();
+    // The one that needs something comes first; with both connected, the status names it.
+    const signedOut = on.find(({ st }) => st.needsSignIn), waiting = on.find(({ st }) => st.awaitingChoice), failed = on.find(({ st }) => st.lastError);
+    const which = (x) => (on.length > 1 ? `${x.c.short} ` : "");
+    row.classList.toggle("problem", !on.length || !!(signedOut || waiting || failed));
+    now.textContent = !on.length ? "set up" : signedOut ? "sign in" : "sync now";
+    now.hidden = !!waiting && !signedOut; // the choice is made in settings (⚙ beside it)
+    const last = Math.max(0, ...on.map(({ st }) => st.lastSnapshot || 0));
     $("driveStatus").textContent = busy ? "syncing…"
-      : !st.connected ? "not connected"
-      : st.needsSignIn ? "signed out"
-      : st.awaitingChoice ? "waiting: choose in settings"
-      : st.lastError ? "last sync failed"
-      : st.lastSnapshot ? `saved ${ago(st.lastSnapshot)}` : "connected";
-    $("driveStatus").title = st.lastError || (st.lastCheck ? `checked ${TT.when(st.lastCheck)}${st.email ? ` · ${st.email}` : ""}` : "");
+      : !on.length ? "not connected"
+      : signedOut ? `${which(signedOut)}signed out`
+      : waiting ? "waiting: choose in settings"
+      : failed ? `${which(failed)}last sync failed`
+      : last ? `saved ${ago(last)}` : "connected";
+    $("driveStatus").title = failed?.st.lastError || on.map(({ c, st }) => [c.short, st.lastCheck ? `checked ${TT.when(st.lastCheck)}` : "", st.email].filter(Boolean).join(" · ")).join("\n");
     now.disabled = busy;
     // Tab 1 notice: signed out without being disconnected (until signed in, or hidden with ×).
-    const { driveNoticeHidden } = await chrome.storage.local.get("driveNoticeHidden");
-    $("driveNotice").hidden = !(st.connected && st.needsSignIn) || !!driveNoticeHidden;
+    const hidden = await chrome.storage.local.get(BACKUP_CLOUDS.map((c) => `${c.id}NoticeHidden`));
+    const notice = on.find(({ c, st }) => st.needsSignIn && !hidden[`${c.id}NoticeHidden`]);
+    $("driveNotice").hidden = !notice;
+    if (notice) {
+      $("driveNotice").dataset.cloud = notice.c.id;
+      $("driveNotice").querySelector(".msg").textContent = `${notice.c.name} got signed out, so backups ${on.length > 1 ? "there " : ""}are paused.`;
+    }
   }
   render();
-  chrome.storage.onChanged.addListener((c, area) => area === "local" && (c.backup || c.backupState || c.driveNoticeHidden) && render());
+  chrome.storage.onChanged.addListener((c, area) => area === "local" && (c.backup || BACKUP_CLOUDS.some((x) => c[x.key] || c[`${x.id}NoticeHidden`])) && render());
   seg.querySelectorAll("button").forEach((b) => (b.onclick = async () => {
     const { backup = {} } = await chrome.storage.local.get("backup");
     await chrome.storage.local.set({ backup: { ...backup, interval: Number(b.dataset.h) } });
@@ -1573,26 +1587,34 @@ function initBackup() {
   const settings = () => send("openSettings", { section: "backup" }).then(() => closePopup(), fail);
   $("driveSettings").onclick = settings;
   $("importLocal").onclick = settings;
+  const signIn = async (cloud) => {
+    const res = await send("backupConnect", { cloud: cloud.c.id });
+    return res.awaitingChoice ? `Signed in · ${cloud.c.short} has other snapshots — choose in settings` : `Signed in to ${cloud.c.name}`;
+  };
   now.onclick = async () => {
-    const { backupState: st = {} } = await chrome.storage.local.get("backupState");
-    if (!st.connected || st.awaitingChoice) return settings();
+    const on = await clouds();
+    const signedOut = on.find(({ st }) => st.needsSignIn);
+    if (!on.length || (!signedOut && on.some(({ st }) => st.awaitingChoice))) return settings();
     busy = true;
     render();
     try {
-      const res = await send(st.needsSignIn ? "backupConnect" : "backupNow");
-      toast(res.awaitingChoice ? "Drive has other snapshots — choose in settings" : res.uploaded ? "Snapshot saved to Drive" : "Nothing changed since the last snapshot");
+      if (signedOut) toast(await signIn(signedOut));
+      else {
+        const res = await send("backupNow");
+        const saved = res.uploaded ? `Snapshot saved to ${res.savedTo.join(" and ")}` : "Nothing changed since the last snapshot";
+        toast(res.failed.length ? `${saved} · ${res.failed.map((f) => f.name).join(" and ")} failed` : saved);
+      }
     } catch (err) { fail(err); }
     busy = false;
     render();
   };
   $("exportLocal").onclick = () => send("backupExportLocal").then(() => closePopup(), fail);
-  $("driveNoticeClose").onclick = () => chrome.storage.local.set({ driveNoticeHidden: true });
+  $("driveNoticeClose").onclick = () => chrome.storage.local.set({ [`${$("driveNotice").dataset.cloud || "drive"}NoticeHidden`]: true });
   $("driveNoticeSignIn").onclick = async () => {
+    const cloud = (await clouds()).find(({ c }) => c.id === ($("driveNotice").dataset.cloud || "drive"));
+    if (!cloud) return;
     $("driveNoticeSignIn").disabled = true;
-    try {
-      const res = await send("backupConnect");
-      toast(res.awaitingChoice ? "Signed in · Drive has other snapshots — choose in settings" : "Signed in to Google Drive");
-    } catch (err) { fail(err); }
+    try { toast(await signIn(cloud)); } catch (err) { fail(err); }
     $("driveNoticeSignIn").disabled = false;
   };
 }

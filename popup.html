@@ -257,7 +257,7 @@
       <div class="row tight">
         <div class="label"><svg><use href="#i-users"/></svg><span class="titles">session switch<span class="sub" id="ssSite"></span></span></div>
         <div class="actions">
-          <button class="icon-btn small" id="ssSettings" title="Session switch settings: Drive backup, WebRTC, backups and linked sites"><svg><use href="#i-sliders"/></svg></button>
+          <button class="icon-btn small" id="ssSettings" title="Session switch settings: cloud backup, WebRTC, backups and linked sites"><svg><use href="#i-sliders"/></svg></button>
           <button class="text-btn" id="ssNewBtn" hidden><svg><use href="#i-plus"/></svg>new profile</button>
         </div>
       </div>
@@ -498,9 +498,9 @@
     <div class="panel" id="panel-backup" hidden>
     <section data-section="drive" class="block" id="driveRow">
       <div class="row tight">
-        <div class="label"><svg><use href="#i-cloud"/></svg>drive backup</div>
+        <div class="label"><svg><use href="#i-cloud"/></svg>cloud backup</div>
         <div class="actions"><span class="status" id="driveStatus"></span>
-          <button class="icon-btn small" id="driveSettings" title="Drive setup, snapshots and restore"><svg><use href="#i-sliders"/></svg></button>
+          <button class="icon-btn small" id="driveSettings" title="Google Drive and Dropbox setup, snapshots and restore"><svg><use href="#i-sliders"/></svg></button>
           <button class="text-btn" id="driveNow">sync now</button>
         </div>
       </div>
@@ -518,8 +518,8 @@
     <section data-section="settingsFile" class="row">
       <div class="label"><svg><use href="#i-file"/></svg>settings file</div>
       <div class="actions">
-        <button class="text-btn" id="exportLocal" title="Save Extra Guac's settings and data (API keys included) as a .json file. Session switch profiles aren't included: they're in Drive backups and session switch's encrypted backup file">export</button>
-        <button class="text-btn" id="importLocal" title="Load settings and data from an exported file or a Drive snapshot">import</button>
+        <button class="text-btn" id="exportLocal" title="Save Extra Guac's settings and data (API keys included) as a .json file. Session switch profiles aren't included: they're in cloud backups and session switch's encrypted backup file">export</button>
+        <button class="text-btn" id="importLocal" title="Load settings and data from an exported file or a Drive or Dropbox snapshot">import</button>
       </div>
     </section>
 
@@ -556,7 +556,7 @@
     </section>
     </div>
 
-    <!-- Tab 1, at the bottom: Drive backup was signed out without you disconnecting it. -->
+    <!-- Tab 1, at the bottom: a cloud backup was signed out without you disconnecting it. -->
     <div class="drive-notice" id="driveNotice" role="alert" hidden>
       <svg><use href="#i-cloud"/></svg>
       <span class="msg">Google Drive got signed out, so backups are paused.</span>

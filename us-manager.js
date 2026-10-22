@@ -527,13 +527,14 @@
     }
   };
 
-  // ---- Restore from Drive ----
+  // ---- Restore from a Drive or Dropbox snapshot ----
 
   async function fillSnaps() {
     const sel = $("usSnap");
-    const { backupState: st = {}, backupDevice } = await chrome.storage.local.get(["backupState", "backupDevice"]);
-    if (!st.connected || st.needsSignIn) {
-      sel.innerHTML = `<option value="">connect Google Drive in backup first</option>`;
+    const { backupState: st = {}, dropboxState: db = {}, backupDevice } = await chrome.storage.local.get(["backupState", "dropboxState", "backupDevice"]);
+    const live = [st, db].filter((x) => x.connected && !x.needsSignIn).length;
+    if (!live) {
+      sel.innerHTML = `<option value="">connect Google Drive or Dropbox in backup first</option>`;
       $("usRestore").disabled = true;
       return;
     }
@@ -543,8 +544,10 @@
       for (const snap of snapshots) {
         const o = document.createElement("option");
         o.value = snap.id;
+        o.dataset.cloud = snap.cloud;
         const where = snap.kind === "pre-restore" ? "before a restore" : backupDevice && snap.device === backupDevice ? "this browser" : snap.device ? "another browser" : "";
-        o.textContent = [TT.when(snap.at), where, snap.scripts != null ? `${snap.scripts} script${snap.scripts === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
+        const cloud = live > 1 ? TT.cloudShort(snap.cloud) : "";
+        o.textContent = [TT.when(snap.at), cloud, where, snap.scripts != null ? `${snap.scripts} script${snap.scripts === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
         sel.append(o);
       }
       if (!snapshots.length) sel.innerHTML = `<option value="">no snapshots yet</option>`;
@@ -562,7 +565,7 @@
     $("usRestore").disabled = true;
     say("usBackupStatus", "restoring…");
     try {
-      const r = await send("backupRestore", { id: opt.value, what: "userscripts" });
+      const r = await send("backupRestore", { cloud: opt.dataset.cloud, id: opt.value, what: "userscripts" });
       say("usBackupStatus", `${r.scripts} script${r.scripts === 1 ? "" : "s"} restored. Undo last restore (in backup) puts back what was here before.`);
     } catch (err) { say("usBackupStatus", err.message, true); }
     $("usRestore").disabled = false;
@@ -598,6 +601,6 @@
     if (area !== "local") return;
     if (c.usScripts || c.usLastCheck) load();
     if (c.tt) fillSettings();
-    if (c.backupState) { snapsListed = false; if (active === "settings") onSettings(); }
+    if (c.backupState || c.dropboxState) { snapsListed = false; if (active === "settings") onSettings(); }
   });
 })();

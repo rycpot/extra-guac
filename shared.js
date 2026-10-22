@@ -417,5 +417,12 @@
   const hostName = (h) => (h === "x02" ? "X02" : h);
   const uploadChoices = (u) => { const on = uploadHosts(u); return on.includes(u.menu) ? [u.menu] : on; };
 
-  globalThis.TT = { when, settingsTask, uploadHosts, uploadChoices, hostName, focusNew, focusPattern, focusMatches, focusAddress, focusExpiresAt, focusState, focusThresholdMs, DEFAULTS, MAX_KEYWORDS, HL_LIMITS, HL_COLORS, HL_LOOKS, hlLookRule, hlOf, hlSiteKey, PROXY_LIMITS, proxyOf, proxySite, proxyName, proxyAnyEnding, proxyLabel, proxyCovers, proxyBest, proxyDomain, proxyCountry, proxySlots, countryName, SHORTENERS, SHORTENER_LABEL, shortQuota, shortDay, keyTag, PANELS, SECTIONS, layoutOf, merge, getSettings, updateSettings, monthKey, cleanFolder, applyTheme };
+  // The clouds backups go to (bg-backup.js, bg-dropbox.js), with the storage key of each one's state.
+  const BACKUP_CLOUDS = [
+    { id: "drive", name: "Google Drive", short: "Drive", key: "backupState", account: "Google" },
+    { id: "dropbox", name: "Dropbox", short: "Dropbox", key: "dropboxState", account: "Dropbox" },
+  ];
+  const cloudShort = (id) => BACKUP_CLOUDS.find((c) => c.id === id)?.short || "";
+
+  globalThis.TT = { when, BACKUP_CLOUDS, cloudShort, settingsTask, uploadHosts, uploadChoices, hostName, focusNew, focusPattern, focusMatches, focusAddress, focusExpiresAt, focusState, focusThresholdMs, DEFAULTS, MAX_KEYWORDS, HL_LIMITS, HL_COLORS, HL_LOOKS, hlLookRule, hlOf, hlSiteKey, PROXY_LIMITS, proxyOf, proxySite, proxyName, proxyAnyEnding, proxyLabel, proxyCovers, proxyBest, proxyDomain, proxyCountry, proxySlots, countryName, SHORTENERS, SHORTENER_LABEL, shortQuota, shortDay, keyTag, PANELS, SECTIONS, layoutOf, merge, getSettings, updateSettings, monthKey, cleanFolder, applyTheme };
 })();

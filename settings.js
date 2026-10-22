@@ -1238,29 +1238,41 @@
       if (!res?.ok) throw new Error(res?.error || "Something went wrong");
       return res;
     };
-    const say = (text, bad = false) => { $("driveState").textContent = text; $("driveState").classList.toggle("bad", bad); };
+    const CLOUDS = TT.BACKUP_CLOUDS;
+    const say = (c, text, bad = false) => { $(`${c.id}State`).textContent = text; $(`${c.id}State`).classList.toggle("bad", bad); };
     const when = (t) => TT.when(t);
     const age = (t) => { const d = (Date.now() - t) / 864e5; return d < 1 ? "today" : d < 2 ? "yesterday" : d < 60 ? `${Math.round(d)} days ago` : d < 730 ? `${Math.round(d / 30.4)} months ago` : `${Math.round(d / 365)} years ago`; };
     const size = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
+    const states = async () => {
+      const got = await chrome.storage.local.get(CLOUDS.map((c) => c.key));
+      return CLOUDS.map((c) => ({ c, st: got[c.key] || {} }));
+    };
+    const both = (names) => names.join(" and ");
+    const NOT_CONNECTED = `<p class="rm-empty">Connect Google Drive or Dropbox to see your snapshots.</p>`;
 
     let listed = false;
     async function render() {
-      const { backup = {}, backupState: st = {} } = await chrome.storage.local.get(["backup", "backupState"]);
+      const { backup = {} } = await chrome.storage.local.get("backup");
       const interval = String(backup.interval ?? 24);
       document.querySelectorAll('[name="driveInterval"]').forEach((r) => (r.checked = r.value === interval));
-      $("driveConnect").textContent = !st.connected ? "connect Google Drive" : st.needsSignIn ? "sign in again" : "reconnect";
-      $("driveConnect").hidden = st.connected && !st.needsSignIn;
-      // While connected, it says so (with the account) where the connect button was.
-      $("driveOn").hidden = !st.connected || !!st.needsSignIn;
-      $("driveOn").title = st.email ? `Connected as ${st.email}` : "";
-      $("driveDisconnect").hidden = !st.connected;
-      $("driveNow").disabled = !st.connected;
-      if (!st.connected) say("not connected");
-      else if (st.awaitingChoice) say("connected — Drive already has snapshots from another browser or an earlier install. Restore one below, or press sync now to start backing up this browser as it is.", true);
-      else if (st.needsSignIn) say("signed out of Google — sign in again", true);
-      else if (st.lastError) say(`last sync failed: ${st.lastError}`, true);
-      else say(`connected${st.email ? ` as ${st.email}` : ""}${st.lastSnapshot ? ` · last snapshot ${when(st.lastSnapshot)}` : ""}${st.lastCheck ? ` · checked ${when(st.lastCheck)}` : ""}`);
-      if (st.connected && !st.needsSignIn && !listed) listSnaps();
+      const all = await states();
+      for (const { c, st } of all) {
+        $(`${c.id}Connect`).textContent = !st.connected ? `connect ${c.name}` : st.needsSignIn ? "sign in again" : "reconnect";
+        $(`${c.id}Connect`).hidden = st.connected && !st.needsSignIn;
+        // While connected, it says so (with the account) where the connect button was.
+        $(`${c.id}On`).hidden = !st.connected || !!st.needsSignIn;
+        $(`${c.id}On`).title = st.email ? `Connected as ${st.email}` : "";
+        $(`${c.id}Disconnect`).hidden = !st.connected;
+        if (!st.connected) say(c, "not connected");
+        else if (st.awaitingChoice) say(c, `${c.short} already has snapshots from another browser or an earlier install. Restore one below, or press sync now to start backing up this browser as it is.`, true);
+        else if (st.needsSignIn) say(c, `signed out of ${c.account} — sign in again`, true);
+        else if (st.lastError) say(c, `last sync failed: ${st.lastError}`, true);
+        else say(c, [st.email ? `as ${st.email}` : "", st.lastSnapshot ? `last snapshot ${when(st.lastSnapshot)}` : "", st.lastCheck ? `checked ${when(st.lastCheck)}` : ""].filter(Boolean).join(" · "));
+      }
+      const live = all.filter(({ st }) => st.connected && !st.needsSignIn);
+      $("driveNow").disabled = !all.some(({ st }) => st.connected);
+      if (!live.length) { $("driveSnaps").innerHTML = NOT_CONNECTED; listed = false; }
+      else if (!listed) listSnaps();
       const { preRestore } = await chrome.storage.local.get("preRestore");
       $("undoRestore").hidden = !preRestore?.data;
       if (preRestore?.at) $("undoRestore").title = `Put back the settings from just before the restore on ${when(preRestore.at)}`;
@@ -1270,9 +1282,20 @@
       listed = true;
       const box = $("driveSnaps");
       try {
-        const { snapshots } = await send("backupList");
+        const { snapshots, failed } = await send("backupList");
         const { backupDevice } = await chrome.storage.local.get("backupDevice");
-        if (!snapshots.length) return void (box.innerHTML = `<p class="rm-empty">No snapshots yet.</p>`);
+        // With both clouds connected, each row says which one it's in.
+        const live = (await states()).filter(({ st }) => st.connected && !st.needsSignIn);
+        const notes = failed.map((f) => {
+          const p = document.createElement("p");
+          p.className = "hint bad";
+          p.textContent = `Couldn't list the ${f.name} snapshots: ${f.error}`;
+          return p;
+        });
+        if (!snapshots.length) {
+          box.innerHTML = `<p class="rm-empty">No snapshots yet.</p>`;
+          return void box.append(...notes);
+        }
         const table = document.createElement("table");
         table.className = "snaps";
         for (const snap of snapshots) {
@@ -1284,20 +1307,22 @@
             <td><button type="button" class="btn ghost" data-json>.json</button></td>`;
           tr.querySelector("b").textContent = when(snap.at);
           const tags = [];
+          if (live.length > 1) tags.push(TT.cloudShort(snap.cloud));
           if (snap.kind === "pre-restore") tags.push("before a restore");
           // A browser's id goes with its install: one removed and added again counts as another.
           if (backupDevice && snap.device === backupDevice) tags.push("this browser");
           else if (snap.device) tags.push("earlier install or another browser");
           if (snap.profiles) tags.push(`+ ${snap.profiles} profile${snap.profiles === 1 ? "" : "s"}`);
-          for (const t of tags) {
+          tags.forEach((t, i) => {
             const tag = document.createElement("span");
-            tag.className = "tag";
+            tag.className = live.length > 1 && i === 0 ? `tag cloud-tag ${snap.cloud}` : "tag";
             tag.textContent = t;
             tr.cells[0].append(tag);
-          }
+          });
           tr.querySelector(".when .hint").textContent = age(snap.at);
           tr.cells[1].querySelector(".hint").textContent = size(snap.size);
           tr.title = snap.name;
+          const ref = { cloud: snap.cloud, id: snap.id };
           tr.querySelectorAll("[data-what]").forEach((b) => (b.onclick = async () => {
             const settingsToo = b.dataset.what === "settings";
             if (!confirm(settingsToo
@@ -1305,7 +1330,7 @@
               : `Add the bookmarks from ${when(snap.at)} in a new folder under Other bookmarks?`)) return;
             b.disabled = true;
             try {
-              const res = await send("backupRestore", { id: snap.id, what: b.dataset.what });
+              const res = await send("backupRestore", { ...ref, what: b.dataset.what });
               const n = (count) => `${count} session switch profile${count === 1 ? "" : "s"}`;
               const profiles = res.profiles?.locked ? ` Its ${n(res.profiles.locked)} were locked with a passphrase by an older version, so they weren't added: restore a newer snapshot from the browser they came from.`
                 : res.profiles?.added ? ` ${n(res.profiles.added)} added.` : "";
@@ -1314,10 +1339,10 @@
             } catch (err) { alert(err.message); }
             b.disabled = false;
           }));
-          tr.querySelector("[data-html]").onclick = () => send("backupBookmarksHtml", { id: snap.id }).catch((err) => alert(err.message));
-          tr.querySelector("[data-json]").onclick = () => send("backupDownload", { id: snap.id }).catch((err) => alert(err.message));
+          tr.querySelector("[data-html]").onclick = () => send("backupBookmarksHtml", ref).catch((err) => alert(err.message));
+          tr.querySelector("[data-json]").onclick = () => send("backupDownload", ref).catch((err) => alert(err.message));
         }
-        box.replaceChildren(table);
+        box.replaceChildren(table, ...notes);
       } catch (err) {
         box.innerHTML = `<p class="rm-empty"></p>`;
         box.firstChild.textContent = `Couldn't list snapshots: ${err.message}`;
@@ -1329,40 +1354,43 @@
       const { backup = {} } = await chrome.storage.local.get("backup");
       await chrome.storage.local.set({ backup: { ...backup, interval: Number(r.value) } });
     }));
-    $("driveConnect").onclick = async () => {
-      $("driveConnect").disabled = true;
-      say("waiting for Google…");
-      try {
-        const res = await send("backupConnect");
+    for (const c of CLOUDS) {
+      $(`${c.id}Connect`).onclick = async () => {
+        $(`${c.id}Connect`).disabled = true;
+        say(c, `waiting for ${c.account}…`);
+        try {
+          const res = await send("backupConnect", { cloud: c.id });
+          listed = false;
+          await render(); // lists the snapshots again, this cloud's too
+          if (res.awaitingChoice) alert(`${c.name} already has snapshots from another browser or an earlier install, so nothing was backed up yet.\n\nIf this is a new install, restore one of them below. Otherwise press sync now to start backing up this browser.`);
+        } catch (err) { say(c, err.message, true); }
+        $(`${c.id}Connect`).disabled = false;
+      };
+      $(`${c.id}Disconnect`).onclick = async () => {
+        if (!confirm(`Disconnect ${c.name}? Your snapshots stay in ${c.short}.`)) return;
+        await send("backupDisconnect", { cloud: c.id });
         listed = false;
-        if (res.awaitingChoice) alert("Google Drive already has snapshots from another browser or an earlier install, so nothing was backed up yet.\n\nIf this is a new install, restore one of them below. Otherwise press sync now to start backing up this browser.");
-      } catch (err) { say(err.message, true); }
-      $("driveConnect").disabled = false;
-      render();
-    };
-    $("driveDisconnect").onclick = async () => {
-      if (!confirm("Disconnect Google Drive? Your snapshots stay in Drive.")) return;
-      await send("backupDisconnect");
-      $("driveSnaps").innerHTML = `<p class="rm-empty">Connect Google Drive to see your snapshots.</p>`;
-      listed = false;
-    };
+      };
+    }
     $("driveNow").onclick = async () => {
-      const { backupState: st = {} } = await chrome.storage.local.get("backupState");
-      if (st.awaitingChoice && !(await ask(
-        "Back up this browser's settings to Drive?",
+      const waiting = (await states()).filter(({ st }) => st.connected && st.awaitingChoice).map(({ c }) => c.short);
+      if (waiting.length && !(await ask(
+        "Back up this browser's settings now?",
         "This uploads the settings in this browser now as the newest snapshot. Nothing in this browser changes. " +
-        "Drive also has snapshots from another browser or an earlier install; if this browser is a fresh install that still " +
+        `${both(waiting)} also ${waiting.length > 1 ? "have" : "has"} snapshots from another browser or an earlier install; if this browser is a fresh install that still ` +
         "needs its settings, choose Not now and use restore settings on one of those instead.",
         "Back up this browser", "Not now"))) return;
       $("driveNow").disabled = true;
-      say("syncing…");
+      for (const { c, st } of await states()) if (st.connected) say(c, "syncing…");
       try {
         const res = await send("backupNow");
         listed = false;
         await listSnaps();
-        alert(res.uploaded ? "Snapshot saved to Drive." : "Nothing changed since the last snapshot, so none was saved.");
-      } catch (err) { say(err.message, true); }
+        const failed = res.failed.map((f) => `\n\n${f.name} failed: ${f.error}`).join("");
+        alert((res.uploaded ? `Snapshot saved to ${both(res.savedTo)}.` : "Nothing changed since the last snapshot, so none was saved.") + failed);
+      } catch (err) { alert(err.message); }
       $("driveNow").disabled = false;
+      render();
     };
 
     $("exportLocal").onclick = () => send("backupExportLocal").catch((err) => alert(err.message));
@@ -1398,13 +1426,13 @@
     };
 
     render();
-    chrome.storage.onChanged.addListener((c, area) => area === "local" && (c.backup || c.backupState || c.preRestore) && render());
+    chrome.storage.onChanged.addListener((c, area) => area === "local" && (c.backup || c.backupState || c.dropboxState || c.preRestore) && render());
   }
 
   // What happened to the settings that were there before a restore/import.
   function savedNote(res) {
-    return res?.preRestore === "drive"
-      ? "The previous settings were saved to Drive first (kept 30 days) — undo last restore puts them back."
+    return res?.savedTo?.length
+      ? `The previous settings were saved to ${res.savedTo.join(" and ")} first (kept 30 days) — undo last restore puts them back.`
       : "The previous settings were kept in this browser — undo last restore puts them back.";
   }
   // ---- Tools layout: drag sections between the popup's tabs ----

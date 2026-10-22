@@ -134,14 +134,15 @@
     }
   });
 
-  // ---- Profiles only, from a Drive snapshot (bg-backup.js) ----
+  // ---- Profiles only, from a Drive or Dropbox snapshot (bg-backup.js) ----
 
   const sayDrive = (text, bad = false) => say(text, bad, "ssSnapStatus");
   async function snaps() {
     const sel = $("ssSnap");
-    const { backupState: st = {}, backupDevice } = await chrome.storage.local.get(["backupState", "backupDevice"]);
+    const { backupState: st = {}, dropboxState: db = {}, backupDevice } = await chrome.storage.local.get(["backupState", "dropboxState", "backupDevice"]);
     $("ssSnapRestore").disabled = true;
-    if (!st.connected || st.needsSignIn) return void (sel.innerHTML = `<option value="">connect Google Drive in backup first</option>`);
+    const live = [st, db].filter((x) => x.connected && !x.needsSignIn).length;
+    if (!live) return void (sel.innerHTML = `<option value="">connect Google Drive or Dropbox in backup first</option>`);
     try {
       const reply = await chrome.runtime.sendMessage({ type: "backupList" });
       if (!reply?.ok) throw new Error(reply?.error || "Something went wrong");
@@ -150,8 +151,10 @@
       sel.replaceChildren(...list.map((snap) => {
         const o = document.createElement("option");
         o.value = snap.id;
+        o.dataset.cloud = snap.cloud;
         const where = snap.kind === "pre-restore" ? "before a restore" : backupDevice && snap.device === backupDevice ? "this browser" : snap.device ? "another browser" : "";
-        o.textContent = [TT.when(snap.at), where, `${snap.profiles} profile${snap.profiles === 1 ? "" : "s"}`].filter(Boolean).join(" · ");
+        const cloud = live > 1 ? TT.cloudShort(snap.cloud) : "";
+        o.textContent = [TT.when(snap.at), cloud, where, `${snap.profiles} profile${snap.profiles === 1 ? "" : "s"}`].filter(Boolean).join(" · ");
         return o;
       }));
       if (!list.length) sel.innerHTML = `<option value="">no snapshots with profiles yet</option>`;
@@ -167,7 +170,7 @@
     $("ssSnapRestore").disabled = true;
     sayDrive("Adding the profiles…");
     try {
-      const reply = await chrome.runtime.sendMessage({ type: "backupRestore", id: opt.value, what: "profiles" });
+      const reply = await chrome.runtime.sendMessage({ type: "backupRestore", cloud: opt.dataset.cloud, id: opt.value, what: "profiles" });
       if (!reply?.ok) throw new Error(reply?.error || "Something went wrong");
       sayDrive(reply.locked
         ? `This snapshot's ${reply.locked} profile${reply.locked === 1 ? " was" : "s were"} locked with a passphrase by an older version, so nothing was added. Pick a newer snapshot.`
@@ -177,15 +180,18 @@
     }
     $("ssSnapRestore").disabled = false;
   });
-  // Listed when the section is first opened, and again when Drive is connected or signed in.
+  // Listed when the section is first opened, and again when a cloud is connected or signed in.
   let listed = false;
   const listOnce = () => !listed && location.hash === "#sessions" && ((listed = true), snaps());
   listOnce();
   addEventListener("hashchange", listOnce);
   chrome.storage.onChanged.addListener((c, area) => {
-    if (area !== "local" || !c.backupState) return;
-    const was = c.backupState.oldValue || {}, now = c.backupState.newValue || {};
-    if (!!was.connected !== !!now.connected || !!was.needsSignIn !== !!now.needsSignIn || was.lastSnapshot !== now.lastSnapshot) {
+    if (area !== "local") return;
+    const flipped = TT.BACKUP_CLOUDS.some(({ key }) => {
+      const was = c[key]?.oldValue || {}, now = c[key]?.newValue || {};
+      return c[key] && (!!was.connected !== !!now.connected || !!was.needsSignIn !== !!now.needsSignIn || was.lastSnapshot !== now.lastSnapshot);
+    });
+    if (flipped) {
       listed = false;
       listOnce();
     }
