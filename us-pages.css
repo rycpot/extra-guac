@@ -28,12 +28,19 @@
 .bar .grow { flex: 1; }
 .ed { flex: 1; min-height: 0; display: flex; }
 .code { position: relative; flex: 1; min-width: 0; display: flex; overflow: hidden; }
-.gutter { flex: none; padding: 14px 10px 14px 16px; text-align: right; color: var(--muted); opacity: .7; white-space: pre; overflow: hidden; user-select: none; }
-.stack { position: relative; flex: 1; min-width: 0; }
-.stack pre, .stack textarea { position: absolute; inset: 0; margin: 0; padding: 14px 16px; border: 0; white-space: pre; overflow: auto; }
-.stack pre { color: var(--fg); pointer-events: none; overflow: hidden; }
-.stack textarea { resize: none; outline: none; background: transparent; color: transparent; caret-color: var(--fg); }
+/* The row numbers, the colored copy and the textarea sit in one scroll box sized by the colored
+   copy, so they always move together, however fast the scrolling. */
+.scroll { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: auto; scroll-padding: 14px 16px; }
+.doc { flex: 1 0 auto; display: flex; width: max-content; min-width: 100%; }
+.gutter { position: sticky; left: 0; z-index: 3; flex: none; padding: 14px 10px 14px 16px; text-align: right; color: color-mix(in srgb, var(--muted) 70%, transparent); background: var(--bg);
+  white-space: pre; user-select: none; }
+.stack { position: relative; flex: 1 1 auto; min-width: 0; }
+.stack pre, .stack textarea { margin: 0; padding: 14px 16px; border: 0; font: inherit; white-space: pre; }
+.stack .hl { position: relative; z-index: 2; min-height: 100%; color: var(--fg); pointer-events: none; }
+.stack textarea { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; overflow: hidden; resize: none; outline: none;
+  background: transparent; color: transparent; caret-color: var(--fg); }
 .stack textarea::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); color: transparent; }
+.stack .find-marks { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
 .side2 { width: 300px; flex: none; border-left: 1px solid var(--line); padding: 14px 16px; overflow-y: auto; }
 .side2 h2 { margin: 14px 0 6px; } .side2 h2:first-child { margin-top: 0; }
 .kv { display: grid; grid-template-columns: 82px 1fr; gap: 4px 10px; margin: 0; }

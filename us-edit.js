@@ -37,7 +37,7 @@
 
   globalThis.usEditor = function usEditor(root, { id = "", site = "", onChange = () => {} } = {}) {
     const q = (sel) => root.querySelector(sel);
-    const ta = q(".src"), hl = q(".hl"), gutter = q(".gutter"), status = q(".status");
+    const ta = q(".src"), hl = q(".hl"), gutter = q(".gutter"), box = q(".scroll"), status = q(".status");
     let saved = "", stored = "", changedElsewhere = false, name = "";
 
     // ---- Highlighting (speed-highlight, as in the scratch pads) ----
@@ -58,12 +58,7 @@
       try {
         await (await highlighter()).tokenize(v, "js", (str, type) => { out += type ? `<span class="t-${type}">${esc(str)}</span>` : esc(str); });
       } catch { out = esc(v); }
-      if (seq === hlSeq) { hl.innerHTML = `${out}\n`; painted = v; sync(); }
-    }
-    function sync() {
-      hl.scrollTop = ta.scrollTop;
-      hl.scrollLeft = ta.scrollLeft;
-      gutter.scrollTop = ta.scrollTop;
+      if (seq === hlSeq) { hl.innerHTML = `${out}\n`; painted = v; }
     }
     let lines = 0, sideTimer = 0;
     function onText() {
@@ -75,11 +70,15 @@
       } else {
         paint();
         const v = ta.value;
-        requestAnimationFrame(() => { if (painted !== v && ta.value === v) hl.textContent = `${v}\n`; sync(); });
+        requestAnimationFrame(() => { if (painted !== v && ta.value === v) hl.textContent = `${v}\n`; });
       }
-      sync();
       const n = ta.value.split("\n").length;
-      if (n !== lines) { lines = n; gutter.textContent = Array.from({ length: n }, (_, i) => i + 1).join("\n") + "\n\n"; }
+      if (n !== lines) {
+        lines = n;
+        gutter.textContent = Array.from({ length: n }, (_, i) => i + 1).join("\n") + "\n\n";
+        // A caret brought into view stops clear of the row numbers, which stay put over the code.
+        box.style.scrollPaddingLeft = `${gutter.offsetWidth + 16}px`;
+      }
       const dirty = ta.value !== saved;
       q(".revert").disabled = !dirty || !id;
       if (!status.classList.contains("keep")) status.textContent = dirty ? "unsaved changes" : "";
@@ -90,7 +89,6 @@
     const say = (text, keep = false) => { status.textContent = text; status.classList.toggle("keep", keep); };
     let replacing = false; // an edit from find and replace: a step of its own, never typing
     ta.addEventListener("input", (e) => { status.classList.remove("keep"); record(!replacing && e.inputType === "insertText" && e.data?.length === 1 && !/\s/.test(e.data)); onText(); });
-    ta.addEventListener("scroll", sync);
     ta.addEventListener("keydown", (e) => {
       const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
       if (mod && !e.altKey && (k === "z" || k === "y")) { e.preventDefault(); return step(k === "y" || e.shiftKey ? 1 : -1); }
@@ -166,12 +164,11 @@
       ta.focus({ preventScroll: true });
       ta.setSelectionRange(start, start);
       const top = PAD + (line - 1) * LINE;
-      ta.scrollTop = Math.max(0, top + LINE / 2 - ta.clientHeight / 2);
-      ta.scrollLeft = 0;
-      sync();
+      box.scrollTop = Math.max(0, top + LINE / 2 - box.clientHeight / 2);
+      box.scrollLeft = 0;
       root.querySelectorAll(".jump-flash").forEach((x) => x.remove());
       const flash = Object.assign(document.createElement("div"), { className: "jump-flash" });
-      flash.style.top = `${top - ta.scrollTop}px`;
+      flash.style.top = `${top}px`;
       flash.style.height = `${LINE}px`;
       q(".stack").append(flash);
       setTimeout(() => flash.remove(), 1700);
@@ -180,7 +177,7 @@
     // A click on a row number selects that row (Shift+click: from the caret's row to there).
     gutter.addEventListener("mousedown", (e) => {
       e.preventDefault();
-      const n = Math.floor((e.clientY - gutter.getBoundingClientRect().top + gutter.scrollTop - PAD) / LINE) + 1;
+      const n = Math.floor((e.clientY - gutter.getBoundingClientRect().top - PAD) / LINE) + 1;
       const v = ta.value, rows = v.split("\n");
       if (n < 1 || n > rows.length) return;
       const startOf = (r) => rows.slice(0, r - 1).reduce((t, l) => t + l.length + 1, 0);
@@ -213,7 +210,7 @@
 
     // Find and replace (find-bar.js), over the code.
     const finder = findBar({
-      ta, mount: q(".code"), layer: q(".stack"), mirror: true,
+      ta, mount: q(".code"), layer: q(".stack"), scroller: () => box,
       edit: (a, b, text) => {
         replacing = true;
         ta.focus({ preventScroll: true });
@@ -343,7 +340,7 @@
       ta.value = saved;
       ta.focus({ preventScroll: true });
       ta.setSelectionRange(0, 0);
-      ta.scrollTop = 0;
+      box.scrollTop = 0;
       record();
       onText();
       finder.refresh();
