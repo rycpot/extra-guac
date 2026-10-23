@@ -1407,7 +1407,8 @@ async function initUploads() {
 let uploadTargets = [];
 const uploadRunning = []; // { preview } for each image still on its way, oldest first
 let uploadCount = { done: 0, total: 0 };
-let trayThumbUrls = [], traySeq = 0, trayFetched = new Set();
+let traySeq = 0, trayShown = "", trayFetched = new Set();
+const trayThumbUrls = new Map(); // link -> object URL of its thumbnail, kept while it's in the tray
 
 function renderUploadStatus() {
   const { done, total } = uploadCount;
@@ -1422,19 +1423,39 @@ async function renderUploadTray() {
   const items = uploadHistory.slice(0, Math.max(0, 4 - uploadRunning.length));
   const recs = await Promise.all(items.map((it) => UPTHUMBS.get(it.link).catch(() => null)));
   if (seq !== traySeq) return;
-  trayThumbUrls.forEach((u) => URL.revokeObjectURL(u));
-  trayThumbUrls = [];
+  // Settings, the history and a timer all ask for this often: the tiles are only rebuilt
+  // when what they show changes, so the thumbnails don't reload and flicker.
+  const shown = JSON.stringify([uploadRunning.map((r) => r.preview), items.map((it, i) => [it.link, it.at, !!recs[i]?.thumb])]);
+  if (shown === trayShown) return;
+  trayShown = shown;
+  for (const [link, url] of trayThumbUrls) {
+    if (!items.some((it, i) => it.link === link && recs[i]?.thumb)) { URL.revokeObjectURL(url); trayThumbUrls.delete(link); }
+  }
   const tray = $("uploadTray");
   const tile = (title, bg) => {
     const b = Object.assign(document.createElement("button"), { className: "up-thumb", title });
     if (bg) b.style.backgroundImage = `url("${bg.replace(/"/g, "%22")}")`;
     return b;
   };
-  const busy = [...uploadRunning].reverse().map((r) => Object.assign(tile("Uploading…", r.preview), { className: "up-thumb busy", disabled: true }));
+  // Tiles already showing stay as they are (moved, not redrawn).
+  const kept = new Map([...tray.querySelectorAll(".up-thumb[data-link]")].map((b) => [b.dataset.link, b]));
+  const keptBusy = new Map([...tray.querySelectorAll(".up-thumb.busy")].map((b) => [b.dataset.preview, b]));
+  const busy = [...uploadRunning].reverse().map((r) => {
+    if (keptBusy.has(r.preview)) return keptBusy.get(r.preview);
+    const b = Object.assign(tile("Uploading…", r.preview), { className: "up-thumb busy", disabled: true });
+    b.dataset.preview = r.preview;
+    return b;
+  });
   const done = items.map((item, i) => {
+    const old = kept.get(item.link);
+    if (old && old.classList.contains("none") === !recs[i]?.thumb) return old;
     let url = "";
-    if (recs[i]?.thumb) trayThumbUrls.push((url = URL.createObjectURL(recs[i].thumb)));
+    if (recs[i]?.thumb) {
+      if (!trayThumbUrls.has(item.link)) trayThumbUrls.set(item.link, URL.createObjectURL(recs[i].thumb));
+      url = trayThumbUrls.get(item.link);
+    }
     const b = tile(`${item.link}\n${TT.hostName(item.host)} · ${when(item.at)}\nClick to copy the link`, url);
+    b.dataset.link = item.link;
     if (!url) { b.classList.add("none"); b.innerHTML = '<svg><use href="#i-upload"/></svg>'; }
     b.onclick = () => copy(item.link, "Link copied");
     return b;
