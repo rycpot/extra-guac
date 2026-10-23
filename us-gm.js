@@ -16,10 +16,13 @@ function usApi(ctx) {
   // One connection per script and frame, opened when first needed: values changed elsewhere,
   // menu commands run from the popup, request progress, notification clicks, finished
   // downloads and closed tabs come back on it.
-  let port = null;
+  let port = null, portUp = null, portIsUp = null;
   const onPort = new Map(); // kind -> handler
   function connect() {
     if (port) return port;
+    // portUp settles once Extra Guac's side has the connection ("hello"), so nothing sent on it
+    // before then is lost.
+    portUp = new Promise((r) => { portIsUp = r; });
     port = chrome.runtime.connect({ name: `us:${id}:${key}` });
     port.onMessage.addListener((m) => onPort.get(m?.t)?.(m));
     // Extra Guac's side sleeps when idle, which closes this; it's opened again while anything
@@ -81,7 +84,7 @@ function usApi(ctx) {
     return refreshing;
   }
   // Sent once the connection hears about changes, so nothing from before then is missed.
-  onPort.set("hello", () => { if (ctx.storage) refresh(); });
+  onPort.set("hello", () => { portIsUp?.(); if (ctx.storage) refresh(); });
   // A document-idle script starts with no values written into its code and waits for this
   // first refresh before it runs, for 5 seconds at most (bg-userscripts.js). Earlier ones start
   // with the copy written into their code, which can be a moment older than the last save.
@@ -144,15 +147,31 @@ function usApi(ctx) {
     return btoa(bin);
   }
   const fromB64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  const join = (list) => {
+    const out = new Uint8Array(list.reduce((n, b) => n + b.length, 0));
+    let at = 0;
+    for (const b of list) { out.set(b, at); at += b.length; }
+    return out;
+  };
+  const decode = (bytes, charset) => { try { return new TextDecoder(charset || "utf-8").decode(bytes); } catch { return new TextDecoder().decode(bytes); } };
   function xmlhttpRequest(d = {}) {
     const rid = `${id}:${nextReq++}`;
-    let done = false, aborted = false;
+    let done = false, aborted = false, head = null;
     const call = (name, arg) => { try { d[name]?.call(handle, arg); } catch (err) { console.error(err); } };
+    const type = (d.responseType || "").toLowerCase();
+    // responseType "stream": the answer is a ReadableStream that fills as the pieces come in.
+    let feed = null;
+    const stream = type === "stream" ? new ReadableStream({ start(c) { feed = c; } }) : null;
+    const state = (readyState, more = {}) => ({
+      readyState, status: head?.status || 0, statusText: head?.statusText || "", finalUrl: head?.finalUrl || d.url,
+      responseHeaders: head?.headers || "", context: d.context, ...more,
+    });
     const handle = {
       abort() {
         if (done || aborted) return;
         aborted = true;
         ask("xhrAbort", { rid }).catch(() => {});
+        feed?.error(new Error("aborted"));
         const r = { readyState: 4, status: 0, statusText: "", response: null, responseText: "", finalUrl: d.url };
         call("onabort", r); call("onloadend", r);
       },
@@ -161,50 +180,69 @@ function usApi(ctx) {
     handle.promise = new Promise((a, b) => { resolve = a; reject = b; });
     handle.promise.catch(() => {});
     (async () => {
-      if (typeof d.onprogress === "function") connect();
-      const type = (d.responseType || "").toLowerCase();
+      const progress = ["onprogress", "onreadystatechange"].some((n) => typeof d[n] === "function") || !!stream;
+      // The answer's headers, progress and any pieces come back over the connection.
+      connect();
+      await Promise.race([portUp, new Promise((r) => setTimeout(r, 3000))]);
+      const pieces = [];
       requests.set(rid, (m) => {
-        if (aborted) return;
-        if (m.ev === "progress") return call("onprogress", { lengthComputable: !!m.total, loaded: m.loaded, total: m.total || 0 });
+        if (aborted || done) return;
+        if (m.ev === "headers") { head = m; return call("onreadystatechange", state(2)); }
+        if (m.ev === "chunk") { const b = fromB64(m.b64); return feed ? feed.enqueue(b) : pieces.push(b); }
+        if (m.ev === "progress") {
+          call("onreadystatechange", state(3));
+          return call("onprogress", { ...state(3), lengthComputable: !!m.total, loaded: m.loaded, total: m.total || 0 });
+        }
+        if (m.ev === "streamed") return; // the answer itself comes over the connection
         done = true;
         requests.delete(rid);
-        const r = { readyState: 4, status: m.status || 0, statusText: m.statusText || "", finalUrl: m.finalUrl || d.url, responseHeaders: m.headers || "", context: d.context };
+        head = m;
         if (m.ev !== "load") {
-          r.error = m.error || "";
+          feed?.error(new Error(m.error || m.ev));
+          const r = { ...state(4), error: m.error || "" };
           call(m.ev === "timeout" ? "ontimeout" : "onerror", r);
           call("onloadend", r);
           return reject(r);
         }
-        const bytes = m.b64 != null ? fromB64(m.b64) : null;
-        // charset=x-user-defined: one character per byte, as the page's own XMLHttpRequest gives.
-        const raw = !!d.overrideMimeType?.includes("charset=x-user-defined");
-        const text = !bytes ? m.text ?? "" : raw ? Array.from(bytes, (b) => String.fromCharCode(b < 0x80 ? b : 0xf700 + b)).join("") : new TextDecoder().decode(bytes);
-        let response = text;
-        if (type === "json") { try { response = JSON.parse(text); } catch { response = undefined; } }
-        else if (type === "arraybuffer") response = bytes ? bytes.buffer : new TextEncoder().encode(text).buffer;
-        else if (type === "blob") response = new Blob([bytes || text], { type: m.mime || "" });
-        else if (type === "document") { try { response = new DOMParser().parseFromString(text, /xml/.test(m.mime || "") ? "text/xml" : "text/html"); } catch { response = null; } }
-        Object.assign(r, { response });
-        if (type === "" || type === "text" || type === "json" || type === "document") r.responseText = text;
-        if (type === "document") r.responseXML = response;
+        const r = state(4);
+        let response;
+        if (stream) {
+          feed.close();
+          response = stream;
+        } else {
+          const bytes = m.b64 != null ? fromB64(m.b64) : m.streamed ? join(pieces) : null;
+          // charset=x-user-defined: one character per byte, as the page's own XMLHttpRequest gives.
+          const raw = !!d.overrideMimeType?.includes("charset=x-user-defined");
+          const text = !bytes ? m.text ?? "" : raw ? Array.from(bytes, (b) => String.fromCharCode(b < 0x80 ? b : 0xf700 + b)).join("") : decode(bytes, m.charset);
+          response = text;
+          if (type === "json") { try { response = JSON.parse(text); } catch { response = undefined; } }
+          else if (type === "arraybuffer") response = bytes ? bytes.buffer : new TextEncoder().encode(text).buffer;
+          else if (type === "blob") response = new Blob([bytes || text], { type: m.mime || "" });
+          else if (type === "document") { try { response = new DOMParser().parseFromString(text, /xml/.test(m.mime || "") ? "text/xml" : "text/html"); } catch { response = null; } }
+          if (type === "" || type === "text" || type === "json" || type === "document") r.responseText = text;
+          if (type === "document") r.responseXML = response;
+        }
+        r.response = response;
         call("onreadystatechange", r);
         call("onload", r);
         call("onloadend", r);
         resolve(r);
       });
-      call("onloadstart", { readyState: 1, finalUrl: d.url });
+      call("onreadystatechange", state(1));
+      call("onloadstart", state(1, stream ? { response: stream } : {}));
       const req = {
         url: new URL(d.url, location.href).href, method: (d.method || "GET").toUpperCase(), headers: d.headers || {}, body: await body(d.data),
-        timeout: Number(d.timeout) || 0, anonymous: !!d.anonymous, binary: ["arraybuffer", "blob"].includes(type) || !!d.overrideMimeType?.includes("charset=x-user-defined"),
-        redirect: d.redirect, user: d.user, password: d.password, progress: typeof d.onprogress === "function",
+        timeout: Number(d.timeout) || 0, anonymous: !!d.anonymous, cookie: d.cookie ? String(d.cookie) : "",
+        binary: ["arraybuffer", "blob"].includes(type) || !!d.overrideMimeType?.includes("charset=x-user-defined"),
+        redirect: d.redirect, user: d.user, password: d.password, progress, stream: !!stream,
       };
-      // The answer is the reply; the connection only carries progress.
       const m = await ask("xhr", { rid, req });
       requests.get(rid)?.(m);
     })().catch((err) => {
       requests.delete(rid);
-      if (aborted) return;
+      if (aborted || done) return;
       done = true;
+      feed?.error(err);
       const r = { readyState: 4, status: 0, statusText: "", error: err.message, finalUrl: d.url };
       call("onerror", r); call("onloadend", r);
       reject(r);

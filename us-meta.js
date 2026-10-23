@@ -183,7 +183,8 @@
     if (kindsOf(meta).includes("requests")) {
       const set = new Set();
       for (const m of code.matchAll(/headers\s*:\s*\{([^}]*)\}/g)) {
-        for (const h of m[1].matchAll(/["']?\b(cookie|referer|user-agent|origin|host)\b["']?\s*:/gi)) set.add(h[1].toLowerCase());
+        // cookie, referer, user-agent and origin are set with a request rule (bg-userscripts.js).
+        for (const h of m[1].matchAll(/["']?\b(host)\b["']?\s*:/gi)) set.add(h[1].toLowerCase());
       }
       if (set.size) out.push(`Its requests set ${[...set].join(", ")}, which Chrome doesn't let extensions change; ${set.size > 1 ? "those are" : "that's"} left out.`);
     }

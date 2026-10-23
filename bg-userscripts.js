@@ -442,6 +442,56 @@ function usBody(b) {
   }
 }
 
+// Headers a fetch can't set (Chrome drops them) are set by a request rule for just that request:
+// a session rule on its exact address, for requests from here (no tab), gone once the answer's
+// headers are in. While one is up, every request from here to that address waits its turn.
+const US_RULED_HEADERS = ["cookie", "referer", "user-agent", "origin"];
+const US_RULE_BASE = 9400000; // session rules 9400000-9499999
+let usNextRule = 0;
+const usUrlTurns = new Map(); // address -> settles when its rule is gone
+// Rules left from before the worker last stopped (their requests stopped with it).
+chrome.declarativeNetRequest.getSessionRules().then((rules) => {
+  const ids = rules.map((r) => r.id).filter((id) => id >= US_RULE_BASE && id < US_RULE_BASE + 100000);
+  if (ids.length) return chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: ids });
+}).catch(() => {});
+
+async function usWithHeaders(url, method, ruled, send) {
+  while (usUrlTurns.has(url)) await usUrlTurns.get(url);
+  if (!ruled.length) return send();
+  let done;
+  usUrlTurns.set(url, new Promise((r) => { done = r; }));
+  const id = US_RULE_BASE + (usNextRule++ % 100000);
+  const methods = ["connect", "delete", "get", "head", "options", "patch", "post", "put"];
+  const condition = { tabIds: [chrome.tabs.TAB_ID_NONE], requestMethods: [methods.includes(method.toLowerCase()) ? method.toLowerCase() : "other"] };
+  const rule = (match) => ({ id, priority: 1, action: { type: "modifyHeaders", requestHeaders: ruled }, condition: { ...condition, ...match } });
+  try {
+    // A regular expression of the exact address; an address too long for one, as a plain filter.
+    await chrome.declarativeNetRequest.updateSessionRules({ addRules: [rule({ regexFilter: `^${url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$` })] })
+      .catch(() => (/[*^|]/.test(url) ? null : chrome.declarativeNetRequest.updateSessionRules({ addRules: [rule({ urlFilter: `|${url}|` })] })))
+      .catch((err) => console.warn("[userscripts] request headers", err));
+    return await send();
+  } finally {
+    await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: [id] }).catch(() => {});
+    usUrlTurns.delete(url);
+    done();
+  }
+}
+
+// Answers bigger than this, and every "stream" answer, come over the script's connection in
+// pieces (one message can't hold much more than 64 MB).
+const US_CHUNK = 1024 * 1024;
+const usB64 = (bytes) => {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+};
+const usJoin = (list, size) => {
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const c of list) { out.set(c, at); at += c.length; }
+  return out;
+};
+
 async function usXhr(s, sender, { rid, req }) {
   usNeed(s, "requests");
   const url = new URL(req.url);
@@ -451,50 +501,74 @@ async function usXhr(s, sender, { rid, req }) {
   }
   const ctl = new AbortController();
   const key = `${usPortKey(sender, s.id)}|${rid}`;
+  const port = () => usPorts.get(usPortKey(sender, s.id));
   usXhrs.set(key, ctl);
   let timedOut = false;
   const timer = req.timeout > 0 ? setTimeout(() => { timedOut = true; ctl.abort(); }, req.timeout) : 0;
-  const headers = new Headers();
-  for (const [k, v] of Object.entries(req.headers || {})) { try { headers.set(k, String(v)); } catch {} }
+  const headers = new Headers(), ruled = [];
+  for (const [k, v] of Object.entries(req.headers || {})) {
+    const name = k.toLowerCase().trim();
+    if (US_RULED_HEADERS.includes(name) && url.protocol !== "data:") ruled.push({ header: name, operation: "set", value: String(v) });
+    else { try { headers.set(k, String(v)); } catch {} }
+  }
+  // cookie: added to the cookies the request carries anyway.
+  if (req.cookie && url.protocol !== "data:") {
+    const set = ruled.find((h) => h.header === "cookie");
+    if (set) set.value = `${set.value}; ${req.cookie}`;
+    else ruled.push({ header: "cookie", operation: "append", value: String(req.cookie) });
+  }
   if (req.user && !headers.has("authorization")) headers.set("authorization", `Basic ${btoa(`${req.user}:${req.password || ""}`)}`);
   const body = usBody(req.body);
   if (req.body?.type && !headers.has("content-type")) headers.set("content-type", req.body.type);
   try {
-    const res = await fetch(url.href, {
+    const address = url.href.split("#")[0];
+    const res = await usWithHeaders(address, req.method, ruled, () => fetch(address, {
       method: req.method, headers, body: ["GET", "HEAD"].includes(req.method) ? undefined : body, signal: ctl.signal,
       credentials: req.anonymous ? "omit" : "include", redirect: ["manual", "error"].includes(req.redirect) ? req.redirect : "follow", cache: "no-store",
-    });
+    }));
     // A redirect may not lead outside the @connect list either.
     if (res.redirected && !usConnectAllowed(s.meta, res.url, sender.url || sender.tab?.url)) {
       ctl.abort();
       return { ev: "error", error: `${new URL(res.url).hostname} (redirected to) isn't in this script's @connect list`, finalUrl: url.href };
     }
+    const head = {
+      status: res.status, statusText: res.statusText, finalUrl: res.url || url.href, mime: res.headers.get("content-type") || "",
+      headers: [...res.headers].map(([k, v]) => `${k}: ${v}`).join("\r\n"),
+    };
+    const charset = /charset=([^;]+)/i.exec(head.mime)?.[1] || "";
+    if (req.progress) port()?.postMessage({ t: "xhr", rid, ev: "headers", ...head });
     const total = Number(res.headers.get("content-length")) || 0;
-    const chunks = [];
-    let loaded = 0, last = 0;
+    // Pieces go out as they're read for a stream; otherwise the answer is kept until it's done,
+    // or until it's bigger than US_CHUNK, when it goes out 1 MB at a time from there on.
+    let streamed = !!req.stream && !!port(), loaded = 0, last = 0;
+    let held = [], heldSize = 0;
+    const flush = () => {
+      if (!heldSize) return;
+      port()?.postMessage({ t: "xhr", rid, ev: "chunk", b64: usB64(usJoin(held, heldSize)) });
+      held = []; heldSize = 0;
+    };
     if (res.body && req.method !== "HEAD") {
       const reader = res.body.getReader();
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        chunks.push(value);
+        held.push(value);
+        heldSize += value.length;
         loaded += value.length;
-        if (req.progress && Date.now() - last > 100) { last = Date.now(); usPorts.get(usPortKey(sender, s.id))?.postMessage({ t: "xhr", rid, ev: "progress", loaded, total }); }
+        if (!streamed && heldSize > US_CHUNK && port()) streamed = true;
+        if (streamed && (req.stream || heldSize >= US_CHUNK)) flush();
+        if (req.progress && Date.now() - last > 100) { last = Date.now(); port()?.postMessage({ t: "xhr", rid, ev: "progress", loaded, total }); }
       }
     }
-    const bytes = new Uint8Array(loaded);
-    let at = 0;
-    for (const c of chunks) { bytes.set(c, at); at += c.length; }
-    const out = {
-      ev: "load", status: res.status, statusText: res.statusText, finalUrl: res.url || url.href, mime: res.headers.get("content-type") || "",
-      headers: [...res.headers].map(([k, v]) => `${k}: ${v}`).join("\r\n"),
-    };
-    if (req.binary) {
-      let bin = "";
-      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-      out.b64 = btoa(bin);
-    } else {
-      const charset = /charset=([^;]+)/i.exec(out.mime)?.[1];
+    if (streamed) {
+      flush();
+      port()?.postMessage({ t: "xhr", rid, ev: "load", streamed: true, charset, ...head });
+      return { ev: "streamed" };
+    }
+    const bytes = usJoin(held, heldSize);
+    const out = { ev: "load", ...head };
+    if (req.binary) out.b64 = usB64(bytes);
+    else {
       let dec;
       try { dec = new TextDecoder(charset || "utf-8"); } catch { dec = new TextDecoder(); }
       out.text = dec.decode(bytes);
