@@ -17,6 +17,7 @@ const uploadHandlers = {
   clearUploadHistory: () => editLocal("uploadHistory", () => ({ uploadHistory: [] })),
   deleteUploads: ({ links }) => deleteUploads(links),
   uploadThumbs: ({ links }) => fillUploadThumbs(links),
+  uploadDropped: ({ host, file, url, tabId }) => uploadDropped(host, file, url, tabId),
 };
 
 const UPLOAD_HISTORY_LIMIT = 100;
@@ -326,6 +327,35 @@ async function uploadShot(items, host, tab, what = "") {
   const { notes = {} } = await chrome.storage.local.get("notes");
   if (!notes.shotUpload) await chrome.storage.local.set({ notes: { ...notes, shotUpload: at } });
   return { links, copied, first: !notes.shotUpload, deletable: done.every((d) => d.del) };
+}
+
+// One image dropped, pasted or picked in the popup's upload images section: file (a data:
+// URL and its name), or url when a picture dragged from a page came without its file. host
+// "" = no host switched on: ImgLink without an account, whatever key is saved. The popup
+// sends one image per message, so it can count them off, and copies the links itself.
+async function uploadDropped(host, file, url, tabId) {
+  const { upload } = await TT.getSettings();
+  if (host && !uploadHostsOn(upload).includes(host)) throw new Error(`${host === "x02" ? "X02 needs a verified API key" : `${host} is switched off`} (upload images)`);
+  const s = host ? upload : { ...upload, imglinkVerified: false };
+  const up = UPLOADERS[host || "imglink"];
+  let done = null, blob = null;
+  if (file) {
+    blob = await (await fetch(file.dataUrl)).blob();
+    done = await up.fromFile(blob, file.name || "image.png", s);
+  } else {
+    if (!/^(https?|data|blob):/i.test(url || "")) throw new Error("That isn't an image");
+    if (up.fromUrl && /^https?:/i.test(url)) {
+      try { done = await up.fromUrl(url, s); } catch (e) { if (!e.retryAsFile) throw e; }
+    }
+    if (!done) {
+      const got = await fetchImage(url, { id: tabId });
+      blob = got.blob;
+      done = await up.fromFile(blob, got.name, s);
+    }
+  }
+  const source = file ? file.name || "(dropped image)" : url.startsWith("data:") ? "(embedded image)" : url;
+  await recordUploads([{ host: up.label, link: done.url, source, at: Date.now(), ...(done.del ? { del: done.del } : {}) }], [blob]);
+  return { link: done.url, host: up.label };
 }
 
 // The toolbar badge for a tab: ↑ while any upload from it runs, then ✓ or ✕ for a moment

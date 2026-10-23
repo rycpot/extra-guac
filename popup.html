@@ -485,6 +485,11 @@
         </div>
         <span class="status" id="uploadStatus">right-click an image</span>
       </div>
+      <div class="up-tray" id="uploadTray">
+        <button class="up-drop" id="uploadDrop"><svg><use href="#i-plus"/></svg><span>drop</span></button>
+      </div>
+      <input type="file" id="uploadPick" accept="image/*" multiple hidden>
+      <div class="up-over" id="uploadOver" hidden></div>
       <div class="link-row" id="latestUpload" hidden>
         <span class="link-text"></span>
         <button class="icon-btn small" data-copy title="Copy"><svg><use href="#i-copy"/></svg></button>

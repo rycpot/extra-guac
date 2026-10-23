@@ -43,7 +43,7 @@ A Chrome extension. Click its icon to open the side panel (or a popup, in settin
 | **What font?** | Click any text to see the font's real name, weight and size; the name is copied. |
 | **Zoom & rotate images** | Hold a key and scroll over an image to zoom it. Right-click it for rotate and zoom controls. |
 | **Save images on click** | Hold a key and click an image to save it as is, or as PNG, JPG or WebP. |
-| **Upload images** | Right-click an image to upload it to ImgLink or X02; the link is copied and kept in a history. |
+| **Upload images** | Right-click an image, or drop, paste or pick images in the upload images section, to upload them to ImgLink or X02; the link is copied and kept in a history, with the newest four shown as thumbnails. With no host on, dropped images go to ImgLink without an account; with both on, you drop them on the host you want. |
 | **Dark mode** | Dark pages on every site or only the ones you pick. Sites with a dark theme of their own get that one. |
 | **Remove elements** | Click away clutter on a page; it stays gone on that site until you bring it back. |
 | **Open other site URLs in new tab** | On the sites you pick, links that leave the site open in a new tab. |

@@ -227,6 +227,36 @@ output { width: 38px; text-align: right; color: var(--text2); font-variant-numer
 .host:disabled { opacity: .45; cursor: default; }
 .host:not(:disabled):hover { color: var(--text); }
 
+/* Upload images: a drop tile, then the newest uploads (click one to copy its link). While
+   images are dragged over the section, it shows where they'll go: one zone, or one per host
+   when both are on (also the host picker after browsing or pasting). */
+#uploader { position: relative; }
+.up-tray { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.up-tray > * { aspect-ratio: 1; border-radius: 11px; position: relative; overflow: hidden; }
+.up-drop { border: 1.5px dashed var(--stroke); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  color: var(--text3); font-size: 10.5px; }
+.up-drop svg { width: 18px; height: 18px; }
+.up-drop:hover { color: var(--text); border-color: var(--text3); }
+.up-tray.empty .up-drop { grid-column: 1 / -1; aspect-ratio: auto; height: 52px; flex-direction: row; gap: 8px; font-size: 12px; }
+.up-thumb { display: block; width: 100%; height: 100%; padding: 0; background: var(--field) center / cover no-repeat; box-shadow: inset 0 0 0 1px var(--divider); }
+.up-thumb.none { display: grid; place-items: center; color: var(--text3); }
+.up-thumb.none svg { width: 18px; height: 18px; }
+.up-thumb:hover { box-shadow: inset 0 0 0 1.5px var(--stroke); }
+.up-thumb.busy { cursor: default; }
+.up-thumb.busy::after { content: ""; position: absolute; inset: 0; background: rgba(0,0,0,.4); }
+.up-thumb.busy::before { content: ""; position: absolute; z-index: 1; left: 50%; top: 50%; width: 22px; height: 22px; margin: -13px 0 0 -13px;
+  border-radius: 50%; border: 2.5px solid rgba(255,255,255,.3); border-top-color: #fff; animation: up-spin .8s linear infinite; }
+@keyframes up-spin { to { transform: rotate(360deg); } }
+.up-over { position: absolute; inset: 6px -6px 6px; z-index: 3; border-radius: 14px; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+  gap: 6px; padding: 6px; background: color-mix(in srgb, var(--bg) 84%, transparent); backdrop-filter: blur(3px); }
+.up-zone { border: 1.5px dashed var(--stroke); border-radius: 11px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; padding: 6px; color: var(--text2); text-align: center; }
+.up-zone svg { width: 20px; height: 20px; color: var(--text3); pointer-events: none; }
+.up-zone b { font-weight: 500; color: var(--text); pointer-events: none; }
+.up-zone small { font-size: 10.5px; color: var(--text3); pointer-events: none; }
+.up-zone.hot, button.up-zone:hover { border-style: solid; border-color: var(--green); background: color-mix(in srgb, var(--green) 10%, transparent); }
+.up-zone.hot svg, button.up-zone:hover svg { color: var(--green); }
+
 /* Sections are placed by the saved layout before the tabs show. */
 main:not(.laid-out) .panel { visibility: hidden; }
 .empty-panel { margin: 18px 4px; color: var(--text3); font-size: 12px; text-align: center; }

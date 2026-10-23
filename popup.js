@@ -1373,13 +1373,17 @@ async function initUploads() {
       b.title = usable ? `Right-click an image → upload to ${TT.hostName(id)}` : "Save a working X02 API key in settings first";
       b.setAttribute("aria-pressed", String(usable && !!s.upload[id]));
     }
-    const on = [...hosts].filter((b) => b.getAttribute("aria-pressed") === "true").length;
-    $("uploadStatus").textContent = on ? "right-click an image" : "pick a host";
+    uploadTargets = TT.uploadHosts(s.upload);
+    renderUploadStatus();
+    $("uploadDrop").title = uploadTargets.length === 2 ? "Drop images here, or click to pick them; you choose the host as they go"
+      : `Drop images here, or click to pick them. They go to ${uploadTargets.length ? TT.hostName(uploadTargets[0]) : "imglink without an account (no host is on)"}`;
     const latest = await latestShown("upload");
     showCopyRow($("latestUpload"), latest?.link, null, latest && (() => dismiss("upload", latest)));
+    renderUploadTray();
   };
   render(settings);
   onRowChange("upload", async () => render(await TT.getSettings()));
+  initUploadDrop();
   // Each click flips the button at once, so a quick second click flips it back rather
   // than repeating the first; the changes are saved one at a time, in order.
   hosts.forEach((b) => (b.onclick = async () => {
@@ -1392,6 +1396,181 @@ async function initUploads() {
   chrome.storage.onChanged.addListener(async (c, area) => {
     if (area === "local" && c.tt) render(await TT.getSettings());
   });
+}
+
+// ---- Upload images: drop, paste or pick ----------------------------------------
+// Where images go: no host on → imglink without an account; one host on → that one; both on
+// → the section shows a zone per host, and where they're dropped (or which is clicked, after
+// picking files or pasting) is where they go. One image per message, in turn; the links are
+// copied together once all are done.
+
+let uploadTargets = [];
+const uploadRunning = []; // { preview } for each image still on its way, oldest first
+let uploadCount = { done: 0, total: 0 };
+let trayThumbUrls = [], traySeq = 0, trayFetched = new Set();
+
+function renderUploadStatus() {
+  const { done, total } = uploadCount;
+  $("uploadStatus").textContent = uploadRunning.length ? `uploading ${Math.min(done + 1, total)} of ${total}…`
+    : uploadTargets.length ? "drop or right-click an image" : "no host on: imglink, no account";
+}
+
+// The drop tile, then images on their way, then the newest uploads, 4 in all.
+async function renderUploadTray() {
+  const seq = ++traySeq;
+  const { uploadHistory = [] } = await chrome.storage.local.get("uploadHistory");
+  const items = uploadHistory.slice(0, Math.max(0, 4 - uploadRunning.length));
+  const recs = await Promise.all(items.map((it) => UPTHUMBS.get(it.link).catch(() => null)));
+  if (seq !== traySeq) return;
+  trayThumbUrls.forEach((u) => URL.revokeObjectURL(u));
+  trayThumbUrls = [];
+  const tray = $("uploadTray");
+  const tile = (title, bg) => {
+    const b = Object.assign(document.createElement("button"), { className: "up-thumb", title });
+    if (bg) b.style.backgroundImage = `url("${bg.replace(/"/g, "%22")}")`;
+    return b;
+  };
+  const busy = [...uploadRunning].reverse().map((r) => Object.assign(tile("Uploading…", r.preview), { className: "up-thumb busy", disabled: true }));
+  const done = items.map((item, i) => {
+    let url = "";
+    if (recs[i]?.thumb) trayThumbUrls.push((url = URL.createObjectURL(recs[i].thumb)));
+    const b = tile(`${item.link}\n${TT.hostName(item.host)} · ${when(item.at)}\nClick to copy the link`, url);
+    if (!url) { b.classList.add("none"); b.innerHTML = '<svg><use href="#i-upload"/></svg>'; }
+    b.onclick = () => copy(item.link, "Link copied");
+    return b;
+  });
+  tray.replaceChildren($("uploadDrop"), ...busy, ...done);
+  tray.classList.toggle("empty", !busy.length && !done.length);
+  $("uploadDrop").querySelector("span").textContent = tray.classList.contains("empty") ? "Drop images here, or click to pick" : "drop";
+  // Uploads without a thumbnail get one fetched from their link, once per popup.
+  const missing = items.filter((it, i) => !recs[i]?.thumb && !recs[i]?.failed && !trayFetched.has(it.link)).map((it) => it.link);
+  if (missing.length) {
+    missing.forEach((l) => trayFetched.add(l));
+    send("uploadThumbs", { links: missing }).then(() => renderUploadTray(), () => {});
+  }
+}
+
+function initUploadDrop() {
+  const sec = $("uploader"), over = $("uploadOver"), pick = $("uploadPick");
+  const isImageDrag = (e) => [...(e.dataTransfer?.types || [])].some((t) => t === "Files" || t === "text/uri-list");
+
+  // The zones: one for a single target, one per host when both are on. onPick: clicked
+  // (the host picker after picking files or pasting).
+  let picking = null;
+  function showZones(n, onPick) {
+    const hosts = uploadTargets.length ? uploadTargets : [""];
+    const what = n > 1 ? `${n} images` : n === 1 ? "the image" : "images";
+    over.replaceChildren(...hosts.map((h) => {
+      const z = document.createElement(onPick ? "button" : "div");
+      z.className = "up-zone";
+      z.dataset.host = h;
+      const name = h ? TT.hostName(h) : "imglink";
+      z.innerHTML = `<svg><use href="#i-cloud"/></svg><b></b><small></small>`;
+      z.querySelector("b").textContent = hosts.length > 1 ? name : `Upload ${what} to ${name}`;
+      z.querySelector("small").textContent = onPick ? (hosts.length > 1 ? `upload ${what} here` : "")
+        : hosts.length > 1 ? "drop here" : h ? "release to upload" : "no account (no host is on)";
+      if (onPick) z.onclick = (e) => { e.stopPropagation(); hideZones(); onPick(h); };
+      return z;
+    }));
+    picking = onPick || null;
+    if (onPick) over.onclick = () => hideZones(); // around the zones: cancel
+    over.hidden = false;
+  }
+  function hideZones() { over.hidden = true; picking = null; over.onclick = null; }
+  addEventListener("keydown", (e) => { if (e.key === "Escape" && picking) { e.preventDefault(); hideZones(); } });
+
+  // Images to send: the image files dropped or pasted, else (a picture dragged from a page
+  // that came without its file) the picture's address.
+  function imagesOf(dt) {
+    const files = [...(dt.files || [])].filter((f) => f.type.startsWith("image/"));
+    if (files.length) return files.map((file) => ({ file }));
+    const src = /<img[^>]+src=["']([^"']+)/i.exec(dt.getData("text/html") || "")?.[1]?.replace(/&amp;/g, "&");
+    const link = (dt.getData("text/uri-list") || "").split(/\r?\n/).find((l) => l && !l.startsWith("#"));
+    const url = src || link;
+    return url ? [{ url }] : [];
+  }
+  // Both hosts on: ask which one (unless it was dropped on one).
+  const start = (images, host) => {
+    if (!images.length) return toast("No images in that", true);
+    if (host !== undefined || uploadTargets.length < 2) return uploadImages(images, host ?? uploadTargets[0] ?? "");
+    showZones(images.length, (h) => uploadImages(images, h));
+  };
+
+  sec.addEventListener("dragenter", (e) => {
+    if (!isImageDrag(e)) return;
+    e.preventDefault();
+    if (over.hidden || picking) showZones([...e.dataTransfer.items].filter((i) => i.kind === "file").length);
+  });
+  sec.addEventListener("dragover", (e) => {
+    if (!isImageDrag(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    const zone = e.target.closest?.(".up-zone");
+    over.querySelectorAll(".up-zone").forEach((z) => z.classList.toggle("hot", z === zone || over.children.length === 1));
+  });
+  sec.addEventListener("dragleave", (e) => { if (!picking && !sec.contains(e.relatedTarget)) hideZones(); });
+  sec.addEventListener("drop", (e) => {
+    if (!isImageDrag(e)) return;
+    e.preventDefault();
+    const zone = e.target.closest?.(".up-zone") || (over.children.length === 1 && over.firstElementChild);
+    hideZones();
+    if (zone) start(imagesOf(e.dataTransfer), zone.dataset.host);
+  });
+  // Files dropped anywhere else would open in the panel in place of Extra Guac.
+  addEventListener("dragover", (e) => { if (isImageDrag(e) && !sec.contains(e.target)) { e.preventDefault(); e.dataTransfer.dropEffect = "none"; } });
+  addEventListener("drop", (e) => { if (isImageDrag(e) && !sec.contains(e.target)) e.preventDefault(); });
+
+  $("uploadDrop").onclick = () => pick.click();
+  pick.onchange = () => {
+    const images = [...pick.files].filter((f) => f.type.startsWith("image/")).map((file) => ({ file }));
+    pick.value = "";
+    start(images);
+  };
+  // Pasting an image anywhere in the popup, outside a text box, uploads it too.
+  addEventListener("paste", (e) => {
+    if (e.target.closest?.("input, textarea, [contenteditable]") || !sec.offsetParent) return;
+    const images = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith("image/")).map((file) => ({ file }));
+    if (!images.length) return;
+    e.preventDefault();
+    start(images);
+  });
+}
+
+const fileAsDataUrl = (file) => new Promise((resolve, reject) => {
+  const r = new FileReader();
+  r.onload = () => resolve(r.result);
+  r.onerror = () => reject(new Error(`Couldn't read ${file.name || "the image"}`));
+  r.readAsDataURL(file);
+});
+
+async function uploadImages(images, host) {
+  const runs = images.map((it) => ({ preview: it.file ? URL.createObjectURL(it.file) : it.url }));
+  if (!uploadRunning.length) uploadCount = { done: 0, total: 0 };
+  uploadRunning.push(...runs);
+  uploadCount.total += runs.length;
+  renderUploadStatus();
+  renderUploadTray();
+  const links = [], errors = [];
+  let label = host ? TT.hostName(host) : "imglink";
+  for (const [i, it] of images.entries()) {
+    try {
+      const file = it.file && { dataUrl: await fileAsDataUrl(it.file), name: it.file.name || "image.png" };
+      const res = await send("uploadDropped", { host, file, url: it.url });
+      links.push(res.link);
+      label = res.host;
+    } catch (err) { errors.push(err.message); }
+    uploadRunning.splice(uploadRunning.indexOf(runs[i]), 1);
+    if (runs[i].preview.startsWith("blob:")) URL.revokeObjectURL(runs[i].preview);
+    uploadCount.done++;
+    renderUploadStatus();
+    renderUploadTray();
+  }
+  if (errors.length) {
+    const lead = links.length ? `${links.length} of ${images.length} uploaded (links copied). ` : "";
+    if (links.length) navigator.clipboard.writeText(links.join("\n")).catch(() => {});
+    return toast(lead + errors[0], true);
+  }
+  copy(links.join("\n"), `Uploaded to ${label} · ${links.length > 1 ? `${links.length} links` : "link"} copied`);
 }
 
 // ---- Screenshot history -----------------------------------------------------
