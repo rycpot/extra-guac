@@ -87,12 +87,18 @@ function usInjected(s, values, key) {
   // The GM names come in as the inner function's parameters, so a script may still declare
   // its own (a fallback "function GM_addStyle" or "var GM_info") without clashing.
   const names = page ? ["GM_info", "GM", "unsafeWindow", "GM_log"] : US_API;
+  const storage = USM.kindsOf(m).includes("storage");
   const api = page
     ? `const __usInfo = ${JSON.stringify(info)}, __usApi = { GM_info: __usInfo, GM: { info: __usInfo }, unsafeWindow: window, GM_log: console.log.bind(console, ${JSON.stringify(`[${m.name}]`)}) };\n`
-    : `const __usApi = (${usApi.toString()})(${JSON.stringify({ id: s.id, key, info, values: values || {}, resources, storage: USM.kindsOf(m).includes("storage") })});\n`;
+    : `const __usApi = (${usApi.toString()})(${JSON.stringify({ id: s.id, key, info, values: values || {}, resources, storage })});\n`;
   const requires = m.requires.map((u) => `${s.requires?.[u] ?? `console.warn(${JSON.stringify(`[${m.name}] @require not loaded: ${u}`)});`}\n`).join(";\n");
   const name = m.name.replace(/[^\w .-]/g, "_");
-  return `(() => {\n${check}${api}(function (${names.join(", ")}) {\n${requires}\n${s.code}\n}).apply(window, ${JSON.stringify(names)}.map((n) => __usApi[n]));\n})();\n//# sourceURL=userscript:///${encodeURIComponent(name)}.user.js`;
+  const run = `(function (${names.join(", ")}) {\n${requires}\n${s.code}\n}).apply(window, ${JSON.stringify(names)}.map((n) => __usApi[n]))`;
+  // The values written into this code can be a moment old (see usValuesChanged), so a
+  // document-idle script that saves values first waits for its copy to be brought up to date
+  // (us-gm.js). Earlier run-at times start at once, as they ask to.
+  const start = !page && storage && m.runAt === "document_idle" ? `__usApi.ready.then(() => ${run});` : `${run};`;
+  return `(() => {\n${check}${api}${start}\n})();\n//# sourceURL=userscript:///${encodeURIComponent(name)}.user.js`;
 }
 
 // Chrome 133+ gives each script a world of its own, so one script can't use another's
@@ -594,6 +600,8 @@ function usOnConnect(port) {
 function usOnScriptPort(port, id) {
   const key = usPortKey(port.sender, id);
   usPorts.set(key, port);
+  // From here on it hears about changed values; told so, it asks for any it missed before.
+  port.postMessage({ t: "hello" });
   port.onDisconnect.addListener(() => {
     if (usPorts.get(key) === port) usPorts.delete(key);
     const tabId = port.sender.tab?.id;

@@ -36,7 +36,9 @@ function usApi(ctx) {
 
   // ---- Values ----
   // Read from a copy here, so GM_getValue answers at once; writes go to Extra Guac and the
-  // other tabs running this script hear about them. The copy is refreshed once at start.
+  // other tabs running this script hear about them over the connection. The copy is refreshed
+  // at start, and again each time the connection is opened: changes made while it was closed
+  // (Extra Guac's side asleep, or not connected yet) were sent to nobody.
   const listeners = new Map();
   let nextListener = 1;
   function changed(key, oldValue, newValue, remote) {
@@ -45,26 +47,38 @@ function usApi(ctx) {
       try { l.fn(key, oldValue, newValue, remote); } catch (err) { console.error(err); }
     }
   }
+  // Keys written here, or heard about, after a refresh was asked for are newer than its answer,
+  // so it leaves them as they are. One set per refresh waiting or on its way.
+  const watching = new Set();
+  const touched = (k) => { for (const fresh of watching) fresh.add(k); };
   onPort.set("value", (m) => {
+    touched(m.key);
     const old = values[m.key];
     if (m.deleted) delete values[m.key];
     else values[m.key] = m.value;
     changed(m.key, old, m.deleted ? undefined : m.value, true);
   });
   const clone = (v) => (v === undefined ? undefined : JSON.parse(JSON.stringify(v)));
-  // Keys this copy wrote before that answer came are newer than it, so they're kept.
-  let fresh = null;
-  if (ctx.storage) {
-    fresh = new Set();
-    ask("values").then((r) => {
+  // What differs from Extra Guac's saved values comes in as changes made elsewhere. One at a time.
+  let refreshing = Promise.resolve();
+  function refresh() {
+    const fresh = new Set();
+    watching.add(fresh);
+    refreshing = refreshing.then(() => ask("values").then((r) => {
       const got = r.values || {};
       for (const [k, v] of Object.entries(got)) {
         if (!fresh.has(k) && JSON.stringify(values[k]) !== JSON.stringify(v)) { const old = values[k]; values[k] = v; changed(k, old, v, true); }
       }
       for (const k of Object.keys(values)) if (!fresh.has(k) && !(k in got)) { const old = values[k]; delete values[k]; changed(k, old, undefined, true); }
-      fresh = null;
-    }, () => { fresh = null; });
+    }, () => {}).finally(() => { watching.delete(fresh); }));
+    return refreshing;
   }
+  // Sent once the connection hears about changes, so nothing from before then is missed.
+  onPort.set("hello", () => { if (ctx.storage) refresh(); });
+  // The copy this page started with can be older than a value saved just before it loaded (the
+  // registered code is brought up to date a moment after each save). A document-idle script
+  // waits for this first refresh, for 2 seconds at most, before it runs (bg-userscripts.js).
+  const ready = ctx.storage ? Promise.race([refresh(), new Promise((r) => setTimeout(r, 2000))]) : Promise.resolve();
   const getValue = (key, def) => (Object.hasOwn(values, key) ? clone(values[key]) : def);
   function setValues(obj) {
     const set = {};
@@ -73,7 +87,7 @@ function usApi(ctx) {
       const json = JSON.stringify(v);
       if (json === undefined) continue;
       const old = values[k];
-      fresh?.add(k);
+      touched(k);
       values[k] = JSON.parse(json);
       set[k] = values[k];
       changed(k, old, values[k], false);
@@ -81,7 +95,7 @@ function usApi(ctx) {
     return ask("setValues", { values: set }).catch((err) => warn("saving failed", err));
   }
   function deleteValues(keys) {
-    for (const k of keys) { fresh?.add(k); if (Object.hasOwn(values, k)) { const old = values[k]; delete values[k]; changed(k, old, undefined, false); } }
+    for (const k of keys) { touched(k); if (Object.hasOwn(values, k)) { const old = values[k]; delete values[k]; changed(k, old, undefined, false); } }
     return ask("deleteValues", { keys }).catch((err) => warn("deleting failed", err));
   }
   function addValueChangeListener(key, fn) {
@@ -310,5 +324,7 @@ function usApi(ctx) {
   };
   api.GM.xmlhttpRequest = api.GM.xmlHttpRequest;
   api.GM.getResourceURL = api.GM.getResourceUrl;
+  // Not one of the script's names: what bg-userscripts.js waits on before a document-idle start.
+  api.ready = ready;
   return api;
 }
