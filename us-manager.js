@@ -30,7 +30,7 @@
     trash: '<path d="M4.5 7h15"/><path d="M9.5 7V4.5h5V7"/><path d="M6.5 7l1 13h9l1-13"/>',
   };
   const SHOWN = ["storage", "requests", "styles", "menu"];
-  const RUN_AT = { document_start: "before the page loads", document_end: "once the page is there, before its images", document_idle: "after the page has loaded" };
+  const RUN_AT = { document_start: "before the page loads", document_end: "once the page is there, before its images", document_idle: "after the page has loaded", context_menu: "when picked from the right-click menu" };
 
   let scripts = [];
   const open = new Set(); // rows showing their details

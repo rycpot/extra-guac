@@ -13,7 +13,7 @@
   const hash = location.hash.slice(1);
   let pendingId = "";
   try { pendingId = decodeURIComponent(/^pending=(.+)$/.exec(hash)?.[1] || ""); } catch {}
-  const RUN_AT = { document_start: "before the page loads", document_end: "once the page is there", document_idle: "after the page has loaded" };
+  const RUN_AT = { document_start: "before the page loads", document_end: "once the page is there", document_idle: "after the page has loaded", context_menu: "when picked from the right-click menu" };
   let code = "", url = "", installedId = "", pendingAt = 0;
 
   function fail(text) {

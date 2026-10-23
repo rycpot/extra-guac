@@ -26,7 +26,7 @@
 
 })();
 `;
-  const RUN_AT = { document_start: "before the page loads", document_end: "once the page is there, before its images", document_idle: "after the page has loaded" };
+  const RUN_AT = { document_start: "before the page loads", document_end: "once the page is there, before its images", document_idle: "after the page has loaded", context_menu: "when picked from the right-click menu" };
   const LINE = 20, PAD = 14; // .code-font line height and the code's top padding, in px
   const esc = (s) => s.replace(/[&<>]/g, (c) => (c === "&" ? "&amp;" : c === "<" ? "&lt;" : "&gt;"));
   let shj = null;

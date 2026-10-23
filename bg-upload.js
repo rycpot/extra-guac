@@ -386,11 +386,11 @@ async function uploadImage(host, srcUrl, tab, frameId = 0) {
 // right-clicked: that page could see the text in its copy event or swap it, and selecting
 // text there would take the cursor out of whatever was being typed in. The clipboardWrite
 // permission lets it work without a click. Tried twice, in case Chrome closed the page
-// just then.
-async function copyToClipboard(text) {
+// just then. html: the text is HTML, copied as such (userscripts' GM_setClipboard).
+async function copyToClipboard(text, { html = false } = {}) {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      await toOffscreen({ type: "copy", text });
+      await toOffscreen({ type: "copy", text, html });
       return true;
     } catch {}
   }

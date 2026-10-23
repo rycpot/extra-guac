@@ -36,9 +36,16 @@ async function usState() {
   return { permitted, available: permitted && !oldChrome && await usAvailable(), oldChrome };
 }
 
-async function usLoad() {
-  const { usScripts = [], usValues = {} } = await chrome.storage.local.get(["usScripts", "usValues"]);
-  return { scripts: Array.isArray(usScripts) ? usScripts : [], values: usValues && typeof usValues === "object" ? usValues : {} };
+// The scripts and what they saved, read from storage once and kept until either changes: every
+// GM function call looks its script up here. editLocal (background.js) drops the copy the moment
+// it writes either; storage.onChanged below catches any other writer. Callers only read it.
+let usCache = null;
+function usForget() { usCache = null; }
+function usLoad() {
+  usCache ||= chrome.storage.local.get(["usScripts", "usValues"]).then(
+    ({ usScripts = [], usValues = {} }) => ({ scripts: Array.isArray(usScripts) ? usScripts : [], values: usValues && typeof usValues === "object" ? usValues : {} }),
+    (err) => { usCache = null; throw err; });
+  return usCache;
 }
 // Read-change-write of the script list, in turn with every other (editLocal, background.js).
 const usEditScripts = (fn) => editLocal(["usScripts"], async ({ usScripts = [] }) => {
@@ -80,24 +87,27 @@ function usInjected(s, values, key) {
   const i = ${rx([...m.matches, ...m.includes])}, x = ${rx([...m.excludes, ...m.excludeMatches])};
   if ((i.length && !t(i)) || t(x)) return; }\n`
     : "";
+  // Each file once, as fetched; GM_getResourceText / GM_getResourceURL make text or a data URL
+  // of it when asked (us-gm.js).
   const resources = Object.fromEntries(m.resources.map((r) => {
     const f = s.resources?.[r.name];
-    return [r.name, f ? { text: f.text ?? (f.b64 ? new TextDecoder().decode(Uint8Array.from(atob(f.b64), (c) => c.charCodeAt(0))) : ""), url: f.b64 ? `data:${f.mime || "application/octet-stream"};base64,${f.b64}` : f.url } : null];
+    return [r.name, f ? { text: f.text, b64: f.b64, mime: f.mime, url: f.url } : null];
   }));
   // The GM names come in as the inner function's parameters, so a script may still declare
   // its own (a fallback "function GM_addStyle" or "var GM_info") without clashing.
   const names = page ? ["GM_info", "GM", "unsafeWindow", "GM_log"] : US_API;
   const storage = USM.kindsOf(m).includes("storage");
+  // A document-idle script waits for its values before it runs (us-gm.js), so they aren't
+  // written in here for it, and saving doesn't register it again (usValuesChanged). Scripts
+  // that start earlier, or from the right-click menu, read the copy written here.
+  const idle = m.runAt === "document_idle";
   const api = page
     ? `const __usInfo = ${JSON.stringify(info)}, __usApi = { GM_info: __usInfo, GM: { info: __usInfo }, unsafeWindow: window, GM_log: console.log.bind(console, ${JSON.stringify(`[${m.name}]`)}) };\n`
-    : `const __usApi = (${usApi.toString()})(${JSON.stringify({ id: s.id, key, info, values: values || {}, resources, storage })});\n`;
+    : `const __usApi = (${usApi.toString()})(${JSON.stringify({ id: s.id, key, info, values: idle ? {} : values || {}, resources, storage })});\n`;
   const requires = m.requires.map((u) => `${s.requires?.[u] ?? `console.warn(${JSON.stringify(`[${m.name}] @require not loaded: ${u}`)});`}\n`).join(";\n");
   const name = m.name.replace(/[^\w .-]/g, "_");
   const run = `(function (${names.join(", ")}) {\n${requires}\n${s.code}\n}).apply(window, ${JSON.stringify(names)}.map((n) => __usApi[n]))`;
-  // The values written into this code can be a moment old (see usValuesChanged), so a
-  // document-idle script that saves values first waits for its copy to be brought up to date
-  // (us-gm.js). Earlier run-at times start at once, as they ask to.
-  const start = !page && storage && m.runAt === "document_idle" ? `__usApi.ready.then(() => ${run});` : `${run};`;
+  const start = !page && storage && idle ? `__usApi.ready.then(() => ${run});` : `${run};`;
   return `(() => {\n${check}${api}${start}\n})();\n//# sourceURL=userscript:///${encodeURIComponent(name)}.user.js`;
 }
 
@@ -153,10 +163,12 @@ async function usSyncNow() {
     await chrome.userScripts.configureWorld({ messaging: true }).catch((err) => console.error("[userscripts] world", err));
     const have = await chrome.userScripts.getScripts();
     const keys = await usKeys(want.map((s) => s.id));
-    const regs = want.map((s) => usRegistration(s, values[s.id], keys[s.id]));
+    // @run-at context-menu scripts aren't registered: they run when picked from the right-click
+    // menu (usContextRun), in the same world they'd have otherwise.
+    const regs = want.filter((s) => s.meta.runAt !== "context_menu").map((s) => usRegistration(s, values[s.id], keys[s.id]));
     // A world of its own only messages Extra Guac when configured to, one by one.
     if (usOwnWorlds()) {
-      const worlds = new Set(regs.map((r) => r.worldId).filter(Boolean));
+      const worlds = new Set(want.filter((s) => !USM.inPage(s.meta)).map((s) => s.id));
       const configs = await chrome.userScripts.getWorldConfigurations();
       for (const c of configs) if (c.worldId && !worlds.has(c.worldId)) await chrome.userScripts.resetWorldConfiguration(c.worldId).catch(() => {});
       for (const w of worlds) {
@@ -199,11 +211,14 @@ async function usSyncNow() {
   const alarm = await chrome.alarms.get(US_UPDATE_ALARM);
   if (!hours || !scripts.length || !available) { if (alarm) await chrome.alarms.clear(US_UPDATE_ALARM); }
   else if (alarm?.periodInMinutes !== hours * 60) chrome.alarms.create(US_UPDATE_ALARM, { delayInMinutes: Math.min(hours * 60, 5), periodInMinutes: hours * 60 });
+  // Right-click items for @run-at context-menu scripts (usContextItems) follow the same changes.
+  syncMenus(await TT.getSettings());
 }
 let usSyncing = Promise.resolve(), usValuesTimer = 0;
 const usSync = () => (usSyncing = usSyncing.then(usSyncNow).catch((err) => console.error("[userscripts] sync", err)));
 // After saved values change: the copy those scripts start with is brought up to date at once
-// (a burst of writes counts as one), so the next page load reads what was just saved.
+// (a burst of writes counts as one), so the next page load reads what was just saved. Only
+// scripts that start before the page has loaded have such a copy (see usInjected).
 const usValuesDue = new Set();
 function usValuesChanged(ids) {
   for (const id of ids) usValuesDue.add(id);
@@ -217,7 +232,7 @@ function usValuesChanged(ids) {
       const { scripts, values } = await usLoad();
       const have = new Set((await chrome.userScripts.getScripts({ ids: due.map((id) => `us-${id}`) })).map((h) => h.id));
       const keys = await usKeys(due);
-      const regs = scripts.filter((s) => due.includes(s.id) && have.has(`us-${s.id}`)).map((s) => usRegistration(s, values[s.id], keys[s.id]));
+      const regs = scripts.filter((s) => due.includes(s.id) && have.has(`us-${s.id}`) && s.meta.runAt !== "document_idle").map((s) => usRegistration(s, values[s.id], keys[s.id]));
       if (regs.length) await chrome.userScripts.update(regs);
     }).catch((err) => console.error("[userscripts] values", err));
   }, 50);
@@ -225,6 +240,7 @@ function usValuesChanged(ids) {
 
 chrome.storage.onChanged.addListener((c, area) => {
   if (area !== "local") return;
+  if (c.usScripts || c.usValues) usForget();
   if (c.usScripts) usSync();
   else if (c.usValues) {
     const was = c.usValues.oldValue || {}, now = c.usValues.newValue || {};
@@ -503,37 +519,59 @@ const usOps = {
   deleteValues: async (s, sender, { keys }) => { usNeed(s, "storage"); await usWriteValues(s, sender, {}, keys || []); },
   xhr: (s, sender, msg) => usXhr(s, sender, msg),
   xhrAbort: async (s, sender, { rid }) => { usXhrs.get(`${usPortKey(sender, s.id)}|${rid}`)?.abort(); },
-  clipboard: async (s, sender, { text }) => {
+  clipboard: async (s, sender, { text, html }) => {
     usNeed(s, "clipboard");
-    if (!(await copyToClipboard(String(text)))) throw new Error("Couldn't copy");
+    if (!(await copyToClipboard(String(text), { html: !!html }))) throw new Error("Couldn't copy");
   },
   notification: async (s, sender, { nid, n }) => {
     usNeed(s, "notifications");
+    // highlight: the tab that sent it comes to the front; with no text, that's all it does.
+    if (n.highlight && sender.tab) await usFocusTab(sender.tab);
+    if (n.highlight && !n.text) return { shown: false };
     const id = `us:${usPortKey(sender, s.id)}:${nid}`;
     const opts = { type: "basic", iconUrl: chrome.runtime.getURL("icons/icon128.png"), title: n.title || s.meta.name, message: n.text || " ", silent: !!n.silent };
     if (/^data:image\//.test(n.image || "")) opts.iconUrl = n.image;
+    else if (/^https?:/i.test(n.image || "")) opts.iconUrl = (await usImageData(n.image)) || opts.iconUrl;
     await chrome.notifications.create(id, opts);
     await editSession("usNotifs", (map = {}) => ({ ...map, [id]: { key: usPortKey(sender, s.id), nid } }));
     if (n.timeout > 0) setTimeout(() => chrome.notifications.clear(id), n.timeout);
   },
-  openInTab: async (s, sender, { url, active, insert }) => {
+  openInTab: async (s, sender, { oid, url, active, insert }) => {
     usNeed(s, "tabs");
     if (!/^(https?|ftp|file|data):/i.test(url)) throw new Error("Can't open that address");
     const from = sender.tab;
     const tab = await chrome.tabs.create({ url, active, ...(from && insert ? { index: from.index + 1, openerTabId: from.id, windowId: from.windowId } : {}) });
-    await editSession("usOpened", (list = []) => [...list.slice(-200), tab.id]);
+    // Remembered so the script hears when it closes, and only it can close it.
+    await editSession("usTabs", (map = {}) => Object.fromEntries([...Object.entries(map).slice(-200), [tab.id, { key: usPortKey(sender, s.id), oid }]]));
     return { tabId: tab.id };
   },
   closeTab: async (s, sender, { tabId }) => {
-    const { usOpened = [] } = await chrome.storage.session.get("usOpened");
-    if (usOpened.includes(tabId)) await chrome.tabs.remove(tabId).catch(() => {});
+    const { usTabs = {} } = await chrome.storage.session.get("usTabs");
+    if (usTabs[tabId]?.key.endsWith(`:${s.id}`)) await chrome.tabs.remove(tabId).catch(() => {});
   },
-  download: async (s, sender, { url, name, saveAs, conflict }) => {
+  download: async (s, sender, { did, url, name, saveAs, conflict }) => {
     usNeed(s, "downloads");
     if (!/^(https?|data):/i.test(url)) throw new Error("Can't download that address");
     const filename = String(name || "").split(/[\\/]/).map((p) => p.replace(/[<>:"|?*\x00-\x1f]/g, "_").replace(/^\.+/, "").trim()).filter(Boolean).join("/");
     const downloadId = await chrome.downloads.download({ url, filename: filename || undefined, saveAs, conflictAction: ["uniquify", "overwrite", "prompt"].includes(conflict) ? conflict : "uniquify" });
+    // The script hears when it's saved or has stopped (usDownloadDone). A small file can be done
+    // before this is written down, so its state is looked at once more after.
+    await editSession("usDownloads", (map = {}) => ({ ...map, [downloadId]: { key: usPortKey(sender, s.id), did } }));
+    const [item] = await chrome.downloads.search({ id: downloadId });
+    if (item && item.state !== "in_progress") await usDownloadDone(downloadId, item.state, item.error);
     return { downloadId };
+  },
+  // @grant window.close: only the top frame closes its tab, as a page's own window.close would.
+  closeSelf: async (s, sender) => {
+    usNeed(s, "window");
+    if (!s.meta.grants.includes("window.close")) throw new Error("Not granted: this needs @grant window.close");
+    if (sender.frameId || sender.tab?.id == null) throw new Error("Only the top frame can close its tab");
+    await chrome.tabs.remove(sender.tab.id);
+  },
+  focusSelf: async (s, sender) => {
+    usNeed(s, "window");
+    if (!s.meta.grants.includes("window.focus")) throw new Error("Not granted: this needs @grant window.focus");
+    if (sender.tab) await usFocusTab(sender.tab);
   },
   menu: async (s, sender, { cid, name, title }) => {
     usNeed(s, "menu");
@@ -559,13 +597,18 @@ function editSession(key, fn) {
   return run;
 }
 
-// Saves values and tells this script's copies in other tabs and frames.
+// Saves values and tells this script's copies in other tabs and frames. Saving what's already
+// there writes nothing.
 async function usWriteValues(s, sender, set, keys) {
+  let changed = false;
   await editLocal(["usValues"], ({ usValues = {} }) => {
-    const mine = { ...(usValues[s.id] || {}), ...set };
+    const was = usValues[s.id] || {};
+    const mine = { ...was, ...set };
     for (const k of keys) delete mine[k];
-    return { usValues: { ...usValues, [s.id]: mine } };
+    changed = JSON.stringify(mine) !== JSON.stringify(was);
+    return changed ? { usValues: { ...usValues, [s.id]: mine } } : null;
   });
+  if (!changed) return;
   const from = usPortKey(sender, s.id);
   for (const [key, port] of usPorts) {
     if (key === from || !key.endsWith(`:${s.id}`)) continue;
@@ -619,6 +662,32 @@ function usAttach() {
 }
 usAttach();
 
+// Tells a script's copy something over its connection. The event that brings it here may have
+// woken the worker, and the copy reconnects half a second after that, so it's tried a few times.
+function usPost(key, msg, tries = 8) {
+  const port = usPorts.get(key);
+  if (port) { try { port.postMessage(msg); return; } catch {} }
+  if (tries > 0) setTimeout(() => usPost(key, msg, tries - 1), 500);
+}
+
+async function usFocusTab(tab) {
+  await chrome.tabs.update(tab.id, { active: true }).catch(() => {});
+  await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+}
+
+// A notification's image from the web, as a data URL (Chrome only shows those or its own files).
+async function usImageData(url) {
+  try {
+    const res = await fetch(url, { credentials: "include" });
+    const blob = res.ok ? await res.blob() : null;
+    if (!blob || !/^image\//.test(blob.type) || blob.size > 2 * 1024 * 1024) return "";
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return `data:${blob.type};base64,${btoa(bin)}`;
+  } catch { return ""; }
+}
+
 // Kept in storage.session, so a click still finds its script after the worker slept (the
 // script's connection comes back on its own).
 async function usNotif(id, ev) {
@@ -626,12 +695,78 @@ async function usNotif(id, ev) {
   const { usNotifs = {} } = await chrome.storage.session.get("usNotifs");
   const n = usNotifs[id];
   if (!n) return;
-  usPorts.get(n.key)?.postMessage({ t: "notif", nid: n.nid, ev });
+  usPost(n.key, { t: "notif", nid: n.nid, ev });
   if (ev === "done") await editSession("usNotifs", (map = {}) => { const { [id]: _, ...rest } = map; return rest; });
 }
 chrome.notifications.onClicked.addListener((id) => { usNotif(id, "click").catch(() => {}); });
 chrome.notifications.onClosed.addListener((id) => { usNotif(id, "done").catch(() => {}); });
-chrome.tabs.onRemoved.addListener((tabId) => chrome.storage.session.remove(`usMenus:${tabId}`).catch(() => {}));
+
+// A script's download has been saved or has stopped: told once, whichever notices first.
+async function usDownloadDone(downloadId, state, error) {
+  let entry = null;
+  await editSession("usDownloads", (map = {}) => {
+    entry = map[downloadId] || null;
+    const { [downloadId]: _, ...rest } = map;
+    return rest;
+  });
+  if (entry) usPost(entry.key, { t: "download", did: entry.did, ev: state === "complete" ? "load" : "error", error: error || "" });
+}
+chrome.downloads.onChanged.addListener((d) => {
+  const state = d.state?.current;
+  if (state === "complete" || state === "interrupted") usDownloadDone(d.id, state, d.error?.current).catch(() => {});
+});
+
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  chrome.storage.session.remove(`usMenus:${tabId}`).catch(() => {});
+  // A tab a script opened: it hears that it closed.
+  const { usTabs = {} } = await chrome.storage.session.get("usTabs").catch(() => ({}));
+  if (!usTabs[tabId]) return;
+  let entry = null;
+  await editSession("usTabs", (map = {}) => {
+    entry = map[tabId] || null;
+    if (!entry) return map;
+    const { [tabId]: _, ...rest } = map;
+    return rest;
+  }).catch(() => {});
+  if (entry) usPost(entry.key, { t: "tabClosed", oid: entry.oid });
+});
+
+// ---- Right-click menu: @run-at context-menu ----
+
+// A script that runs from the right-click menu gets an item there on the pages it names (under
+// "Userscripts" when there are several). Running it needs chrome.userScripts.execute (Chrome 135+).
+const usCanRunNow = () => typeof chrome.userScripts?.execute === "function";
+async function usContextItems() {
+  const { us } = await TT.getSettings();
+  if (!us.enabled || !usCanRunNow() || !(await usAvailable())) return;
+  const { scripts } = await usLoad();
+  const list = usByOrder(scripts).filter((s) => s.enabled !== false && s.meta?.runAt === "context_menu");
+  if (!list.length) return;
+  const patterns = (s) => USM.registration(s.meta).matches;
+  const parentId = list.length > 1 ? "us" : undefined;
+  if (parentId) chrome.contextMenus.create({ id: parentId, title: "Userscripts", contexts: ["all"], documentUrlPatterns: [...new Set(list.flatMap(patterns))] });
+  for (const s of list) {
+    chrome.contextMenus.create({ id: `us:${s.id}`, parentId, title: parentId ? s.meta.name : `Run ${s.meta.name}`, contexts: ["all"], documentUrlPatterns: patterns(s) });
+  }
+}
+
+// Picked from the menu: runs once in the frame that was right-clicked (the top one for
+// @noframes), as it would have run on load.
+async function usContextRun(info, tab) {
+  const id = String(info.menuItemId).slice(3);
+  const { scripts, values } = await usLoad();
+  const s = scripts.find((x) => x.id === id && x.enabled !== false);
+  if (!s || !usCanRunNow()) return;
+  const frameId = s.meta.noframes ? 0 : info.frameId || 0;
+  if (!USM.urlAllowed(s.meta, (frameId ? info.frameUrl : info.pageUrl) || tab.url || "")) return;
+  const key = (await usKeys([s.id]))[s.id];
+  const page = USM.inPage(s.meta);
+  await chrome.userScripts.execute({
+    target: { tabId: tab.id, frameIds: [frameId] }, injectImmediately: true,
+    js: [{ code: usInjected(s, values[s.id], key) }], world: page ? "MAIN" : "USER_SCRIPT",
+    ...(!page && usOwnWorlds() ? { worldId: s.id } : {}),
+  });
+}
 
 // ---- From the popup, settings, editor and install page ----
 

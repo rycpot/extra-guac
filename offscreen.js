@@ -28,13 +28,21 @@ const actions = {
     return { svg: made.svg, png: await EGQR.png(made.svg, 1024), ok: made.ok, iconScale: made.iconScale };
   },
 
-  copy({ text }) {
+  // html: the text goes in as HTML, with its words as the plain-text version beside it.
+  copy({ text, html = false }) {
+    const asHtml = (e) => {
+      e.preventDefault();
+      e.clipboardData.setData("text/html", text);
+      e.clipboardData.setData("text/plain", new DOMParser().parseFromString(text, "text/html").body.textContent || "");
+    };
+    if (html) document.addEventListener("copy", asHtml, { once: true });
     const ta = document.createElement("textarea");
     ta.value = text;
     document.body.append(ta);
     ta.select();
     const ok = document.execCommand("copy");
     ta.remove();
+    document.removeEventListener("copy", asHtml);
     if (!ok) throw new Error("copy failed");
   },
 

@@ -14,7 +14,8 @@ function usApi(ctx) {
   const warn = (what, err) => console.warn(`[${info.script.name}] ${what}:`, err?.message || err);
 
   // One connection per script and frame, opened when first needed: values changed elsewhere,
-  // menu commands run from the popup, request progress and notification clicks come back on it.
+  // menu commands run from the popup, request progress, notification clicks, finished
+  // downloads and closed tabs come back on it.
   let port = null;
   const onPort = new Map(); // kind -> handler
   function connect() {
@@ -26,7 +27,7 @@ function usApi(ctx) {
     port.onDisconnect.addListener(() => {
       port = null;
       setTimeout(() => {
-        if (port || !(menus.size || listeners.size || notifs.size)) return;
+        if (port || !(usesValues || menus.size || listeners.size || notifs.size || downloads.size || opened.size)) return;
         connect();
         for (const [cid, m] of menus) ask("menu", { cid, name: m.name, title: m.title }).catch(() => {});
       }, 500);
@@ -47,10 +48,16 @@ function usApi(ctx) {
       try { l.fn(key, oldValue, newValue, remote); } catch (err) { console.error(err); }
     }
   }
-  // Keys written here, or heard about, after a refresh was asked for are newer than its answer,
-  // so it leaves them as they are. One set per refresh waiting or on its way.
+  // A refresh leaves alone the keys that are newer than its answer can be: ones written here,
+  // or heard about, after it was asked for, and ones whose write from here hadn't been saved
+  // yet when it was asked for. One set per refresh waiting or on its way.
   const watching = new Set();
   const touched = (k) => { for (const fresh of watching) fresh.add(k); };
+  const unsaved = new Map(); // key -> writes from here not saved yet
+  function saving(keys, write) {
+    for (const k of keys) unsaved.set(k, (unsaved.get(k) || 0) + 1);
+    return write.finally(() => { for (const k of keys) { const n = unsaved.get(k) - 1; if (n) unsaved.set(k, n); else unsaved.delete(k); } });
+  }
   onPort.set("value", (m) => {
     touched(m.key);
     const old = values[m.key];
@@ -62,7 +69,7 @@ function usApi(ctx) {
   // What differs from Extra Guac's saved values comes in as changes made elsewhere. One at a time.
   let refreshing = Promise.resolve();
   function refresh() {
-    const fresh = new Set();
+    const fresh = new Set(unsaved.keys());
     watching.add(fresh);
     refreshing = refreshing.then(() => ask("values").then((r) => {
       const got = r.values || {};
@@ -75,12 +82,18 @@ function usApi(ctx) {
   }
   // Sent once the connection hears about changes, so nothing from before then is missed.
   onPort.set("hello", () => { if (ctx.storage) refresh(); });
-  // The copy this page started with can be older than a value saved just before it loaded (the
-  // registered code is brought up to date a moment after each save). A document-idle script
-  // waits for this first refresh, for 2 seconds at most, before it runs (bg-userscripts.js).
-  const ready = ctx.storage ? Promise.race([refresh(), new Promise((r) => setTimeout(r, 2000))]) : Promise.resolve();
-  const getValue = (key, def) => (Object.hasOwn(values, key) ? clone(values[key]) : def);
+  // A document-idle script starts with no values written into its code and waits for this
+  // first refresh before it runs, for 5 seconds at most (bg-userscripts.js). Earlier ones start
+  // with the copy written into their code, which can be a moment older than the last save.
+  const ready = ctx.storage ? Promise.race([refresh(), new Promise((r) => setTimeout(r, 5000))]) : Promise.resolve();
+  // Once the script reads or writes values, the connection stays open so the copy keeps up with
+  // saves in other tabs, even without a change listener.
+  let usesValues = false;
+  const useValues = () => { if (!usesValues && ctx.storage) { usesValues = true; connect(); } };
+  const getValue = (key, def) => { useValues(); return Object.hasOwn(values, key) ? clone(values[key]) : def; };
+  const listValues = () => { useValues(); return Object.keys(values); };
   function setValues(obj) {
+    useValues();
     const set = {};
     for (const [k, v] of Object.entries(obj)) {
       if (v === undefined) continue;
@@ -92,11 +105,12 @@ function usApi(ctx) {
       set[k] = values[k];
       changed(k, old, values[k], false);
     }
-    return ask("setValues", { values: set }).catch((err) => warn("saving failed", err));
+    return saving(Object.keys(set), ask("setValues", { values: set })).catch((err) => warn("saving failed", err));
   }
   function deleteValues(keys) {
+    useValues();
     for (const k of keys) { touched(k); if (Object.hasOwn(values, k)) { const old = values[k]; delete values[k]; changed(k, old, undefined, false); } }
-    return ask("deleteValues", { keys }).catch((err) => warn("deleting failed", err));
+    return saving(keys, ask("deleteValues", { keys })).catch((err) => warn("deleting failed", err));
   }
   function addValueChangeListener(key, fn) {
     connect();
@@ -212,7 +226,11 @@ function usApi(ctx) {
   }
   const addStyle = (css) => addElement("style", { textContent: css });
   // Copied by Extra Guac (in its own hidden page), so it works without a click on the page.
-  const setClipboard = (data) => ask("clipboard", { text: String(data ?? "") }).catch((err) => warn("copying failed", err));
+  // A type of "html" (or { type: "html" } / { mimetype: "text/html" }) copies it as HTML.
+  const setClipboard = (data, type) => {
+    const t = typeof type === "string" ? type : type?.type || type?.mimetype || "";
+    return ask("clipboard", { text: String(data ?? ""), html: /html/i.test(t) }).catch((err) => warn("copying failed", err));
+  };
 
   // ---- Extra Guac does it ----
   let nextNotif = 1;
@@ -227,31 +245,63 @@ function usApi(ctx) {
         if (ev === "click") { try { d.onclick?.(); } catch (err) { console.error(err); } }
         else { notifs.delete(nid); try { d.ondone?.(); } catch (err) { console.error(err); } resolve(); }
       });
-      ask("notification", { nid, n: { text: d.text || "", title: d.title || "", image: d.image || "", silent: !!d.silent, timeout: Number(d.timeout) || 0, highlight: !!d.highlight } })
+      // highlight with no text only brings this tab to the front: there's nothing to show.
+      ask("notification", { nid, n: { text: d.text || "", title: d.title || "", image: String(d.image || ""), silent: !!d.silent, timeout: Number(d.timeout) || 0, highlight: !!d.highlight } })
+        .then((r) => { if (r?.shown === false) notifs.get(nid)?.("done"); })
         .catch((err) => { warn("notification failed", err); notifs.delete(nid); resolve(); });
     });
   }
+  // The tab handed back hears when it's closed (onclose), however that happens.
+  let nextTab = 1;
+  const opened = new Map(); // oid -> tab
+  onPort.set("tabClosed", (m) => {
+    const tab = opened.get(m.oid);
+    if (!tab) return;
+    opened.delete(m.oid);
+    tab.closed = true;
+    try { tab.onclose?.(); } catch (err) { console.error(err); }
+  });
   function openInTab(url, opts) {
     const o = typeof opts === "boolean" ? { active: !opts } : { active: true, ...opts };
     if (o.loadInBackground !== undefined) o.active = !o.loadInBackground;
+    const oid = `${id}:${nextTab++}`;
+    connect();
     const tab = { closed: false, onclose: null, close() { tab.closed = true; tabId.then((t) => t && ask("closeTab", { tabId: t })).catch(() => {}); } };
-    const tabId = ask("openInTab", { url: new URL(url, location.href).href, active: !!o.active, insert: o.insert !== false }).then((r) => r.tabId, (err) => warn("opening the tab failed", err));
+    opened.set(oid, tab);
+    const tabId = ask("openInTab", { oid, url: new URL(url, location.href).href, active: !!o.active, insert: o.insert !== false })
+      .then((r) => r.tabId, (err) => { opened.delete(oid); tab.closed = true; warn("opening the tab failed", err); });
     return tab;
   }
+  // onload once the file is saved; onerror when it can't start or stops partway.
+  let nextDownload = 1;
+  const downloads = new Map(); // did -> handler
+  onPort.set("download", (m) => downloads.get(m.did)?.(m));
   async function download(details, name) {
     const d = typeof details === "string" ? { url: details, name } : { ...details };
+    const did = `${id}:${nextDownload++}`;
     try {
       let url = d.url;
       if (url instanceof Blob) url = `data:${url.type || "application/octet-stream"};base64,${await b64(url)}`;
       else if (/^blob:/.test(url)) { const blob = await (await fetch(url)).blob(); url = `data:${blob.type || "application/octet-stream"};base64,${await b64(blob)}`; }
       else url = new URL(url, location.href).href;
-      await ask("download", { url, name: d.name || "", saveAs: !!d.saveAs, conflict: d.conflictAction || "uniquify" });
+      connect();
+      const finished = new Promise((resolve, reject) => downloads.set(did, (m) => {
+        downloads.delete(did);
+        if (m.ev === "load") resolve(); else reject(new Error(m.error || "the download stopped"));
+      }));
+      await ask("download", { did, url, name: d.name || "", saveAs: !!d.saveAs, conflict: d.conflictAction || "uniquify" });
+      await finished;
       try { d.onload?.({}); } catch (err) { console.error(err); }
     } catch (err) {
+      downloads.delete(did);
       try { d.onerror?.({ error: "not_succeeded", details: err.message }); } catch (e) { console.error(e); }
       throw err;
     }
   }
+  // @grant window.close / window.focus: the script's tab itself is closed or brought to the
+  // front. Only this script's own world sees these; the page's window is untouched.
+  if (info.script.grant.includes("window.close")) window.close = () => { ask("closeSelf").catch((err) => warn("closing the tab failed", err)); };
+  if (info.script.grant.includes("window.focus")) window.focus = () => { ask("focusSelf").catch((err) => warn("bringing the tab to the front failed", err)); };
   const menus = new Map();
   onPort.set("menu", (m) => { try { menus.get(m.cid)?.run(); } catch (err) { console.error(err); } });
   let nextMenu = 1;
@@ -268,7 +318,15 @@ function usApi(ctx) {
     menus.delete(String(cid));
     ask("unmenu", { cid: String(cid) }).catch(() => {});
   }
-  const res = (name) => resources[name];
+  // Each @resource comes once, as fetched; text or a data URL is made of it when asked.
+  const resourceText = (name) => {
+    const f = resources[name];
+    return !f ? null : f.text ?? (f.b64 != null ? new TextDecoder().decode(fromB64(f.b64)) : "");
+  };
+  const resourceUrl = (name) => {
+    const f = resources[name];
+    return !f ? null : f.b64 != null ? `data:${f.mime || "application/octet-stream"};base64,${f.b64}` : f.url ?? null;
+  };
   const missing = (name) => () => { throw new Error(`${name} isn't available in Extra Guac`); };
 
   const api = {
@@ -278,9 +336,12 @@ function usApi(ctx) {
     GM_getValue: getValue,
     GM_setValue: (k, v) => { setValues({ [k]: v }); },
     GM_deleteValue: (k) => { deleteValues([k]); },
-    GM_listValues: () => Object.keys(values),
-    GM_getValues: (keys) => (Array.isArray(keys) ? Object.fromEntries(keys.filter((k) => Object.hasOwn(values, k)).map((k) => [k, clone(values[k])]))
-      : Object.fromEntries(Object.entries(keys || {}).map(([k, def]) => [k, getValue(k, def)]))),
+    GM_listValues: listValues,
+    GM_getValues: (keys) => {
+      useValues();
+      return Array.isArray(keys) ? Object.fromEntries(keys.filter((k) => Object.hasOwn(values, k)).map((k) => [k, clone(values[k])]))
+        : Object.fromEntries(Object.entries(keys || {}).map(([k, def]) => [k, getValue(k, def)]));
+    },
     GM_setValues: (obj) => { setValues(obj || {}); },
     GM_deleteValues: (keys) => { deleteValues(keys || []); },
     GM_addValueChangeListener: addValueChangeListener,
@@ -294,8 +355,8 @@ function usApi(ctx) {
     GM_download: (...a) => { download(...a).catch(() => {}); },
     GM_registerMenuCommand: registerMenuCommand,
     GM_unregisterMenuCommand: unregisterMenuCommand,
-    GM_getResourceText: (n) => res(n)?.text ?? null,
-    GM_getResourceURL: (n) => res(n)?.url ?? null,
+    GM_getResourceText: resourceText,
+    GM_getResourceURL: resourceUrl,
     GM_cookie: { list: missing("GM_cookie"), set: missing("GM_cookie"), delete: missing("GM_cookie") },
   };
   api.GM = {
@@ -304,7 +365,7 @@ function usApi(ctx) {
     getValue: async (k, def) => getValue(k, def),
     setValue: async (k, v) => { await setValues({ [k]: v }); },
     deleteValue: async (k) => { await deleteValues([k]); },
-    listValues: async () => Object.keys(values),
+    listValues: async () => listValues(),
     getValues: async (keys) => api.GM_getValues(keys),
     setValues: async (obj) => { await setValues(obj || {}); },
     deleteValues: async (keys) => { await deleteValues(keys || []); },

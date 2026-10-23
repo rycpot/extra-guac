@@ -13,6 +13,8 @@ function editLocal(keys, fn) {
   const run = localEdits.then(async () => {
     const patch = await fn(await chrome.storage.local.get(keys));
     if (patch) await chrome.storage.local.set(patch);
+    // Userscripts keep these in memory (bg-userscripts.js): the copy goes as soon as they change.
+    if (patch && ("usScripts" in patch || "usValues" in patch)) usForget();
     return patch;
   });
   localEdits = run.catch(() => {});
@@ -106,6 +108,8 @@ function syncMenus(s) {
     }
     // QR codes (bg-qr.js): this page, a link, the selected text.
     qrMenuItems(s);
+    // Userscripts that run from the right-click menu (bg-userscripts.js).
+    await usContextItems().catch((err) => console.error("[userscripts] menu", err));
     // Pinned clipboard entries (bg-clip.js), when that's switched on.
     const pins = await clipMenuItems(s);
     if (pins.length) {
@@ -152,6 +156,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (String(info.menuItemId).startsWith("clippin:")) return onClipMenu(info, tab);
   if (info.menuItemId === "imgControls") return onImgControlsMenu(info, tab);
   if (String(info.menuItemId).startsWith("qr:")) return onQrMenu(info, tab);
+  if (String(info.menuItemId).startsWith("us:")) return usContextRun(info, tab).catch((err) => console.error("[userscripts] menu", err));
   const m = String(info.menuItemId).match(/^upload:(\w+)$/);
   if (m && info.srcUrl) uploadImage(m[1], info.srcUrl, tab, info.frameId);
 });

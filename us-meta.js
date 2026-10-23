@@ -20,7 +20,8 @@
     }
     const list = (k) => (raw[k] || []).filter(Boolean);
     const resources = list("resource").map((r) => /^(\S+)\s+(\S+)/.exec(r)).filter(Boolean).map(([, name, url]) => ({ name, url }));
-    const runAt = { "document-start": "document_start", "document-body": "document_end", "document-end": "document_end", "document-idle": "document_idle" }[(raw["run-at"] || "").toLowerCase()] || "document_idle";
+    // context-menu: run only when picked from the right-click menu, never on its own.
+    const runAt = { "document-start": "document_start", "document-body": "document_end", "document-end": "document_end", "document-idle": "document_idle", "context-menu": "context_menu" }[(raw["run-at"] || "").toLowerCase()] || "document_idle";
     return {
       name: raw.name || "", namespace: raw.namespace || "", version: raw.version || "", description: raw.description || "",
       author: raw.author || "", icon: raw.icon || raw.iconURL || raw.icon64 || raw.icon64URL || "",
@@ -71,14 +72,28 @@
     return !any([...meta.excludes, ...meta.excludeMatches]);
   }
 
+  // An @include or @exclude glob that means exactly what a match pattern would: one named host
+  // (or every host on http and https), with "http*://" being both schemes. Null when it means
+  // more or less than that (a "*." in the host, ".tld", a port, a regular expression, "*://*/…"
+  // which also covers local files).
+  function asMatch(p) {
+    const m = /^(https?|http\*|\*):\/\/(\*|[^/*]+)(\/.*)$/i.exec(p);
+    if (!m || /\.tld(\/|$)/i.test(p) || (m[1] === "*" && m[2] === "*")) return null;
+    const out = `${m[1].toLowerCase() === "http*" ? "*" : m[1]}://${m[2]}${m[3]}`;
+    return nativeMatch(out) ? out : null;
+  }
+
   // What Chrome is asked to inject on: its own patterns where they say all of it, else every
   // page with the script itself checking the address first (filter: true).
   function registration(meta) {
-    const native = meta.includes.length === 0 && meta.matches.length > 0 && meta.matches.every(nativeMatch);
-    const exNative = meta.excludes.length === 0 && meta.excludeMatches.every(nativeMatch);
+    const inc = meta.includes.map(asMatch), exc = meta.excludes.map(asMatch);
+    const matches = [...meta.matches, ...inc.filter(Boolean)];
+    const excludeMatches = [...meta.excludeMatches, ...exc.filter(Boolean)];
+    const native = inc.every(Boolean) && matches.length > 0 && matches.every(nativeMatch);
+    const exNative = exc.every(Boolean) && excludeMatches.every(nativeMatch);
     return {
-      matches: native ? meta.matches : ["*://*/*", "file:///*"],
-      excludeMatches: exNative ? meta.excludeMatches : [],
+      matches: native ? matches : ["*://*/*", "file:///*"],
+      excludeMatches: exNative ? excludeMatches : [],
       filter: !native || !exNative,
     };
   }
@@ -109,14 +124,15 @@
     tabs: ["GM_openInTab", "GM.openInTab"],
     clipboard: ["GM_setClipboard", "GM.setClipboard"],
     resources: ["GM_getResourceText", "GM_getResourceURL", "GM.getResourceText", "GM.getResourceUrl", "GM.getResourceURL"],
-    other: ["GM_info", "GM.info", "GM_log", "GM.log", "unsafeWindow", "none", "window.close", "window.focus"],
+    window: ["window.close", "window.focus"],
+    other: ["GM_info", "GM.info", "GM_log", "GM.log", "unsafeWindow", "none"],
   };
   const KIND = Object.fromEntries(Object.entries(GRANTS).flatMap(([k, list]) => list.map((g) => [g, k])));
   // In plain words, for the install page and the editor.
   const KIND_TEXT = {
     storage: "Save its own settings", requests: "Send requests to other sites, with your cookies", styles: "Add styles and elements to the page",
     menu: "Add commands to the Extra Guac menu", downloads: "Download files", notifications: "Show notifications", tabs: "Open new tabs",
-    clipboard: "Copy to your clipboard", resources: "Use files it brings along",
+    clipboard: "Copy to your clipboard", resources: "Use files it brings along", window: "Close its own tab or bring it to the front",
   };
   const kindsOf = (meta) => [...new Set(meta.grants.map((g) => KIND[g]).filter((k) => k && k !== "other"))];
   const unsupported = (meta) => meta.grants.filter((g) => !KIND[g]);
