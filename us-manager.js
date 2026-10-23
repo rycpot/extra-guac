@@ -318,7 +318,8 @@
     const text = (t, cls = "mut") => { const p = document.createElement("span"); p.className = cls; p.textContent = t; return p; };
     if (m.description) item("about", text(m.description, ""));
     const ins = [...m.matches, ...m.includes];
-    item("runs on", ...(ins.length ? ins : ["every site"]).map((p) => pill(p)), text(RUN_AT[m.runAt] || ""), ...(m.noframes ? [text("· top frame only")] : []));
+    item("runs on", ...(ins.length ? ins : ["every site"]).map((p) => pill(p)), text(RUN_AT[m.runAt] || ""), ...(m.noframes ? [text("· top frame only")] : []),
+      ...(s.mode === "bridge" ? [text("· in the page itself, with the page's own JavaScript")] : []));
     const ex = [...m.excludes, ...m.excludeMatches];
     if (ex.length) item("not on", ...ex.map((p) => pill(p)));
     const kinds = USM.kindsOf(m);

@@ -57,36 +57,42 @@ const usByOrder = (list) => [...list].sort((a, b) => (a.position ?? 0) - (b.posi
 
 // ---- Registration ----
 
-// What Chrome injects for one script: its address check (when Chrome's patterns can't say it
-// all), GM_info, the GM functions (only for one that asks for any), its @require files, then
-// the script, all inside one function so they share names but keep them off the page.
-function usInjected(s, values, key) {
+// The address check put in front of a script when Chrome's patterns can't say it all. Match
+// patterns look at the address without its #part, as Chrome's own do; globs and /regex/ at all of it.
+function usCheck(m) {
+  if (!USM.registration(m).filter) return "";
+  const rx = (list) => JSON.stringify(list.map((p) => {
+    const mr = USM.matchRegex(p), r = mr || USM.globRegex(p);
+    return r && [r.source, r.flags, mr ? 1 : 0];
+  }).filter(Boolean));
+  return `{ const u = location.href, h = u.split("#")[0], t = (l) => l.some(([s, f, m]) => new RegExp(s, f).test(m ? h : u));
+  const i = ${rx([...m.matches, ...m.includes])}, x = ${rx([...m.excludes, ...m.excludeMatches])};
+  if ((i.length && !t(i)) || t(x)) return; }\n`;
+}
+const usFileName = (m) => encodeURIComponent(m.name.replace(/[^\w .-]/g, "_"));
+
+// What Chrome injects for one script: its address check, GM_info, the GM functions (only for one
+// that asks for any), its @require files, then the script, all inside one function so they share
+// names but keep them off the page. Where it runs is USM.mode's: "page" and "bridge" scripts in
+// the page itself ("bridge" ones with the GM functions reaching Extra Guac through usRelay, by
+// events named with token), "isolated" ones in a world of their own.
+function usInjected(s, values, key, token) {
   const m = s.meta;
-  const reg = USM.registration(m);
-  const page = USM.inPage(m);
+  const mode = USM.mode(m, s.code);
+  const page = mode === "page", bridge = mode === "bridge";
+  const injectInto = mode === "isolated" ? "content" : "page";
   const info = {
     script: {
       name: m.name, namespace: m.namespace, version: m.version, description: m.description, author: m.author, icon: m.icon,
       homepage: m.homepage, matches: m.matches, includes: m.includes, excludes: m.excludes, "exclude-match": m.excludeMatches,
       grant: m.grants, connects: m.connects, resources: m.resources.map((r) => ({ name: r.name, url: r.url })),
-      "run-at": m.runAtRaw || "document-idle", noframes: m.noframes, "inject-into": page ? "page" : "content", uuid: s.id,
+      "run-at": m.runAtRaw || "document-idle", noframes: m.noframes, "inject-into": injectInto, uuid: s.id,
       updateURL: m.updateURL, downloadURL: m.downloadURL, options: { check_for_updates: s.autoUpdate !== false },
     },
-    scriptHandler: "Extra Guac", version: chrome.runtime.getManifest().version, injectInto: page ? "page" : "content",
+    scriptHandler: "Extra Guac", version: chrome.runtime.getManifest().version, injectInto,
     scriptMetaStr: /\/\/[ \t]*==UserScript==[\s\S]*?==\/UserScript==/.exec(s.code)?.[0] || "", scriptWillUpdate: s.autoUpdate !== false && !!(m.updateURL || m.downloadURL || s.source),
     isIncognito: false,
   };
-  // Match patterns look at the address without its #part, as Chrome's own do; globs and
-  // /regex/ at all of it.
-  const rx = (list) => JSON.stringify(list.map((p) => {
-    const mr = USM.matchRegex(p), r = mr || USM.globRegex(p);
-    return r && [r.source, r.flags, mr ? 1 : 0];
-  }).filter(Boolean));
-  const check = reg.filter
-    ? `{ const u = location.href, h = u.split("#")[0], t = (l) => l.some(([s, f, m]) => new RegExp(s, f).test(m ? h : u));
-  const i = ${rx([...m.matches, ...m.includes])}, x = ${rx([...m.excludes, ...m.excludeMatches])};
-  if ((i.length && !t(i)) || t(x)) return; }\n`
-    : "";
   // Each file once, as fetched; GM_getResourceText / GM_getResourceURL make text or a data URL
   // of it when asked (us-gm.js).
   const resources = Object.fromEntries(m.resources.map((r) => {
@@ -94,42 +100,57 @@ function usInjected(s, values, key) {
     return [r.name, f ? { text: f.text, b64: f.b64, mime: f.mime, url: f.url } : null];
   }));
   // The GM names come in as the inner function's parameters, so a script may still declare
-  // its own (a fallback "function GM_addStyle" or "var GM_info") without clashing.
-  const names = page ? ["GM_info", "GM", "unsafeWindow", "GM_log"] : US_API;
+  // its own (a fallback "function GM_addStyle" or "var GM_info") without clashing. In the page,
+  // a script granted window.close or window.focus gets its own window too (us-gm.js).
+  const ownWindow = bridge && m.grants.some((g) => g === "window.close" || g === "window.focus");
+  const names = page ? ["GM_info", "GM", "unsafeWindow", "GM_log"] : [...US_API, ...(ownWindow ? ["window"] : [])];
   const storage = USM.kindsOf(m).includes("storage");
   // A document-idle script waits for its values before it runs (us-gm.js), so they aren't
   // written in here for it, and saving doesn't register it again (usValuesChanged). Scripts
   // that start earlier, or from the right-click menu, read the copy written here.
   const idle = m.runAt === "document_idle";
+  const ctx = { id: s.id, key: bridge ? "" : key, info, values: idle ? {} : values || {}, resources, storage, page: bridge };
   const api = page
     ? `const __usInfo = ${JSON.stringify(info)}, __usApi = { GM_info: __usInfo, GM: { info: __usInfo }, unsafeWindow: window, GM_log: console.log.bind(console, ${JSON.stringify(`[${m.name}]`)}) };\n`
-    : `const __usApi = (${usApi.toString()})(${JSON.stringify({ id: s.id, key, info, values: idle ? {} : values || {}, resources, storage })});\n`;
+    : `const __usApi = (${usApi.toString()})(${JSON.stringify(ctx)}${bridge ? `, (${usPageLink.toString()})(${JSON.stringify(token)})` : ""});\n`;
   const requires = m.requires.map((u) => `${s.requires?.[u] ?? `console.warn(${JSON.stringify(`[${m.name}] @require not loaded: ${u}`)});`}\n`).join(";\n");
-  const name = m.name.replace(/[^\w .-]/g, "_");
   const run = `(function (${names.join(", ")}) {\n${requires}\n${s.code}\n}).apply(window, ${JSON.stringify(names)}.map((n) => __usApi[n]))`;
   const start = !page && storage && idle ? `__usApi.ready.then(() => ${run});` : `${run};`;
-  return `(() => {\n${check}${api}${start}\n})();\n//# sourceURL=userscript:///${encodeURIComponent(name)}.user.js`;
+  return `(() => {\n${usCheck(m)}${api}${start}\n})();\n//# sourceURL=userscript:///${usFileName(m)}.user.js`;
+}
+
+// The relay a "bridge" script's page part talks to (us-gm.js), in the script's own world.
+function usRelayCode(s, key, token) {
+  return `(() => {\n${usCheck(s.meta)}(${usRelay.toString()})(${JSON.stringify({ id: s.id, key, token })});\n})();\n//# sourceURL=userscript:///${usFileName(s.meta)}.relay.js`;
 }
 
 // Chrome 133+ gives each script a world of its own, so one script can't use another's
 // values or requests, and messages say which world (and so which script) sent them.
 const usOwnWorlds = () => typeof chrome.userScripts?.getWorldConfigurations === "function";
 
-function usRegistration(s, values, key) {
+// What's registered for one script: the script itself, and for a "bridge" one its relay first,
+// so the relay is listening by the time the page part starts. keys holds the script's key
+// (keys[id]) and its page token (keys[`${id}:page`]); see usKeys.
+function usRegistration(s, values, keys) {
   const m = s.meta;
   const reg = USM.registration(m);
-  const page = USM.inPage(m);
-  return {
-    id: `us-${s.id}`, js: [{ code: usInjected(s, values, key) }], matches: reg.matches,
-    ...(reg.excludeMatches.length ? { excludeMatches: reg.excludeMatches } : {}),
-    runAt: m.runAt, allFrames: !m.noframes, world: page ? "MAIN" : "USER_SCRIPT",
-    ...(!page && usOwnWorlds() ? { worldId: s.id } : {}),
+  const mode = USM.mode(m, s.code);
+  const own = usOwnWorlds() ? { worldId: s.id } : {};
+  const where = {
+    matches: reg.matches, ...(reg.excludeMatches.length ? { excludeMatches: reg.excludeMatches } : {}),
+    runAt: m.runAt, allFrames: !m.noframes,
   };
+  const key = keys[s.id], token = keys[`${s.id}:page`];
+  const script = { id: `us-${s.id}`, js: [{ code: usInjected(s, values, key, token) }], ...where, world: mode === "isolated" ? "USER_SCRIPT" : "MAIN", ...(mode === "isolated" ? own : {}) };
+  if (mode !== "bridge") return [script];
+  return [{ id: `us-${s.id}-relay`, js: [{ code: usRelayCode(s, key, token) }], ...where, world: "USER_SCRIPT", ...own }, script];
 }
+const usKeyIds = (scripts) => scripts.flatMap((s) => [s.id, `${s.id}:page`]);
 
 // Each script's key, built into its registered code (which other scripts and pages can't
-// read), so a message naming a script really comes from it. Kept on this computer only
-// ("usKeys", not in backups).
+// read), so a message naming a script really comes from it; and, as "<id>:page", the token
+// naming a "bridge" script's events between its page part and its relay. Kept on this computer
+// only ("usKeys", not in backups).
 let usKeyCache = null;
 async function usKeys(ids) {
   if (!usKeyCache) ({ usKeys: usKeyCache = {} } = await chrome.storage.local.get("usKeys"));
@@ -162,13 +183,13 @@ async function usSyncNow() {
   if (available) {
     await chrome.userScripts.configureWorld({ messaging: true }).catch((err) => console.error("[userscripts] world", err));
     const have = await chrome.userScripts.getScripts();
-    const keys = await usKeys(want.map((s) => s.id));
+    const keys = await usKeys(usKeyIds(want));
     // @run-at context-menu scripts aren't registered: they run when picked from the right-click
     // menu (usContextRun), in the same world they'd have otherwise.
-    const regs = want.filter((s) => s.meta.runAt !== "context_menu").map((s) => usRegistration(s, values[s.id], keys[s.id]));
+    const regs = want.filter((s) => s.meta.runAt !== "context_menu").flatMap((s) => usRegistration(s, values[s.id], keys));
     // A world of its own only messages Extra Guac when configured to, one by one.
     if (usOwnWorlds()) {
-      const worlds = new Set(want.filter((s) => !USM.inPage(s.meta)).map((s) => s.id));
+      const worlds = new Set(want.filter((s) => USM.mode(s.meta, s.code) !== "page").map((s) => s.id));
       const configs = await chrome.userScripts.getWorldConfigurations();
       for (const c of configs) if (c.worldId && !worlds.has(c.worldId)) await chrome.userScripts.resetWorldConfiguration(c.worldId).catch(() => {});
       for (const w of worlds) {
@@ -231,8 +252,8 @@ function usValuesChanged(ids) {
       if (!us.enabled || !(await usAvailable())) return;
       const { scripts, values } = await usLoad();
       const have = new Set((await chrome.userScripts.getScripts({ ids: due.map((id) => `us-${id}`) })).map((h) => h.id));
-      const keys = await usKeys(due);
-      const regs = scripts.filter((s) => due.includes(s.id) && have.has(`us-${s.id}`) && s.meta.runAt !== "document_idle").map((s) => usRegistration(s, values[s.id], keys[s.id]));
+      const keys = await usKeys(due.flatMap((id) => [id, `${id}:page`]));
+      const regs = scripts.filter((s) => due.includes(s.id) && have.has(`us-${s.id}`) && s.meta.runAt !== "document_idle").flatMap((s) => usRegistration(s, values[s.id], keys));
       if (regs.length) await chrome.userScripts.update(regs);
     }).catch((err) => console.error("[userscripts] values", err));
   }, 50);
@@ -833,13 +854,14 @@ async function usContextRun(info, tab) {
   if (!s || !usCanRunNow()) return;
   const frameId = s.meta.noframes ? 0 : info.frameId || 0;
   if (!USM.urlAllowed(s.meta, (frameId ? info.frameUrl : info.pageUrl) || tab.url || "")) return;
-  const key = (await usKeys([s.id]))[s.id];
-  const page = USM.inPage(s.meta);
-  await chrome.userScripts.execute({
-    target: { tabId: tab.id, frameIds: [frameId] }, injectImmediately: true,
-    js: [{ code: usInjected(s, values[s.id], key) }], world: page ? "MAIN" : "USER_SCRIPT",
-    ...(!page && usOwnWorlds() ? { worldId: s.id } : {}),
-  });
+  const keys = await usKeys(usKeyIds([s]));
+  // A "bridge" script's relay goes in first, as when it's registered.
+  for (const r of usRegistration(s, values[s.id], keys)) {
+    await chrome.userScripts.execute({
+      target: { tabId: tab.id, frameIds: [frameId] }, injectImmediately: true,
+      js: r.js, world: r.world, ...(r.worldId ? { worldId: r.worldId } : {}),
+    });
+  }
 }
 
 // ---- From the popup, settings, editor and install page ----
@@ -871,7 +893,7 @@ const usHandlers = {
     return {
       lastCheck: usLastCheck,
       scripts: usByOrder(scripts).map(({ code, requires, resources, pending, ...s }) => ({
-        ...s, limits: USM.limits(s.meta, code, requires || {}), pending: pending ? { at: pending.at, meta: USM.parseMeta(pending.code) } : null,
+        ...s, limits: USM.limits(s.meta, code, requires || {}), mode: USM.mode(s.meta, code), pending: pending ? { at: pending.at, meta: USM.parseMeta(pending.code) } : null,
       })),
     };
   },

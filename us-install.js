@@ -108,6 +108,7 @@
       can.append(d);
     };
     if (!kinds.length) line("Nothing beyond the page itself", "it runs as part of the pages it names");
+    else if (USM.mode(meta, code) === "bridge") line("Runs in the page itself", "so it can use the page's own JavaScript (unsafeWindow); the page's scripts share that space with it");
     for (const k of kinds) {
       if (k === "requests") line(USM.KIND_TEXT[k], meta.connects.length ? `only to ${meta.connects.join(", ")}` : "to any site");
       else line(USM.KIND_TEXT[k]);

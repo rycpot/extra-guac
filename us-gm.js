@@ -1,13 +1,20 @@
-// Userscripts: the GM_* / GM.* functions a script gets. bg-userscripts.js puts this function's
-// source in front of each script that asks for them and calls it with that script's details;
-// it runs in the script's own world beside the page, so it only reaches Extra Guac through
-// chrome.runtime messages (handled by bg-userscripts.js). Nothing outside this function is used.
+// Userscripts: the GM_* / GM.* functions a script gets. bg-userscripts.js puts these functions'
+// source in front of each script that asks for them and calls them with that script's details.
+// Each is used on its own, so nothing outside a function is used inside it.
+//
+// usApi: the GM functions. In the script's own world beside the page they reach Extra Guac with
+// chrome.runtime messages (handled by bg-userscripts.js). In the page itself ("bridge" scripts,
+// us-meta.js) there's no chrome.runtime, so link carries the same messages through the relay.
 // eslint-disable-next-line no-unused-vars
-function usApi(ctx) {
+function usApi(ctx, link) {
   const { id, key, info, resources = {} } = ctx;
+  link ||= {
+    send: (msg) => chrome.runtime.sendMessage({ ...msg, us: id, key }),
+    connect: () => chrome.runtime.connect({ name: `us:${id}:${key}` }),
+  };
   let values = { ...ctx.values };
   const ask = async (op, data = {}) => {
-    const r = await chrome.runtime.sendMessage({ ...data, us: id, key, op });
+    const r = await link.send({ ...data, op });
     if (r?.error) throw new Error(r.error);
     return r;
   };
@@ -23,7 +30,7 @@ function usApi(ctx) {
     // portUp settles once Extra Guac's side has the connection ("hello"), so nothing sent on it
     // before then is lost.
     portUp = new Promise((r) => { portIsUp = r; });
-    port = chrome.runtime.connect({ name: `us:${id}:${key}` });
+    port = link.connect();
     port.onMessage.addListener((m) => onPort.get(m?.t)?.(m));
     // Extra Guac's side sleeps when idle, which closes this; it's opened again while anything
     // still listens (menu commands are told again, so the popup's list keeps working).
@@ -337,9 +344,12 @@ function usApi(ctx) {
     }
   }
   // @grant window.close / window.focus: the script's tab itself is closed or brought to the
-  // front. Only this script's own world sees these; the page's window is untouched.
-  if (info.script.grant.includes("window.close")) window.close = () => { ask("closeSelf").catch((err) => warn("closing the tab failed", err)); };
-  if (info.script.grant.includes("window.focus")) window.focus = () => { ask("focusSelf").catch((err) => warn("bringing the tab to the front failed", err)); };
+  // front. In its own world, window there is the script's alone. In the page, window is the
+  // page's, so the script gets a window of its own (api.window) that only differs in those two.
+  const own = {};
+  if (info.script.grant.includes("window.close")) own.close = () => { ask("closeSelf").catch((err) => warn("closing the tab failed", err)); };
+  if (info.script.grant.includes("window.focus")) own.focus = () => { ask("focusSelf").catch((err) => warn("bringing the tab to the front failed", err)); };
+  if (!ctx.page) Object.assign(window, own);
   const menus = new Map();
   onPort.set("menu", (m) => { try { menus.get(m.cid)?.run(); } catch (err) { console.error(err); } });
   let nextMenu = 1;
@@ -423,7 +433,81 @@ function usApi(ctx) {
   };
   api.GM.xmlhttpRequest = api.GM.xmlHttpRequest;
   api.GM.getResourceURL = api.GM.getResourceUrl;
+  if (ctx.page && Object.keys(own).length) {
+    // Methods come bound to the real window (they refuse to run on anything else); names
+    // starting with a capital are constructors and come as they are.
+    api.window = new Proxy(window, {
+      get: (t, p) => (Object.hasOwn(own, p) ? own[p] : (v => (typeof v === "function" && typeof p === "string" && !/^[A-Z]/.test(p) ? v.bind(t) : v))(Reflect.get(t, p))),
+      set: (t, p, v) => Reflect.set(t, p, v),
+    });
+  }
   // Not one of the script's names: what bg-userscripts.js waits on before a document-idle start.
   api.ready = ready;
   return api;
+}
+
+// usPageLink: what usApi uses in the page itself. Its messages go to the relay (usRelay) as
+// events on document named with this script's token, as JSON text (which crosses between the
+// page and the relay's world as it is), and the relay's answers come back the same way. The
+// page shares this space, so a page set on interfering could too; the relay holds the script's
+// key, which never comes into the page.
+// eslint-disable-next-line no-unused-vars
+function usPageLink(token) {
+  // Taken now, before anything else in the page can swap them.
+  const doc = document, Ev = CustomEvent, parse = JSON.parse, text = JSON.stringify;
+  const dispatch = EventTarget.prototype.dispatchEvent, listen = EventTarget.prototype.addEventListener;
+  const up = (msg) => dispatch.call(doc, new Ev(`${token}:up`, { detail: text(msg) }));
+  let isReady;
+  const ready = new Promise((r) => { isReady = r; });
+  const waiting = new Map();
+  let n = 0, port = null;
+  listen.call(doc, `${token}:down`, (e) => {
+    let m;
+    try { m = parse(e.detail); } catch { return; }
+    if (m.kind === "ready") isReady();
+    else if (m.kind === "reply") {
+      const w = waiting.get(m.n);
+      waiting.delete(m.n);
+      if (m.error != null) w?.reject(new Error(m.error)); else w?.resolve(m.result);
+    } else if (m.kind === "port") port?.heard.forEach((f) => f(m.m));
+    else if (m.kind === "disconnect") { const p = port; port = null; p?.closed.forEach((f) => f()); }
+  });
+  up({ kind: "hello" });
+  return {
+    send: async (msg) => {
+      await ready;
+      const k = ++n;
+      return new Promise((resolve, reject) => { waiting.set(k, { resolve, reject }); up({ kind: "ask", n: k, msg }); });
+    },
+    connect: () => {
+      const p = { heard: [], closed: [] };
+      p.onMessage = { addListener: (f) => p.heard.push(f) };
+      p.onDisconnect = { addListener: (f) => p.closed.push(f) };
+      port = p;
+      ready.then(() => up({ kind: "connect" }));
+      return p;
+    },
+  };
+}
+
+// usRelay: runs beside a "bridge" script, in that script's own world, and passes what the page
+// part sends (usPageLink) to Extra Guac with the script's key, and the answers back.
+// eslint-disable-next-line no-unused-vars
+function usRelay({ id, key, token }) {
+  const down = (msg) => document.dispatchEvent(new CustomEvent(`${token}:down`, { detail: JSON.stringify(msg) }));
+  let port = null;
+  document.addEventListener(`${token}:up`, (e) => {
+    let m;
+    try { m = JSON.parse(e.detail); } catch { return; }
+    if (m.kind === "hello") down({ kind: "ready" });
+    else if (m.kind === "ask") {
+      chrome.runtime.sendMessage({ ...m.msg, us: id, key })
+        .then((result) => down({ kind: "reply", n: m.n, result }), (err) => down({ kind: "reply", n: m.n, error: err?.message || String(err) }));
+    } else if (m.kind === "connect" && !port) {
+      port = chrome.runtime.connect({ name: `us:${id}:${key}` });
+      port.onMessage.addListener((msg) => down({ kind: "port", m: msg }));
+      port.onDisconnect.addListener(() => { port = null; down({ kind: "disconnect" }); });
+    }
+  });
+  down({ kind: "ready" });
 }

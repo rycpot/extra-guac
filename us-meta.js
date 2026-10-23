@@ -136,12 +136,24 @@
   };
   const kindsOf = (meta) => [...new Set(meta.grants.map((g) => KIND[g]).filter((k) => k && k !== "other"))];
   const unsupported = (meta) => meta.grants.filter((g) => !KIND[g]);
-  // Runs in the page itself, with no extra access (and so as the page's own scripts see it).
-  // @grant none (or only ones that need nothing from Extra Guac) runs there; so does
-  // @inject-into page / @sandbox raw. Anything else runs in a world of its own beside the page.
+  // Where a script runs (bg-userscripts.js):
+  // "page": in the page itself with no extra access, as the page's own scripts see it: @grant
+  //   none, or only grants that need nothing from Extra Guac.
+  // "bridge": in the page itself too, so unsafeWindow is the page's own window, with its GM
+  //   functions reaching Extra Guac through a relay in a world of its own beside the page. For a
+  //   script that asks for the page (@inject-into page, @sandbox raw, @sandbox JavaScript) or
+  //   uses unsafeWindow.
+  // "isolated": in a world of its own beside the page, which only shares the page's elements:
+  //   @inject-into content, @sandbox DOM, and every other script with GM functions.
   const needsApi = (meta) => meta.grants.some((g) => !(KIND[g] === "other"));
-  const inPage = (meta) => meta.injectInto !== "content" && meta.sandbox !== "dom" && meta.sandbox !== "javascript"
-    && (meta.injectInto === "page" || meta.sandbox === "raw" || !needsApi(meta));
+  function mode(meta, code = "") {
+    if (meta.injectInto === "content" || meta.sandbox === "dom") return "isolated";
+    if (!needsApi(meta)) return "page";
+    const body = String(code).replace(/\/\/[ \t]*==UserScript==[\s\S]*?==\/UserScript==/, "");
+    if (meta.injectInto === "page" || meta.sandbox === "raw" || meta.sandbox === "javascript" || /\bunsafeWindow\b/.test(body)) return "bridge";
+    return "isolated";
+  }
+  const inPage = (meta) => mode(meta) === "page";
 
   // "1.2.10" after "1.2.9"; text parts compare as text ("1.0beta" before "1.0").
   function compareVersions(a = "", b = "") {
@@ -177,8 +189,8 @@
     const out = [];
     const bad = unsupported(meta);
     if (bad.length) out.push(`${bad.join(", ")} ${bad.length > 1 ? "aren't" : "isn't"} available here, so the parts that use ${bad.length > 1 ? "them" : "it"} stay off.`);
-    if (!inPage(meta) && /\bunsafeWindow\b/.test(code)) {
-      out.push("It uses unsafeWindow, which here is the script's own window: what the page's own scripts set on window isn't there.");
+    if (mode(meta, code) === "isolated" && /\bunsafeWindow\b/.test(code)) {
+      out.push("It uses unsafeWindow but asks to run apart from the page (@inject-into content or @sandbox DOM), so unsafeWindow is its own window: what the page's own scripts set on window isn't there.");
     }
     if (kindsOf(meta).includes("requests")) {
       const set = new Set();
@@ -195,5 +207,5 @@
     return out;
   }
 
-  globalThis.USM = { parseMeta, matchRegex, globRegex, urlAllowed, registration, sitesOf, GRANTS, KIND, KIND_TEXT, kindsOf, unsupported, limits, inPage, compareVersions, keyOf, asksMore };
+  globalThis.USM = { parseMeta, matchRegex, globRegex, urlAllowed, registration, sitesOf, GRANTS, KIND, KIND_TEXT, kindsOf, unsupported, limits, inPage, mode, compareVersions, keyOf, asksMore };
 })();
