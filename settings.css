@@ -535,3 +535,5 @@ input.text.us-filter { flex: none; width: 220px; }
 .seg.radios input:checked + span { background: var(--chip); color: var(--fg); }
 .seg.radios input:focus-visible + span { outline: 2px solid var(--accent); }
 .seg.radios label { min-width: 0; } /* not the 100px of a row's own label: the choices sit evenly */
+dialog.ask .imp-err { margin: 2px 0 8px; }
+dialog.ask .imp-err:empty { display: none; }

@@ -122,7 +122,7 @@
       <h2>Encrypted backup file</h2>
       <p class="hint">A backup holds every profile's saved logins, so anyone with the file and its passphrase can use those
         accounts. It is encrypted with the passphrase you choose here (PBKDF2 and AES-GCM), and the passphrase isn't stored
-        anywhere. The Webshare key isn't included. Profiles aren't part of the settings file.</p>
+        anywhere. The Webshare key isn't included.</p>
       <form id="ssExport">
         <div class="row"><input class="text" id="ssPass1" type="password" autocomplete="new-password" minlength="10" required placeholder="passphrase, at least 10 characters" aria-label="Passphrase"></div>
         <div class="row"><input class="text" id="ssPass2" type="password" autocomplete="new-password" minlength="10" required placeholder="passphrase again" aria-label="Passphrase again"></div>
@@ -699,10 +699,16 @@ Card 4111 1111 1111 1111</textarea>
         <button type="button" class="btn ghost" id="undoRestore" hidden>undo last restore</button>
         <input type="file" id="importFile" accept=".json,.gz,application/json,application/gzip" hidden>
       </div>
+      <label class="row"><input type="checkbox" id="exportProfiles"> Include session switch profiles, encrypted with a passphrase</label>
+      <div id="exportPass" hidden>
+        <div class="row"><input class="text" id="exportPass1" type="password" autocomplete="new-password" minlength="10" placeholder="passphrase, at least 10 characters" aria-label="Passphrase"></div>
+        <div class="row"><input class="text" id="exportPass2" type="password" autocomplete="new-password" minlength="10" placeholder="passphrase again" aria-label="Passphrase again"></div>
+      </div>
       <p class="hint">Extra Guac's settings and data as a .json file, API keys included (not the Google or Dropbox sign-in) — keep it somewhere private.
         Import takes such a file or a Drive or Dropbox snapshot (.json.gz) and replaces the current settings and data.
-        Session switch profiles aren't in this file: they come back from a Drive or Dropbox snapshot or from session
-        switch's encrypted backup file.</p>
+        Session switch profiles (saved logins) are only in the file when you tick the box above: they're encrypted with
+        your passphrase (PBKDF2 and AES-GCM), which isn't stored anywhere. Importing such a file asks whether to bring
+        them back too; they're added next to the profiles already here.</p>
     </section>
   </div>
   </main>

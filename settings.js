@@ -1393,8 +1393,83 @@
       render();
     };
 
-    $("exportLocal").onclick = () => send("backupExportLocal").catch((err) => alert(err.message));
+    // Ticked, the file also carries the session switch profiles, encrypted with the passphrase.
+    $("exportProfiles").onchange = () => {
+      $("exportPass").hidden = !$("exportProfiles").checked;
+      if ($("exportProfiles").checked) $("exportPass1").focus();
+    };
+    $("exportLocal").onclick = async () => {
+      let passphrase;
+      if ($("exportProfiles").checked) {
+        passphrase = $("exportPass1").value;
+        if (passphrase.length < 10) return void (alert("Use a passphrase of at least 10 characters."), $("exportPass1").focus());
+        if (passphrase !== $("exportPass2").value) return void (alert("The passphrases don't match."), $("exportPass2").focus());
+      }
+      $("exportLocal").disabled = true;
+      try {
+        const res = await send("backupExportLocal", passphrase === undefined ? {} : { passphrase });
+        if (passphrase !== undefined) {
+          $("exportPass1").value = $("exportPass2").value = "";
+          if (!res.profiles) alert("There are no session switch profiles yet, so the file has the settings only.");
+        }
+      } catch (err) { alert(err.message); }
+      $("exportLocal").disabled = false;
+    };
     $("importLocal").onclick = () => $("importFile").click();
+    const imported = async (res) => {
+      const p = res.profiles;
+      const n = (count) => `${count} session switch profile${count === 1 ? "" : "s"}`;
+      const profiles = !p ? "" : p.error ? ` The session switch profiles couldn't be added: ${p.error}`
+        : ` ${n(p.added)} added.${p.skipped ? ` ${p.skipped} ${p.skipped === 1 ? "was" : "were"} already here.` : ""}${p.noRoom ? ` ${p.noRoom} came without their proxy: all the plan's proxy sites are in use.` : ""}`;
+      alert(`Settings imported.${profiles} ${savedNote(res)}`);
+      location.reload();
+    };
+    // A file with session switch profiles: settings and profiles (with the file's passphrase,
+    // checked before anything changes), or the settings only.
+    function importChoice(name, from, snapshot) {
+      const count = Number(snapshot.ssProfilesSealed.profiles) || 0;
+      const d = document.createElement("dialog");
+      d.className = "ask";
+      d.innerHTML = `<h3></h3><p></p>
+        <div class="imp-pick"><button type="button" class="ask-opt" data-both><span>Settings + session profiles</span><small>enter the file's passphrase</small></button>
+          <button type="button" class="ask-opt" data-settings><span>Just settings</span><small>session profiles not included</small></button>
+          <div class="ask-btns"><button type="button" class="btn ghost no">Cancel</button></div></div>
+        <form class="imp-pass" hidden><div class="row"><input class="text" type="password" autocomplete="current-password" required placeholder="the file's passphrase" aria-label="Passphrase"></div>
+          <p class="hint bad imp-err"></p>
+          <div class="ask-btns"><button type="button" class="btn ghost back">Back</button><button type="submit" class="btn blue">Import</button></div></form>`;
+      d.querySelector("h3").textContent = `Import ${name}${from}?`;
+      d.querySelector("p").textContent = `It replaces Extra Guac's settings and data. It also has ${count ? `${count} session switch profile${count === 1 ? "" : "s"}` : "session switch profiles"}, encrypted with a passphrase; brought back, they're added next to the profiles already here.`;
+      const pick = d.querySelector(".imp-pick"), form = d.querySelector(".imp-pass"), input = form.querySelector("input"), err = form.querySelector(".imp-err");
+      const go = form.querySelector("[type=submit]");
+      const close = () => { d.close(); d.remove(); };
+      d.querySelector(".no").onclick = close;
+      d.addEventListener("cancel", (e) => { e.preventDefault(); if (!go.disabled) close(); });
+      d.querySelector("[data-settings]").onclick = async () => {
+        close();
+        try { await imported(await send("backupImportLocal", { snapshot })); } catch (e) { alert(e.message); }
+      };
+      d.querySelector("[data-both]").onclick = () => { pick.hidden = true; form.hidden = false; err.textContent = ""; input.focus(); };
+      form.querySelector(".back").onclick = () => { form.hidden = true; pick.hidden = false; d.querySelector("[data-both]").focus(); };
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        go.disabled = true;
+        go.textContent = "Opening…";
+        err.textContent = "";
+        try {
+          const res = await send("backupImportLocal", { snapshot, passphrase: input.value });
+          close();
+          await imported(res);
+        } catch (e) {
+          err.textContent = e.message;
+          input.select();
+        }
+        go.disabled = false;
+        go.textContent = "Import";
+      };
+      document.body.append(d);
+      d.showModal();
+      d.querySelector("[data-both]").focus();
+    }
     $("importFile").onchange = async () => {
       const file = $("importFile").files[0];
       $("importFile").value = "";
@@ -1407,10 +1482,8 @@
         const snapshot = JSON.parse(text);
         if (snapshot?.app !== "Extra Guac") throw new Error("That isn't an Extra Guac backup");
         const from = snapshot.createdAt ? ` from ${when(snapshot.createdAt)}` : "";
-        if (!confirm(`Replace Extra Guac's settings and data with the ones in ${file.name}${from}?`)) return;
-        const res = await send("backupImportLocal", { snapshot });
-        alert(`Settings imported. ${savedNote(res)}`);
-        location.reload();
+        if (snapshot.ssProfilesSealed?.file) return importChoice(file.name, from, snapshot);
+        await imported(await send("backupImportLocal", { snapshot }));
       } catch (err) {
         alert(err instanceof SyntaxError ? "That file couldn't be read as a backup." : err.message);
       }

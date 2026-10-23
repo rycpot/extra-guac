@@ -1458,6 +1458,12 @@ async function openFile(text, passphrase) {
   } catch {
     box = null;
   }
+  const payload = await unseal(box, passphrase);
+  return serial(() => getGroups().then(() => importBackup(payload)));
+}
+
+// The profiles in an opened file; a wrong passphrase throws before anything is added.
+async function unseal(box, passphrase) {
   if (box?.format !== "session-switch-backup" || box.version !== 1) throw new Error("This file isn't a Session Switch backup.");
   const iterations = Number(box.kdf?.iterations);
   if (!(iterations >= 100000 && iterations <= 5000000)) throw new Error("This backup uses settings that are not supported.");
@@ -1468,11 +1474,15 @@ async function openFile(text, passphrase) {
   } catch {
     throw new Error("The passphrase is wrong, or the file is damaged.");
   }
-  return serial(() => getGroups().then(() => importBackup(payload)));
+  return payload;
 }
 
 globalThis.sessionDriveCopy = driveCopy;
 globalThis.sessionDriveRestore = driveRestore;
+// The settings file (bg-backup.js) can carry the same encrypted file, made and opened by these.
+globalThis.sessionSealFile = sealFile;
+globalThis.sessionUnseal = unseal;
+globalThis.sessionImportOpened = (payload) => serial(() => getGroups().then(() => importBackup(payload)));
 
 // ---- Proxy ----
 // A profile's proxy uses Extra Guac's Webshare account (getProxy in bg-proxy.js): its key, its

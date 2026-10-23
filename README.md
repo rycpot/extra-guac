@@ -65,7 +65,7 @@ A Chrome extension. Click its icon to open the side panel (or a popup, in settin
 |---|---|
 | **Cloud backup** | Snapshots of your settings, data and bookmarks to your own Google Drive, Dropbox or both, by hand or every 1 to 24 hours. Restore any snapshot from the list. |
 | **Beam** | Send files between your devices with a 6-digit code or a QR code, encrypted end to end. The other device uses Extra Guac too, or just [rycpot.github.io/beam](https://rycpot.github.io/beam) in any browser. Once connected, the devices can also chat. |
-| **Settings file** | Export everything as a .json file, or import one to replace it. |
+| **Settings file** | Export everything as a .json file, or import one to replace it. Tick the box to include session switch profiles, encrypted with a passphrase; importing such a file lets you bring back the settings with the profiles, or the settings only. |
 
 **Layout:** drag tools between tabs, or reorder them, in settings → general. Tab 3 holds session switch, userscripts and word search at first, and anything you drag there.
 

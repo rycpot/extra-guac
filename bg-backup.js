@@ -126,15 +126,32 @@ const backupHandlers = {
     const { snap } = await readAnyCopy(ref);
     await saveFile(`extra-guac-${stamp(new Date(snap.createdAt))}.json`, "application/json", JSON.stringify(snap, null, 1));
   },
-  // Local file: settings and data, no bookmarks (Chrome exports those itself).
-  backupExportLocal: async () => {
+  // Local file: settings and data, no bookmarks (Chrome exports those itself). With a passphrase,
+  // session switch profiles come along as their encrypted backup file (bg-sessions.js), in
+  // ssProfilesSealed: { profiles (how many), file }, outside data so a restore never reads it as
+  // settings.
+  backupExportLocal: async ({ passphrase } = {}) => {
     const snap = await buildSnapshot(false);
+    let profiles = 0;
+    if (passphrase !== undefined) {
+      const { file, count } = await sessionSealFile(passphrase);
+      if (count) snap.ssProfilesSealed = { profiles: count, file };
+      profiles = count;
+    }
     await saveFile(`extra-guac-settings-${stamp(new Date())}.json`, "application/json", JSON.stringify(snap, null, 1));
+    return { profiles };
   },
-  backupImportLocal: async ({ snapshot }) => {
+  // With a passphrase, the file's profiles are opened first (a wrong one changes nothing), then
+  // added next to the ones here once the settings are in.
+  backupImportLocal: async ({ snapshot, passphrase }) => {
     if (snapshot?.app !== "Extra Guac" || !snapshot.data || typeof snapshot.data !== "object") throw new Error("That isn't an Extra Guac backup");
     assertHasData(snapshot.data);
-    return locked(async () => {
+    let opened = null;
+    if (passphrase !== undefined) {
+      if (!snapshot.ssProfilesSealed?.file) throw new Error("This file has no session switch profiles");
+      opened = await sessionUnseal(snapshot.ssProfilesSealed.file, passphrase);
+    }
+    const saved = await locked(async () => {
       const saved = await savePreRestore();
       await keepPadsBefore(snapshot.data);
       await applyData(snapshot.data);
@@ -142,6 +159,8 @@ const backupHandlers = {
       await markChosen(); // counts as a choice, see backupConnect
       return saved;
     });
+    if (!opened) return saved;
+    return { ...saved, profiles: await sessionImportOpened(opened).catch((err) => ({ error: err.message })) };
   },
   // Puts back what was there before the last restore/import (and keeps what's there now
   // as the new "before", so pressing it twice flips back).
