@@ -16,7 +16,20 @@ const mediaHandlers = {
 // hasn't been used on, the page's own videos and audio are turned down instead
 // (storage.session "volumePage": { [tabId]: true }), and again after each reload.
 
-async function setVolume(tabId, volume) {
+// One change at a time: the slider sends a new value every few dozen milliseconds while it's
+// dragged, and starting a capture takes longer than that. Run side by side, a second change
+// would see no capture yet and ask Chrome for another one, which it refuses while the first is
+// starting: the tab then got its media turned down on top of the capture, which was left
+// running at the first value, even at 100%.
+let volumeQueue = Promise.resolve();
+function volumeTask(fn) {
+  const run = volumeQueue.then(fn);
+  volumeQueue = run.catch(() => {});
+  return run;
+}
+const setVolume = (tabId, volume) => volumeTask(() => setVolumeNow(tabId, volume));
+
+async function setVolumeNow(tabId, volume) {
   volume = Math.max(0, Math.min(100, Math.round(+volume)));
   const { volume: vols = {} } = await chrome.storage.session.get("volume");
   const { volumePage: pages = {} } = await chrome.storage.session.get("volumePage");
@@ -85,15 +98,15 @@ chrome.tabs.onUpdated.addListener(async (tabId, info) => {
   if (pages[tabId] && tabId in vols) pageVolume(tabId, vols[tabId] / 100);
 });
 
-async function stopAllVolume() {
+const stopAllVolume = () => volumeTask(async () => {
   const { volume: vols = {}, volumePage: pages = {} } = await chrome.storage.session.get(["volume", "volumePage"]);
   if (!Object.keys(vols).length) return;
   for (const id of Object.keys(pages)) pageVolume(+id, 1);
   await toOffscreen({ type: "volumeStopAll" }).catch(() => {});
   await chrome.storage.session.set({ volume: {}, volumePage: {} });
-}
+});
 
-chrome.tabs.onRemoved.addListener(async (tabId) => {
+chrome.tabs.onRemoved.addListener((tabId) => volumeTask(async () => {
   const { volume: vols = {} } = await chrome.storage.session.get("volume");
   if (!(tabId in vols)) return;
   delete vols[tabId];
@@ -101,7 +114,7 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   delete pages[tabId];
   await chrome.storage.session.set({ volume: vols, volumePage: pages });
   toOffscreen({ type: "volumeStop", tabId }).catch(() => {});
-});
+}).catch(() => {}));
 
 // ---- Keep awake ---------------------------------------------------------------
 // storage.session "awake": { until, minutes } (until = null / minutes = 0 means no time limit).
