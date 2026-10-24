@@ -305,6 +305,16 @@ main:not(.laid-out) .panel { visibility: hidden; }
   #driveInterval button { padding: 4px 6px; }
 }
 
+/* Support: a strip pinned to the bottom of tab 4, under whatever sections it holds */
+.support-bar { position: sticky; bottom: 0; z-index: 2; display: none; align-items: center; justify-content: space-between; gap: 8px;
+  margin: 14px -16px 0; padding: 9px 16px 11px; background: var(--bg); border-top: 1px solid var(--divider); }
+main:has(> #panel-backup:not([hidden])) { padding-bottom: 0; display: flex; flex-direction: column; } /* a short tab still has it at the bottom */
+#panel-backup { flex: 1 0 auto; }
+#panel-backup:not([hidden]) ~ .support-bar { display: flex; }
+.support-bar a { color: var(--text2); font-size: 11.5px; text-decoration: none; }
+.support-bar a:hover { color: var(--text); }
+.support-bar span { color: var(--text3); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 /* Drive signed out on its own: a notice at the bottom of tab 1 (it can be hidden with ×) */
 .drive-notice { position: sticky; bottom: 0; z-index: 2; display: flex; align-items: center; gap: 8px; margin-top: 12px; padding: 8px 6px 8px 12px;
   border: 1px solid color-mix(in srgb, var(--red) 35%, transparent); border-radius: 12px;

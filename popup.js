@@ -242,6 +242,11 @@ function initTabs() {
     if ($(`panel-${name}`).contains($("wordSearch"))) initWordSearch();
   };
   tabs.forEach((t) => (t.onclick = () => show(t.dataset.panel)));
+  // Tab 4's support strip: the page opens next to this tab, and the popup closes.
+  $("supportLink").onclick = (e) => {
+    e.preventDefault();
+    chrome.tabs.create({ url: e.currentTarget.href, ...(tab ? { windowId: tab.windowId, index: tab.index + 1, openerTabId: tab.id } : {}) }).then(() => closePopup(), fail);
+  };
   let last = "tools";
   try { last = localStorage.getItem("panel") || last; } catch {}
   show(document.querySelector(`.tab[data-panel="${last}"]:not(:disabled)`) ? last : "tools");
