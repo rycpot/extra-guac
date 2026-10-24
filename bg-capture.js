@@ -334,13 +334,13 @@ async function captureFullPage(tab) {
   // Side-by-side scrolling panels (page.others) scroll along with the main one, by the
   // smallest panel height at a time, until every one of them has reached its end.
   const others = page.others || [];
-  // Slices overlap by two margins, and each one after the first is drawn from one margin
-  // down, so slices meet in the middle of the overlap, away from both screen edges. Edge
-  // rows aren't to be trusted: a shadow cast from a header above the panel (or a footer
-  // below it) falls on them, and a panel's edge seldom falls on a whole device pixel.
+  // Slices overlap by a margin and 2 px. Each one after the first is drawn from where the one
+  // before it ends, less those 2 px: its top rows never show (a shadow cast from a header
+  // above the panel falls on them), and the one before keeps all but its last 2 px (a panel's
+  // edge seldom falls on a whole device pixel), so a chat bubble low on the first screen stays whole.
   const minH = Math.min(page.viewHeight, ...others.map((o) => o.height));
   const margin = minH > 20 ? Math.min(32, Math.floor(minH / 8)) : 0;
-  const step = Math.max(1, minH - 2 * margin);
+  const step = minH > 20 ? minH - margin - 2 : Math.max(1, minH);
   try {
     for (let y = 0, i = 0; ; i++) {
       if (i >= MAX_SCREENS) { truncated = true; break; }
@@ -360,9 +360,9 @@ async function captureFullPage(tab) {
   }
 
   const scale = slices[0].bmp.width / page.viewWidth;
-  // How far down a slice's own rows start: one margin, or less if it overlaps the one
-  // before it by less than two (in device pixels).
-  const cutAt = (ys, i, h) => (i ? Math.round(Math.max(0, Math.min(margin, (ys[i - 1] + h - ys[i]) / 2)) * scale) : 0);
+  // How far down a slice's own rows start: where the one before it ends, less 2 px (in
+  // device pixels).
+  const cutAt = (ys, i, h) => (i ? Math.round(Math.max(0, ys[i - 1] + h - ys[i] - 2) * scale) : 0);
   const last = slices[slices.length - 1];
   // Panels in device pixels: snapped inwards to whole pixels, and kept within the screen
   // (rounded sizes can reach a pixel past it, which would leave a blank line at a seam).
@@ -608,15 +608,27 @@ function pageFrameRects() {
 async function pageScrollTo(y, hideFixed) {
   const st = window.__ttShot;
   const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-  // Scrolling a panel: only sticky parts inside it repeat (the header and sidebars
-  // outside it are drawn once from the first screen anyway).
+  // Scrolling a panel: sticky parts inside it repeat, and so do fixed parts floating over it
+  // from outside (a chat bubble). The header and sidebars beside it are drawn once from
+  // the first screen anyway, and parts the panel sits inside stay.
+  const panels = st.el ? [st.el, ...(st.sides || []).map((s) => s.el)] : [];
+  const holds = (a, b) => { for (let n = b; n; n = n.parentElement || n.getRootNode().host) if (n === a) return true; return false; };
+  const over = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && panels.some((p) => {
+      const q = p.getBoundingClientRect();
+      return r.left < q.right && r.right > q.left && r.top < q.bottom && r.bottom > q.top;
+    });
+  };
   const hideNew = () => {
     st.seen ||= new Set();
     let found = 0;
-    for (const el of [st.el || document.body, ...(st.sides || []).map((s) => s.el)].flatMap((p) => [...p.querySelectorAll("*")])) {
+    const inside = new Set([st.el || document.body, ...(st.sides || []).map((s) => s.el)].flatMap((p) => [...p.querySelectorAll("*")]));
+    const outside = st.el ? [...document.body.querySelectorAll("*")].filter((el) => !inside.has(el)) : [];
+    for (const el of [...inside, ...outside]) {
       if (st.seen.has(el)) continue;
       const pos = getComputedStyle(el).position;
-      if (pos === "fixed" || pos === "sticky") {
+      if ((pos === "fixed" || pos === "sticky") && (inside.has(el) || (!panels.some((p) => holds(el, p)) && over(el)))) {
         // Hidden by a marker and the capture's stylesheet rather than the element's own style,
         // which some pages rewrite as they scroll.
         st.seen.add(el);
