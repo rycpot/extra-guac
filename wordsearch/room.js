@@ -398,9 +398,10 @@ function validPuzzle(p) {
       Math.abs(w.dr) <= 1 && Math.abs(w.dc) <= 1 && (w.dr || w.dc) && w.len > 0 &&
       [w.r, w.r + w.dr * (w.len - 1)].every((r) => r >= 0 && r < p.n) && [w.c, w.c + w.dc * (w.len - 1)].every((c) => c >= 0 && c < p.n));
 }
-// The host's word: a state where this device's round ended, or a new lobby.
+// The host's word: a state where this device's round ended, or a new lobby. A lobby counts as
+// the end too: the states saying the round was done may all have been lost on the way.
 function onState() {
-  if (mine.playing && (view.phase === "done" || view.round !== mine.round)) {
+  if (mine.playing && (view.phase === "done" || view.phase === "lobby" || view.round !== mine.round)) {
     mine.playing = false;
     stopCountdown();
     api.room.freeze();

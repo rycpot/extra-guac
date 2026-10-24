@@ -5,12 +5,15 @@
 // cancels. Runs in a closed shadow root so page CSS can't touch it.
 // Injected by bg-capture.js (startAreaSelection), which takes the shot on "areaSelected".
 // Text from image (bg-ocr.js) uses it too, with window.__ttAreaMode = "ocr" set first: then
-// there's no ☁, and ✓ (or Enter) reads the text in the box ("ocrSelected").
+// there's no ☁, and ✓ (or Enter) reads the text in the box ("ocrSelected"). For a screenshot,
+// bg-capture.js sets window.__ttAreaHosts first: the hosts ☁ offers.
 (() => {
   if (window.__ttArea) return;
   window.__ttArea = true;
   const OCR = window.__ttAreaMode === "ocr";
+  const HOSTS = window.__ttAreaHosts || [];
   delete window.__ttAreaMode;
+  delete window.__ttAreaHosts;
 
   const MIN = 6;
   const host = document.createElement("div");
@@ -163,17 +166,15 @@
     tip.style.right = room > 360 ? "0" : "auto";
   });
   up.addEventListener("pointerleave", () => { tip.hidden = true; });
-  if (!OCR) chrome.storage.local.get("tt").then(({ tt }) => {
-    const u = tt?.upload || {};
-    const on = [u.imglink && "imglink", u.x02 && u.x02Verified && "x02"].filter(Boolean); // as TT.uploadChoices
-    choices = on.includes(u.menu) ? [u.menu] : on;
-    canUpload = on.length > 0;
+  if (!OCR) {
+    choices = HOSTS;
+    canUpload = choices.length > 0;
     // Usable: the normal tooltip. Off: no title (it would show late, on top), our own instead.
     if (canUpload) up.title = choices.length === 1 ? `Upload to ${choices[0]}` : "Upload to…";
     else up.removeAttribute("title");
     up.setAttribute("aria-label", canUpload ? up.title : NO_HOST);
     up.setAttribute("aria-disabled", String(!canUpload));
-  });
+  }
   up.addEventListener("click", () => {
     if (!canUpload) return;
     if (choices.length === 1) return confirm("upload", choices[0]);

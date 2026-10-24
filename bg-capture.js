@@ -234,7 +234,13 @@ async function captureTab(tab) {
 }
 
 async function startAreaSelection(tab) {
-  await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["page-helpers.js", "area.js"] });
+  const target = { tabId: tab.id };
+  // The ☁ hosts come from here (the page has no TT.uploadChoices), and the mode is set every
+  // time so one left behind by a text-from-image start that found a box already open can't
+  // carry over.
+  const hosts = TT.uploadChoices((await TT.getSettings()).upload);
+  await chrome.scripting.executeScript({ target, args: [hosts], func: (hosts) => { window.__ttAreaMode = "shot"; window.__ttAreaHosts = hosts; } });
+  await chrome.scripting.executeScript({ target, files: ["page-helpers.js", "area.js"] });
 }
 
 async function captureArea(tab, rect, viewportWidth, format = "") {

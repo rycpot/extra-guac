@@ -107,11 +107,12 @@
   }
 
   // How much the code holds, out of 500, under the box being typed in (a link's only once
-  // it's long). Accented letters and emoji take 2 to 4 each.
-  const tooLong = () => EGQR.size(payloadNow()) > EGQR.MAX;
+  // it's long). Accented letters and emoji take 2 to 4 each. A dynamic code holds its short
+  // link instead, so the address it points to can be any length.
+  const tooLong = () => mode === "static" && EGQR.size(payloadNow()) > EGQR.MAX;
   function paintCount() {
     const n = EGQR.size(payloadNow()), over = n > EGQR.MAX;
-    const show = { url: kind === "url" && n > 400, text: kind === "text", body: kind === "email" };
+    const show = { url: kind === "url" && mode === "static" && n > 400, text: kind === "text", body: kind === "email" };
     for (const [k, id] of [["url", "urlCount"], ["text", "textCount"], ["body", "bodyCount"]]) {
       const box = $(id);
       box.hidden = !show[k];
@@ -346,7 +347,7 @@
     if (mode === "dynamic") {
       if (current?.mode === "dynamic") text = current.payload;
     } else text = payloadNow();
-    if (!text || (mode === "static" && tooLong())) {
+    if (!text || tooLong()) {
       made = null;
       code.className = "qr-code empty";
       code.textContent = mode === "dynamic"
@@ -426,8 +427,8 @@
       const url = payloadNow();
       const service = dynService();
       const b = btn("", "make dynamic code", service ? `Makes a ${DYN[service].label} link to this address and a code for it${service === "dub" ? " (one of this month's new links)" : ""}` : "", makeDynamic);
-      b.disabled = !service || !isWeb(url) || tooLong();
-      b.title = !service ? "Link spoo.me (or dub.sh) first" : !isWeb(url) ? "Type a web address (http or https)" : tooLong() ? `Shorten it to ${EGQR.MAX} or less` : b.title;
+      b.disabled = !service || !isWeb(url);
+      b.title = !service ? "Link spoo.me (or dub.sh) first" : !isWeb(url) ? "Type a web address (http or https)" : b.title;
       return box.replaceChildren(b);
     }
     const off = !made?.ok;

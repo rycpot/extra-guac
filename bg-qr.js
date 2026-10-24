@@ -16,7 +16,8 @@
 // - Your icons ("qrIcons"): up to 5, [{ id, url (a PNG data URL) }]; settings say which is
 //   used (qr.icon) and whether icons are fitted to their space (qr.fit: transparent edges
 //   trimmed so the icon fills it, whole).
-// - Codes hold up to 500 bytes (EGQR.MAX): longer content opens the QR page to shorten it.
+// - Static codes hold up to 500 bytes (EGQR.MAX): longer content opens the QR page to shorten
+//   it. A dynamic code holds its short link, so the address it points to can be longer.
 // - The right-click menu always makes static codes; dynamic ones come from the popup or the
 //   QR page, where static is picked again each time they open.
 // Loaded by background.js; qrHandlers join its message handlers.
@@ -155,8 +156,8 @@ async function qrShow(tab, { kind, content, payload }, mode = "static") {
   if (mode === "dynamic" && kind !== "url") mode = "static"; // only links can be dynamic
   if (mode === "dynamic" && !qrDynService(s)) return openQrPage({ kind, content, mode, note: "link" });
   const canCard = /^(https?|file):/i.test(tab?.url || "");
-  // Over 500: the QR page, with its count, to shorten it there.
-  if (!canCard || new TextEncoder().encode(payload).length > 500) return openQrPage({ kind, content, mode });
+  // Static over 500: the QR page, with its count, to shorten it there.
+  if (!canCard || (mode === "static" && new TextEncoder().encode(payload).length > 500)) return openQrPage({ kind, content, mode });
   let entry = { mode, kind, content, payload };
   if (mode === "dynamic") {
     const { link } = await qrDynCreate(payload);

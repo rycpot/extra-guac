@@ -43,6 +43,7 @@
   function start(kws) {
     if (observer && kws.join("\n") === keywords.join("\n")) return;
     keywords = kws;
+    reported = false; // new keywords: the first of them to appear is reported too
     observer?.disconnect();
     // Look right away, at most every 150 ms; changes in between are caught by a timer
     // or the background's next check.
@@ -58,6 +59,7 @@
     observer?.disconnect();
     observer = null;
     keywords = [];
+    reported = false;
     clearTimeout(timer);
     timer = 0;
   }
