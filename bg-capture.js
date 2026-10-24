@@ -334,10 +334,13 @@ async function captureFullPage(tab) {
   // Side-by-side scrolling panels (page.others) scroll along with the main one, by the
   // smallest panel height at a time, until every one of them has reached its end.
   const others = page.others || [];
-  // (A couple of pixels short, so slices overlap: a panel's edge seldom falls on a whole
-  // device pixel, and its edge rows are covered by the next slice.)
+  // Slices overlap by two margins, and each one after the first is drawn from one margin
+  // down, so slices meet in the middle of the overlap, away from both screen edges. Edge
+  // rows aren't to be trusted: a shadow cast from a header above the panel (or a footer
+  // below it) falls on them, and a panel's edge seldom falls on a whole device pixel.
   const minH = Math.min(page.viewHeight, ...others.map((o) => o.height));
-  const step = minH > 20 ? minH - 2 : Math.max(1, minH);
+  const margin = minH > 20 ? Math.min(32, Math.floor(minH / 8)) : 0;
+  const step = Math.max(1, minH - 2 * margin);
   try {
     for (let y = 0, i = 0; ; i++) {
       if (i >= MAX_SCREENS) { truncated = true; break; }
@@ -357,6 +360,9 @@ async function captureFullPage(tab) {
   }
 
   const scale = slices[0].bmp.width / page.viewWidth;
+  // How far down a slice's own rows start: one margin, or less if it overlaps the one
+  // before it by less than two (in device pixels).
+  const cutAt = (ys, i, h) => (i ? Math.round(Math.max(0, Math.min(margin, (ys[i - 1] + h - ys[i]) / 2)) * scale) : 0);
   const last = slices[slices.length - 1];
   // Panels in device pixels: snapped inwards to whole pixels, and kept within the screen
   // (rounded sizes can reach a pixel past it, which would leave a blank line at a seam).
@@ -406,11 +412,20 @@ async function captureFullPage(tab) {
       // Each panel, slice by slice, at the height it was scrolled to.
       for (const pn of panels) {
         const b = pn.box;
-        slices.forEach((s, i) => ctx.drawImage(s.bmp, b.x, b.y, b.w, b.h, b.x, b.y + Math.round(pn.ys[i] * scale) - top, b.w, b.h));
+        slices.forEach((s, i) => {
+          const c = Math.min(cutAt(pn.ys, i, pn.cssH), b.h - 1);
+          ctx.drawImage(s.bmp, b.x, b.y + c, b.w, b.h - c, b.x, b.y + Math.round(pn.ys[i] * scale) - top + c, b.w, b.h - c);
+        });
       }
       // Whatever was under the main panel (a footer), at the very end.
       if (below > 0) ctx.drawImage(last.bmp, 0, edge, width, below, 0, contentEnd - top, width, below);
-    } else for (const s of slices) ctx.drawImage(s.bmp, 0, Math.round(s.y * scale) - top);
+    } else {
+      const ys = slices.map((s) => s.y);
+      slices.forEach((s, i) => {
+        const c = Math.min(cutAt(ys, i, page.viewHeight), s.bmp.height - 1);
+        ctx.drawImage(s.bmp, 0, c, width, s.bmp.height - c, 0, Math.round(s.y * scale) - top + c, width, s.bmp.height - c);
+      });
+    }
     items.push({ name: shotName(tab, shot, parts > 1 ? p + 1 : 0), dataUrl: await canvasToDataUrl(canvas, shot) });
   }
   return { items, truncated, label: parts > 1 ? `full page · ${parts} parts` : "full page" };
