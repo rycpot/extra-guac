@@ -1005,7 +1005,8 @@ async function initVolume(isWeb) {
   const live = scope.signal;
   const levels = [...$("volumePresets").querySelectorAll("button[data-i]")];
   const mute = $("volumeMute");
-  for (const el of [slider, ...levels, mute]) el.disabled = !isWeb;
+  const full = $("volumeFull"); // always 100%, not changed by double-clicking
+  for (const el of [slider, ...levels, full, mute]) el.disabled = !isWeb;
   let level = 100;
   const show = (v) => {
     level = v;
@@ -1018,6 +1019,7 @@ async function initVolume(isWeb) {
       b.dataset.v = presets[i];
       b.classList.toggle("active", presets[i] === v);
     });
+    full.classList.toggle("active", v === 100);
     mute.textContent = v === 0 ? "unmute" : "mute";
     mute.classList.toggle("active", v === 0);
   };
@@ -1076,6 +1078,7 @@ async function initVolume(isWeb) {
     b.onclick = () => set("setVolume", { volume: +b.dataset.v });
     b.ondblclick = () => editPreset(b, +b.dataset.i, (old, v) => level === old && set("setVolume", { volume: v }));
   });
+  full.onclick = () => set("setVolume", { volume: 100 });
   mute.onclick = () => set("volumeMute");
 }
 
