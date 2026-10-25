@@ -81,8 +81,8 @@ chrome.runtime.onStartup.addListener(async () => {
 });
 
 // ---- Right-click menus --------------------------------------------------------
-// Pages get "Redirect with rules" while auto redirect is on and has manual rules, shown only
-// on pages a manual rule would change (redirectMenuFor keeps it in step with the active tab).
+// Pages get "Redirect with rules" while auto redirect is on and has manual rules, only on
+// pages a manual rule would change (redirectMenuFor keeps it in step with the active tab).
 // Images get "Upload image to imglink/x02" for the hosts switched on in the popup;
 // with both on, the item branches into the two hosts.
 
@@ -90,11 +90,9 @@ let menuSync = Promise.resolve();
 function syncMenus(s) {
   menuSync = menuSync.then(async () => {
     await chrome.contextMenus.removeAll();
+    shownMenus.clear();
     const manual = s.redirect.enabled && s.redirect.rules.some((r) => !r.auto && r.on !== false && r.find);
-    if (manual) {
-      chrome.contextMenus.create({ id: "redirect", title: "Redirect with rules", contexts: ["page"], visible: false });
-      redirectMenuNow().catch(() => {});
-    }
+    if (manual) redirectMenuNow().catch(() => {});
     const hosts = TT.uploadChoices(s.upload);
     if (hosts.length === 1) {
       chrome.contextMenus.create({ id: `upload:${hosts[0]}`, title: `Upload image to ${TT.hostName(hosts[0])}`, contexts: ["image"] });
@@ -127,15 +125,33 @@ function syncMenus(s) {
   return menuSync;
 }
 
+// Items that come and go with the active tab ("Redirect with rules", "Activate volume
+// controls") are added and removed rather than hidden: Chrome still counts a hidden item when it
+// decides whether Extra Guac's items go straight in the menu or in an "Extra Guac" submenu, so
+// a hidden one put the only item showing in a submenu. In step with syncMenus (menuSync).
+const shownMenus = new Set();
+function showMenu(props, show) {
+  menuSync = menuSync.then(async () => {
+    if (show === shownMenus.has(props.id)) return;
+    if (show) {
+      shownMenus.add(props.id);
+      await new Promise((done) => chrome.contextMenus.create(props, () => done(chrome.runtime.lastError)));
+    } else {
+      shownMenus.delete(props.id);
+      await chrome.contextMenus.remove(props.id).catch(() => {});
+    }
+  }).catch((err) => console.error("menus", err));
+  return menuSync;
+}
+
 // "Redirect with rules" is shown only where a manual rule would change the address. Chrome
 // can't ask while the menu opens, so it follows the active tab: switching tabs or windows,
 // and the tab's address changing.
 async function redirectMenuFor(url) {
   const { redirect } = await TT.getSettings();
   const manual = redirect.enabled ? redirect.rules.filter((r) => !r.auto && r.on !== false && r.find) : [];
-  if (!manual.length) return;
-  const show = /^https?:/i.test(url || "") && Redirects.apply(url, manual).url !== url;
-  await chrome.contextMenus.update("redirect", { visible: show }).catch(() => {});
+  const show = !!manual.length && /^https?:/i.test(url || "") && Redirects.apply(url, manual).url !== url;
+  await showMenu({ id: "redirect", title: "Redirect with rules", contexts: ["page"] }, show);
 }
 async function redirectMenuNow() {
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });

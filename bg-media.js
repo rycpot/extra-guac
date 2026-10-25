@@ -87,15 +87,15 @@ async function activateVolume(tabId) {
 }
 
 // The item is there only on the active tab while its switch is on. Chrome can't ask while the
-// menu opens, so it follows the active tab (like "Redirect with rules").
+// menu opens, so it follows the active tab (like "Redirect with rules", see showMenu).
 function volumeMenuItem() {
-  chrome.contextMenus.create({ id: "volumeActivate", title: "Activate volume controls", contexts: ["all"], documentUrlPatterns: ["http://*/*", "https://*/*"], visible: false });
   volumeMenuNow().catch(() => {});
 }
 async function volumeMenuNow() {
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   const { volumeArmed: armed = {} } = await chrome.storage.session.get("volumeArmed");
-  await chrome.contextMenus.update("volumeActivate", { visible: !!(tab && armed[tab.id]) }).catch(() => {});
+  const item = { id: "volumeActivate", title: "Activate volume controls", contexts: ["all"], documentUrlPatterns: ["http://*/*", "https://*/*"] };
+  await showMenu(item, !!(tab && armed[tab.id]));
 }
 chrome.tabs.onActivated.addListener(() => { volumeMenuNow().catch(() => {}); });
 chrome.windows.onFocusChanged.addListener((w) => { if (w !== chrome.windows.WINDOW_ID_NONE) volumeMenuNow().catch(() => {}); });
