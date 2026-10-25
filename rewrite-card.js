@@ -4,6 +4,9 @@
 // corrects mistakes only; "rephrase" rewrites it in the tone picked below it. Each result is
 // kept, so switching back is instant, and ↻ asks again. The result can be edited before
 // "replace" (only when the text came from a field) or copy. Stays until ✕ or Esc.
+// It can be dragged by its top bar; where it's left is where it opens next time, on any page
+// (storage.local "rewriteCardSpot": { right, bottom }), until a double-click on the bar puts it
+// back in the corner.
 (() => {
   if (window.__egRewriteCard) return;
   window.__egRewriteCard = true;
@@ -11,6 +14,8 @@
   const GAP = 16;
   const TONES = ["clearer", "shorter", "friendly", "formal", "casual"];
   let host = null, root = null, observer = null;
+  let spot = null; // { right, bottom } once dragged; null = the corner
+  chrome.storage.local.get("rewriteCardSpot").then(({ rewriteCardSpot: s }) => { if (s && !spot) { spot = s; if (host) place(); } }).catch(() => {});
   let source = "", frameId = 0, editable = false, mode = "rephrase", tone = "clearer", results = {}, busy = false;
   let seq = 0; // a new right-click while one is being rewritten: the old answer is dropped
 
@@ -51,7 +56,9 @@
             box-sizing: border-box; border-radius: 12px; background: rgb(22,22,22); color: #fff;
             font: 500 11.5px/1.35 system-ui, sans-serif; box-shadow: 0 8px 28px rgba(0,0,0,.45);
             outline: 1px solid rgba(255,255,255,.28); outline-offset: -1px; } /* the edge keeps it visible on dark pages */
-          .head { display: flex; align-items: center; gap: 8px; }
+          .head { display: flex; align-items: center; gap: 8px; cursor: grab; touch-action: none; user-select: none; }
+          .head.dragging { cursor: grabbing; }
+          .head a, .head button { cursor: pointer; }
           .titles { flex: 1; min-width: 0; display: grid; gap: 1px; }
           .main, .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
           .sub { color: rgba(255,255,255,.6); font-weight: 400; font-size: 10.5px; }
@@ -124,9 +131,10 @@
       for (const b of root.querySelectorAll(".mode button")) b.onclick = () => b.dataset.mode !== mode && pick(b.dataset.mode, tone);
       for (const b of root.querySelectorAll(".tone button")) b.onclick = () => b.dataset.tone !== tone && pick("rephrase", b.dataset.tone);
       root.querySelector("textarea").addEventListener("input", fit);
+      drag(root.querySelector(".head"));
       root.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } });
       addEventListener("keydown", onKey, true);
-      addEventListener("resize", fit);
+      addEventListener("resize", place);
     }
     document.documentElement.append(host);
     place();
@@ -143,11 +151,54 @@
     close();
   }
 
-  // The zoom controls (imgzoom.js) sit in the same corner: stand just above them.
+  // In the corner, the zoom controls (imgzoom.js) sit there too: stand just above them.
+  // Dragged, where it was left, kept on screen (a smaller window pulls it back in).
   function place() {
-    const zoom = document.querySelector("[data-eg-zoom]");
-    host.style.bottom = `${zoom?.isConnected ? GAP + zoom.getBoundingClientRect().height + 8 : GAP}px`;
+    if (!host) return;
+    if (spot) {
+      const card = root.querySelector(".card").getBoundingClientRect();
+      host.style.right = `${Math.round(Math.max(GAP, Math.min(spot.right, innerWidth - card.width - GAP)))}px`;
+      host.style.bottom = `${Math.round(Math.max(GAP, Math.min(spot.bottom, innerHeight - Math.min(card.height, 160) - GAP)))}px`;
+    } else {
+      const zoom = document.querySelector("[data-eg-zoom]");
+      host.style.right = `${GAP}px`;
+      host.style.bottom = `${zoom?.isConnected ? GAP + zoom.getBoundingClientRect().height + 8 : GAP}px`;
+    }
     fit();
+  }
+
+  // Dragged by the top bar (not its buttons or link); a double-click puts it back in the corner.
+  function drag(bar) {
+    bar.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0 || e.target.closest("button, a")) return;
+      e.preventDefault();
+      bar.setPointerCapture(e.pointerId);
+      bar.classList.add("dragging");
+      const from = { x: e.clientX, y: e.clientY, right: parseFloat(host.style.right), bottom: parseFloat(host.style.bottom) };
+      const move = (m) => {
+        spot = { right: from.right - (m.clientX - from.x), bottom: from.bottom - (m.clientY - from.y) };
+        place();
+      };
+      const up = () => {
+        bar.classList.remove("dragging");
+        bar.removeEventListener("pointermove", move);
+        bar.removeEventListener("pointerup", up);
+        bar.removeEventListener("pointercancel", up);
+        if (spot) {
+          spot = { right: parseFloat(host.style.right), bottom: parseFloat(host.style.bottom) };
+          chrome.storage.local.set({ rewriteCardSpot: spot }).catch(() => {});
+        }
+      };
+      bar.addEventListener("pointermove", move);
+      bar.addEventListener("pointerup", up);
+      bar.addEventListener("pointercancel", up);
+    });
+    bar.addEventListener("dblclick", (e) => {
+      if (e.target.closest("button, a")) return;
+      spot = null;
+      chrome.storage.local.remove("rewriteCardSpot").catch(() => {});
+      place();
+    });
   }
 
   // The text box shows all of the text when it fits on screen, else as much as fits, and scrolls.
@@ -164,7 +215,7 @@
   function close() {
     observer?.disconnect();
     removeEventListener("keydown", onKey, true);
-    removeEventListener("resize", fit);
+    removeEventListener("resize", place);
     host?.remove();
     host = null; root = null;
     source = ""; results = {}; busy = false; seq++; // drops the text (the listener stays for the next one)
