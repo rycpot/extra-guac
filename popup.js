@@ -64,6 +64,7 @@ async function init() {
   });
   if (!inPopup && !fixedTab) {
     followActiveTab();
+    panelPort(tab.windowId);
     // In the side panel the keyboard stays here while a picker runs on the page, so Esc
     // is passed on to close it (only Extra Guac's own overlays; see "pageEscape").
     addEventListener("keydown", (e) => {
@@ -125,6 +126,13 @@ let switching = 0;
 function followActiveTab() {
   chrome.tabs.onActivated.addListener(({ windowId }) => windowId === tab?.windowId && switchTab());
   chrome.tabs.onUpdated.addListener((id, info) => id === tab?.id && info.url && switchTab());
+}
+// The side panel tells the background it's open in this window, so a click on the toolbar icon
+// there closes it (see action.onClicked). Made again when the background restarts.
+function panelPort(windowId) {
+  const port = chrome.runtime.connect({ name: `panel:${windowId}` });
+  port.onMessage.addListener((msg) => msg === "close" && window.close());
+  port.onDisconnect.addListener(() => setTimeout(() => panelPort(windowId), 100));
 }
 async function switchTab() {
   const mine = ++switching;

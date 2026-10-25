@@ -374,12 +374,32 @@ async function syncBlurScript(s, injectOpenTabs = false) {
 // ---- Toolbar icon: popup or side panel (settings → general) ---------------------
 // The popup closes whenever it loses focus; the side panel stays open while you use
 // other tabs or the settings window. Both show popup.html.
+// In side panel mode the click comes here (action.onClicked) rather than Chrome opening the
+// panel itself: only then does it count as using Extra Guac on the tab, which tab volume needs.
+// It opens the panel, or closes it when it's open in that window (each open panel keeps a
+// "panel" port here, named after its window).
 
-function applyOpenIn(openIn) {
-  const panel = openIn === "panel";
-  chrome.action.setPopup({ popup: panel ? "" : "popup.html" });
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: panel }).catch(() => {});
+let openIn = "panel";
+const openPanels = new Map(); // windowId → the panel's port
+function applyOpenIn(value) {
+  openIn = value;
+  chrome.action.setPopup({ popup: openIn === "panel" ? "" : "popup.html" });
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
 }
+chrome.action.onClicked.addListener((tab) => {
+  if (openIn !== "panel") return;
+  const port = openPanels.get(tab.windowId);
+  if (!port) return chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {}); // right away, while the click counts
+  if (chrome.sidePanel.close) chrome.sidePanel.close({ windowId: tab.windowId }).catch(() => port.postMessage("close"));
+  else port.postMessage("close");
+});
+chrome.runtime.onConnect.addListener((port) => {
+  const m = port.name.match(/^panel:(\d+)$/);
+  if (!m) return;
+  const windowId = +m[1];
+  openPanels.set(windowId, port);
+  port.onDisconnect.addListener(() => { if (openPanels.get(windowId) === port) openPanels.delete(windowId); });
+});
 
 TT.getSettings().then((s) => applyOpenIn(s.openIn));
 chrome.storage.onChanged.addListener((changes, area) => {
