@@ -176,6 +176,9 @@ input:disabled, .seg button:disabled { opacity: .55; }
 .volume input::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
   background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.25), 0 1px 3px rgba(0,0,0,.35); }
 .volume input:disabled { opacity: .35; cursor: default; }
+[data-section="volume"] { flex-wrap: wrap; }
+[data-section="volume"] .volume { flex-basis: 0; min-width: 0; } /* the hint goes under; the slider stays beside the title */
+.volume-hint { flex-basis: 100%; margin: -10px 0 10px; color: var(--text3); font-size: 11px; }
 output { width: 38px; text-align: right; color: var(--text2); font-variant-numeric: tabular-nums; }
 
 .presets button { padding: 5px 6px; border-radius: 9px; color: var(--text); min-width: 28px; }

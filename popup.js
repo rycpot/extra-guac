@@ -1007,6 +1007,17 @@ async function initVolume(isWeb) {
     out.textContent = `${v}%`;
   };
   show(vols[tab.id] ?? 100);
+  // While the page's own media is turned down (no capture yet), the right-click item that
+  // moves the tab over to a capture is pointed out.
+  // Opening the popup from the icon counts as using Extra Guac on the tab, so such a tab
+  // moves over to a capture right away.
+  const hint = async () => {
+    const { volumePage: pages = {} } = await chrome.storage.session.get("volumePage");
+    if (!live.aborted) $("volumeHint").hidden = !pages[tab.id];
+    return !!pages[tab.id];
+  };
+  if (await hint() && inPopup && !live.aborted) send("setVolume", { volume: vols[tab.id] }).catch(() => {});
+  onStorage((c, area) => { if (area === "session" && c.volumePage) hint(); });
   let pending = 0;
   slider.oninput = () => {
     show(+slider.value);

@@ -15,6 +15,8 @@ const mediaHandlers = {
 // (its icon, a right-click item); the side panel stays open across tabs, so on a tab it
 // hasn't been used on, the page's own videos and audio are turned down instead
 // (storage.session "volumePage": { [tabId]: true }), and again after each reload.
+// Such a tab gets the right-click item "Tab volume: full control", which counts as using
+// Extra Guac there, so it moves the tab over to a capture (fullVolume).
 
 // One change at a time: the slider sends a new value every few dozen milliseconds while it's
 // dragged, and starting a capture takes longer than that. Run side by side, a second change
@@ -35,8 +37,18 @@ async function setVolumeNow(tabId, volume) {
   const { volumePage: pages = {} } = await chrome.storage.session.get("volumePage");
   const captured = tabId in vols && !pages[tabId];
   if (pages[tabId]) {
-    await pageVolume(tabId, volume / 100);
-    if (volume >= 100) { delete vols[tabId]; delete pages[tabId]; } else vols[tabId] = volume;
+    // Once Chrome lets the tab be captured (Extra Guac was used on it since), it moves over.
+    let streamId = null;
+    if (volume < 100) try { streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId }); } catch {}
+    if (streamId) {
+      await toOffscreen({ type: "volumeStart", tabId, streamId, gain: volume / 100 });
+      await pageVolume(tabId, 1);
+      delete pages[tabId];
+      vols[tabId] = volume;
+    } else {
+      await pageVolume(tabId, volume / 100);
+      if (volume >= 100) { delete vols[tabId]; delete pages[tabId]; } else vols[tabId] = volume;
+    }
     await chrome.storage.session.set({ volumePage: pages });
   } else if (volume >= 100) {
     if (captured) await toOffscreen({ type: "volumeStop", tabId }).catch(() => {});
@@ -59,7 +71,9 @@ async function setVolumeNow(tabId, volume) {
 }
 
 // The page's videos and audio, in every frame, at gain × the volume the page gave them
-// (the page's own volume control keeps working); 1 puts them back.
+// (the page's own volume control keeps working); 1 puts them back. Players inside page
+// components (shadow roots) count too: open ones are searched, and ones made later are
+// watched as they're made; any player is caught when it's told to play.
 async function pageVolume(tabId, gain) {
   await chrome.scripting.executeScript({
     target: { tabId, allFrames: true },
@@ -82,13 +96,31 @@ async function pageVolume(tabId, gain) {
         }
         set(el);
       };
-      document.querySelectorAll("video, audio").forEach(apply);
-      st.els.forEach(apply);
+      st.roots ||= new WeakSet();
+      // Media events stay inside the shadow root they happen in, so each root is watched itself.
+      const watch = (root) => {
+        if (st.roots.has(root)) return;
+        st.roots.add(root);
+        root.addEventListener("play", st.watch, true);
+        root.addEventListener("loadedmetadata", st.watch, true);
+      };
       if (!st.watch) { // media added later starts playing: caught as it plays
-        st.watch = (e) => apply(e.target);
-        document.addEventListener("play", st.watch, true);
-        document.addEventListener("loadedmetadata", st.watch, true);
+        st.watch = (e) => st.apply(e.target);
+        const attach = Element.prototype.attachShadow;
+        Element.prototype.attachShadow = function (...a) { const root = attach.apply(this, a); watch(root); return root; };
+        const play = HTMLMediaElement.prototype.play;
+        HTMLMediaElement.prototype.play = function (...a) { st.apply(this); return play.apply(this, a); };
       }
+      st.apply = apply;
+      const search = (root) => {
+        watch(root);
+        for (const el of root.querySelectorAll("*")) {
+          if (el instanceof HTMLMediaElement) apply(el);
+          if (el.shadowRoot) search(el.shadowRoot);
+        }
+      };
+      search(document);
+      st.els.forEach(apply);
     },
   }).catch(() => {});
 }
@@ -97,6 +129,28 @@ chrome.tabs.onUpdated.addListener(async (tabId, info) => {
   const { volumePage: pages = {}, volume: vols = {} } = await chrome.storage.session.get(["volumePage", "volume"]);
   if (pages[tabId] && tabId in vols) pageVolume(tabId, vols[tabId] / 100);
 });
+
+// The right-click item: a click on it lets Chrome capture the tab, so a tab whose media was
+// turned down moves over to a capture at the same volume.
+const fullVolume = (tabId) => volumeTask(async () => {
+  const { volume: vols = {}, volumePage: pages = {} } = await chrome.storage.session.get(["volume", "volumePage"]);
+  if (pages[tabId] && tabId in vols) await setVolumeNow(tabId, vols[tabId]);
+});
+
+// The item is there only while the active tab's media is being turned down. Chrome can't ask
+// while the menu opens, so it follows the active tab (like "Redirect with rules").
+function volumeMenuItem() {
+  chrome.contextMenus.create({ id: "volumeFull", title: "Tab volume: full control", contexts: ["all"], documentUrlPatterns: ["http://*/*", "https://*/*"], visible: false });
+  volumeMenuNow().catch(() => {});
+}
+async function volumeMenuNow() {
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  const { volumePage: pages = {} } = await chrome.storage.session.get("volumePage");
+  await chrome.contextMenus.update("volumeFull", { visible: !!(tab && pages[tab.id]) }).catch(() => {});
+}
+chrome.tabs.onActivated.addListener(() => { volumeMenuNow().catch(() => {}); });
+chrome.windows.onFocusChanged.addListener((w) => { if (w !== chrome.windows.WINDOW_ID_NONE) volumeMenuNow().catch(() => {}); });
+chrome.storage.onChanged.addListener((c, area) => { if (area === "session" && c.volumePage) volumeMenuNow().catch(() => {}); });
 
 const stopAllVolume = () => volumeTask(async () => {
   const { volume: vols = {}, volumePage: pages = {} } = await chrome.storage.session.get(["volume", "volumePage"]);
