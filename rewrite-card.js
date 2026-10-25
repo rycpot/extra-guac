@@ -171,30 +171,49 @@
   }
 
   // Dragged by the top bar (not its buttons or link); a double-click puts it back in the corner.
+  // The drag ends on the button's release wherever it happens (the page, another frame, outside
+  // the window), when the bar loses the pointer, when the window loses focus, and on any move
+  // with the button no longer held, so the card can never stay stuck to the pointer.
+  let endDrag = null;
   function drag(bar) {
     bar.addEventListener("pointerdown", (e) => {
       if (e.button !== 0 || e.target.closest("button, a")) return;
       e.preventDefault();
-      bar.setPointerCapture(e.pointerId);
+      endDrag?.();
+      try { bar.setPointerCapture(e.pointerId); } catch {}
       bar.classList.add("dragging");
       const from = { x: e.clientX, y: e.clientY, right: parseFloat(host.style.right), bottom: parseFloat(host.style.bottom) };
+      let moved = false;
       const move = (m) => {
+        if (m.pointerId !== e.pointerId) return;
+        if (!(m.buttons & 1)) return end();
+        moved = true;
         spot = { right: from.right - (m.clientX - from.x), bottom: from.bottom - (m.clientY - from.y) };
         place();
       };
-      const up = () => {
+      const up = (u) => { if (!u || u.pointerId === undefined || u.pointerId === e.pointerId) end(); };
+      const opts = { capture: true };
+      function end() {
+        if (endDrag !== end) return;
+        endDrag = null;
         bar.classList.remove("dragging");
-        bar.removeEventListener("pointermove", move);
-        bar.removeEventListener("pointerup", up);
-        bar.removeEventListener("pointercancel", up);
-        if (spot) {
+        removeEventListener("pointermove", move, opts);
+        removeEventListener("pointerup", up, opts);
+        removeEventListener("pointercancel", up, opts);
+        removeEventListener("blur", up, opts);
+        bar.removeEventListener("lostpointercapture", up);
+        try { bar.releasePointerCapture(e.pointerId); } catch {}
+        if (moved && spot && host) {
           spot = { right: parseFloat(host.style.right), bottom: parseFloat(host.style.bottom) };
           chrome.storage.local.set({ rewriteCardSpot: spot }).catch(() => {});
         }
-      };
-      bar.addEventListener("pointermove", move);
-      bar.addEventListener("pointerup", up);
-      bar.addEventListener("pointercancel", up);
+      }
+      endDrag = end;
+      addEventListener("pointermove", move, opts);
+      addEventListener("pointerup", up, opts);
+      addEventListener("pointercancel", up, opts);
+      addEventListener("blur", up, opts);
+      bar.addEventListener("lostpointercapture", up);
     });
     bar.addEventListener("dblclick", (e) => {
       if (e.target.closest("button, a")) return;
@@ -221,6 +240,7 @@
   }
 
   function close() {
+    endDrag?.();
     observer?.disconnect();
     removeEventListener("keydown", onKey, true);
     removeEventListener("resize", place);
