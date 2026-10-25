@@ -17,12 +17,16 @@
   let boxH = 0; // the text box's height, set once per text from the text itself (see fit)
   let spot = null; // { right, bottom } once dragged (bg-rewrite.js sends the saved one); null = the corner
   let source = "", frameId = 0, editable = false, mode = "rephrase", tone = "clearer", results = {}, busy = false;
+  // Spaces and line breaks around the text (a selection often starts or ends with a line break):
+  // not shown in the text box, so it has no blank first row, but put back around it on replace.
+  let edges = ["", ""];
   let seq = 0; // a new right-click while one is being rewritten: the old answer is dropped
 
   chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     if (msg?.type !== "egRewriteCard" || !chrome.runtime?.id) return;
     reply(true);
     source = msg.text || "";
+    edges = [source.match(/^\s*/)[0], source.match(/\s*$/)[0]];
     frameId = msg.frameId || 0;
     editable = !!msg.editable;
     mode = msg.mode === "fix" ? "fix" : "rephrase";
@@ -265,7 +269,7 @@
     render({ working: true });
     let res;
     try {
-      const r = await chrome.runtime.sendMessage({ type: "rewriteRun", text: source, mode, tone });
+      const r = await chrome.runtime.sendMessage({ type: "rewriteRun", text: source.trim(), mode, tone });
       if (!r?.ok) throw new Error(r?.error || "Something went wrong");
       res = { text: r.text };
     } catch (err) {
@@ -302,7 +306,7 @@
     ta.readOnly = !!working;
     if (working) {
       sub.textContent = mode === "fix" ? "Fixing…" : `Rephrasing · ${tone}…`;
-      if (ta.hidden || !ta.value) { ta.hidden = false; ta.value = source; fit(); }
+      if (ta.hidden || !ta.value) { ta.hidden = false; ta.value = source.trim(); fit(); }
       return;
     }
     if (error) {
@@ -314,7 +318,7 @@
     const words = text.split(/\s+/).filter(Boolean).length;
     sub.textContent = same ? "Nothing to change" : `${mode === "fix" ? "Fixed" : `Rephrased · ${tone}`} · ${words} word${words === 1 ? "" : "s"}`;
     ta.hidden = false;
-    ta.value = text;
+    ta.value = text.trim();
     ta.scrollTop = 0;
     why.textContent = editable ? "You can edit it here first." : "Selected text on the page can't be replaced; copy it instead.";
     fit();
@@ -331,8 +335,8 @@
   }
 
   async function replace() {
-    const text = root.querySelector("textarea").value;
-    const r = await chrome.runtime.sendMessage({ type: "rewriteReplace", frameId, text }).catch(() => null);
+    const text = root.querySelector("textarea").value.trim();
+    const r = await chrome.runtime.sendMessage({ type: "rewriteReplace", frameId, text: edges[0] + text + edges[1] }).catch(() => null);
     if (r?.ok && r.done) return close();
     // The field is gone or its text changed meanwhile: copied instead, to paste by hand.
     const c = await chrome.runtime.sendMessage({ type: "rewriteCopy", text }).catch(() => null);
