@@ -1,4 +1,4 @@
-// Rewrite text card, at the bottom-right of the page like the text from image card (and just
+// Polish text card, at the bottom-right of the page like the text from image card (and just
 // above the image zoom controls when they're showing). Injected by bg-rewrite.js with the text
 // that was right-clicked; asks the background worker to rewrite it ("rewriteRun"). "fix"
 // corrects mistakes only; "rephrase" rewrites it in the tone picked below it. Each result is
@@ -11,7 +11,7 @@
   const GAP = 16;
   const TONES = ["clearer", "shorter", "friendly", "formal", "casual"];
   let host = null, root = null, observer = null;
-  let source = "", frameId = 0, editable = false, mode = "fix", tone = "clearer", results = {}, busy = false;
+  let source = "", frameId = 0, editable = false, mode = "rephrase", tone = "clearer", results = {}, busy = false;
   let seq = 0; // a new right-click while one is being rewritten: the old answer is dropped
 
   chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
@@ -20,12 +20,13 @@
     source = msg.text || "";
     frameId = msg.frameId || 0;
     editable = !!msg.editable;
-    mode = msg.mode === "rephrase" ? "rephrase" : "fix";
+    mode = msg.mode === "fix" ? "fix" : "rephrase";
     tone = TONES.includes(msg.tone) ? msg.tone : "clearer";
     results = {};
     busy = false;
     seq++;
     show();
+    root.querySelector("textarea").value = "";
     if (msg.error) return render({ error: msg.error });
     run();
   });
@@ -56,8 +57,11 @@
           .sub { color: rgba(255,255,255,.6); font-weight: 400; font-size: 10.5px; }
           .err { color: #ff8a80; white-space: normal; }
           .btns { display: flex; align-items: center; gap: 2px; flex: none; }
-          .by { margin-right: 6px; color: rgba(255,255,255,.55); font-weight: 400; font-size: 10.5px; text-decoration: none; white-space: nowrap; }
-          .by:hover { text-decoration: underline; }
+          /* "Powered by groq", with its wordmark, in Groq's own orange-red. */
+          .by { display: flex; align-items: center; gap: 5px; margin-right: 6px; color: rgba(255,255,255,.55); font-weight: 400;
+            font-size: 10.5px; text-decoration: none; white-space: nowrap; }
+          .by:hover { color: rgba(255,255,255,.8); }
+          .by svg.groq { width: 27.4px; height: 10px; fill: none; stroke: #f55036; stroke-width: 58; stroke-linecap: butt; stroke-linejoin: miter; }
           button { all: unset; height: 26px; min-width: 26px; display: grid; place-items: center; border-radius: 8px; cursor: pointer; }
           button:hover { background: rgba(255,255,255,.12); }
           button[disabled] { opacity: .4; cursor: default; background: none; }
@@ -69,7 +73,8 @@
             background: rgba(255,255,255,.06); color: rgba(255,255,255,.95); font: 400 13px/1.5 system-ui, sans-serif;
             white-space: pre-wrap; overflow-wrap: anywhere; overflow-y: auto; resize: none; cursor: text; }
           textarea:focus { outline: 1px solid rgba(255,255,255,.3); }
-          .foot { display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,.6); font-weight: 400; font-size: 10.5px; }
+          textarea.dim { color: rgba(255,255,255,.4); cursor: default; }
+          .foot { min-height: 26px; display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,.6); font-weight: 400; font-size: 10.5px; }
           .foot .why { flex: 1; min-width: 0; }
           .foot button { height: 26px; padding: 0 12px; font: 600 11.5px system-ui, sans-serif; }
           .replace { background: #3fa34d; color: #fff; }
@@ -83,11 +88,12 @@
           @keyframes spin { to { transform: rotate(360deg); } }
           [hidden] { display: none !important; }
         </style>
-        <div class="card" role="dialog" aria-label="Rewrite">
+        <div class="card" role="dialog" aria-label="Polish text">
           <div class="head">
-            <div class="titles"><div class="main">Rewrite</div><div class="sub"></div></div>
+            <div class="titles"><div class="main">Polish text</div><div class="sub"></div></div>
             <div class="btns">
-              <a class="by" href="https://console.groq.com/keys" target="_blank" rel="noopener" title="Groq rewrites the text, with your own free key">via Groq</a>
+              <a class="by" href="https://console.groq.com/keys" target="_blank" rel="noopener" title="Groq polishes the text, with your own free key">Powered by
+                <svg class="groq" viewBox="0 0 1280 468" role="img" aria-label="groq"><path d="M306 305V163A125 125 0 1 0 180 288H232M306 305A125 125 0 0 1 91.6 393.4M408 312V163A125 125 0 0 1 595.5 54.7M1226 450V163A125 125 0 1 0 1102 288H1155"/><circle cx="762" cy="163" r="125"/></svg></a>
               <i class="spin" hidden></i>
               <button class="again" title="Ask again">${svg("again")}</button>
               <button class="copy" title="Copy the text">${svg("copy")}</button>
@@ -95,9 +101,9 @@
             </div>
           </div>
           <div class="modes">
-            <div class="seg mode" role="group" aria-label="Rewrite mode">
-              <button data-mode="fix" title="Fix spelling, grammar and punctuation only">fix</button>
+            <div class="seg mode" role="group" aria-label="Mode">
               <button data-mode="rephrase" title="Rewrite it to read better, in the tone picked">rephrase</button>
+              <button data-mode="fix" title="Fix spelling, grammar and punctuation only">fix</button>
             </div>
             <div class="seg tone" role="group" aria-label="Tone">
               ${TONES.map((t) => `<button data-tone="${t}">${t}</button>`).join("")}
@@ -206,13 +212,18 @@
       b.setAttribute("aria-pressed", String(b.dataset.tone === tone));
       b.disabled = !!working;
     }
-    root.querySelector(".tone").hidden = mode !== "rephrase";
+    // Kept in place on fix (only not shown), so a narrow card where the tones wrap keeps its height.
+    root.querySelector(".tone").style.visibility = mode === "rephrase" ? "" : "hidden";
     root.querySelector(".modes").hidden = !source;
     sub.classList.toggle("err", !!error);
     why.textContent = "";
+    // While it's working the text box stays at its size, dimmed (the text being polished the
+    // first time, the last result after), so the card doesn't shrink and grow back.
+    ta.classList.toggle("dim", !!working);
+    ta.readOnly = !!working;
     if (working) {
       sub.textContent = mode === "fix" ? "Fixing…" : `Rephrasing · ${tone}…`;
-      ta.hidden = true;
+      if (ta.hidden || !ta.value) { ta.hidden = false; ta.value = source; fit(); }
       return;
     }
     if (error) {

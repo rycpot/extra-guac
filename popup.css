@@ -169,6 +169,7 @@ input:disabled, .seg button:disabled { opacity: .55; }
 #shortCount.limit { color: var(--red); }
 #shortCount.two { white-space: normal; font-size: 9.5px; line-height: 1.12; text-align: right; }
 #shortCount .warn { color: var(--yellow); }
+#rewriteHint { white-space: nowrap; }
 #rewriteHint.warn { color: var(--yellow); }
 
 /* Tab volume: the slider across the section, under it four levels, 100% and mute side by side. */

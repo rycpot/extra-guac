@@ -691,7 +691,7 @@
     }
   }
 
-  // ---- Rewrite text: check the Groq key ----
+  // ---- Polish text: check the Groq key ----
 
   // Checked by itself a moment after a key is pasted or typed, like the OCR.space key; a key
   // Groq refuses turns the field red.

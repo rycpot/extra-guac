@@ -2041,15 +2041,17 @@ function initImgZoom() {
   $("imgMod").querySelectorAll("button").forEach((b) => (b.onclick = () => TT.updateSettings({ imgZoom: { modifier: b.dataset.mod } }).catch(fail)));
 }
 
-// ---- Rewrite text ----
+// ---- Polish text ----
 
-// The switch puts "Rewrite" in the right-click menu (bg-rewrite.js); it needs a Groq key.
+// The switch puts "Polish text" in the right-click menu (bg-rewrite.js); it needs a Groq key.
 function initRewrite() {
   async function render() {
     const { rewrite } = await TT.getSettings();
     setSwitch($("rewriteToggle"), rewrite.menu);
     const hint = $("rewriteHint");
-    hint.textContent = !rewrite.menu ? "" : rewrite.key.trim() ? "right-click selected text → Rewrite" : "add your free Groq key in settings";
+    // Always one line, on or off, so the switch never moves.
+    hint.textContent = !rewrite.menu ? "fix or rephrase text you select" : rewrite.key.trim() ? "right-click selected text → Polish text" : "add your free Groq key in settings";
+    hint.title = hint.textContent;
     hint.classList.toggle("warn", rewrite.menu && !rewrite.key.trim());
   }
   render();

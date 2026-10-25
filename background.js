@@ -107,7 +107,7 @@ function syncMenus(s) {
     }
     // QR codes (bg-qr.js): this page, a link, the selected text.
     qrMenuItems(s);
-    // Rewrite text (bg-rewrite.js): selected text and text fields, while it's switched on.
+    // Polish text (bg-rewrite.js): selected text and text fields, while it's switched on.
     rewriteMenuItem(s);
     // Tab volume (bg-media.js): gives the side panel's slider the tab, while its switch is on.
     volumeMenuItem();
