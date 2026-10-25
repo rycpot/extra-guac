@@ -18,6 +18,8 @@ const REWRITE_TONES = {
   formal: "Make it formal and professional.",
   casual: "Make it relaxed and casual.",
 };
+// The languages the model is best in (Llama 3.3's own list); others work, less reliably.
+const REWRITE_BEST = ["en", "es", "fr", "de", "it", "pt", "hi", "th"];
 const REWRITE_NO_KEY = "Add your free Groq key in settings → polish text";
 
 function rewritePrompt(mode, tone) {
@@ -68,8 +70,23 @@ async function onRewriteMenu(info, tab) {
   if (!msg.text && info.selectionText) Object.assign(msg, { text: info.selectionText, editable: false });
   if (!msg.text?.trim()) msg.error = "Select some text first, or right-click in a text field that has some";
   else if (!(rewrite.key || "").trim()) msg.error = REWRITE_NO_KEY;
+  else msg.lang = await rewriteOtherLanguage(msg.text);
   await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["rewrite-card.js"] });
   await chrome.tabs.sendMessage(tab.id, msg, { frameId: 0 });
+}
+
+// The text's language when Chrome's own detector (on this computer, nothing is sent) is sure it's
+// one the model isn't best in, for a note on the card; else "".
+async function rewriteOtherLanguage(text) {
+  try {
+    const { isReliable, languages = [] } = await chrome.i18n.detectLanguage(text.slice(0, 2000));
+    const top = languages[0];
+    const code = String(top?.language || "").toLowerCase().split("-")[0];
+    if (!isReliable || !code || code === "und" || (top.percentage ?? 0) < 60 || REWRITE_BEST.includes(code)) return "";
+    return top.language;
+  } catch {
+    return "";
+  }
 }
 
 // The right-click menu item, while it's switched on (syncMenus in background.js).

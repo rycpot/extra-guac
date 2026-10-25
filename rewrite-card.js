@@ -20,12 +20,14 @@
   // Spaces and line breaks around the text (a selection often starts or ends with a line break):
   // not shown in the text box, so it has no blank first row, but put back around it on replace.
   let edges = ["", ""];
+  let lang = ""; // the text's language when it isn't one of the model's best (bg-rewrite.js)
   let seq = 0; // a new right-click while one is being rewritten: the old answer is dropped
 
   chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     if (msg?.type !== "egRewriteCard" || !chrome.runtime?.id) return;
     reply(true);
     source = msg.text || "";
+    lang = msg.lang || "";
     edges = [source.match(/^\s*/)[0], source.match(/\s*$/)[0]];
     frameId = msg.frameId || 0;
     editable = !!msg.editable;
@@ -88,7 +90,8 @@
           textarea:focus { outline: 1px solid rgba(255,255,255,.3); }
           textarea.dim { color: rgba(255,255,255,.4); cursor: default; }
           .foot { min-height: 26px; display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,.6); font-weight: 400; font-size: 10.5px; }
-          .foot .why { flex: 1; min-width: 0; }
+          .foot .why { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+          .foot .why.lang { color: #ffd60a; }
           .foot button { height: 26px; padding: 0 12px; font: 600 11.5px system-ui, sans-serif; }
           .replace { background: #3fa34d; color: #fff; }
           .replace:hover { background: #4bb85a; }
@@ -299,7 +302,11 @@
     root.querySelector(".tone").style.visibility = mode === "rephrase" ? "" : "hidden";
     root.querySelector(".modes").hidden = !source;
     sub.classList.toggle("err", !!error);
-    why.textContent = "";
+    // A language the model isn't best in: said on this line the whole time (it's still polished).
+    const note = langNote();
+    why.classList.toggle("lang", !!note);
+    why.textContent = note;
+    why.title = note;
     // While it's working the text box stays at its size, dimmed (the text being polished the
     // first time, the last result after), so the card doesn't shrink and grow back.
     ta.classList.toggle("dim", !!working);
@@ -320,8 +327,15 @@
     ta.hidden = false;
     ta.value = text.trim();
     ta.scrollTop = 0;
-    why.textContent = editable ? "You can edit it here first." : "Selected text on the page can't be replaced; copy it instead.";
+    if (!note) why.textContent = editable ? "You can edit it here first." : "Selected text on the page can't be replaced; copy it instead.";
     fit();
+  }
+
+  function langNote() {
+    if (!lang) return "";
+    let name = lang;
+    try { name = new Intl.DisplayNames(["en"], { type: "language" }).of(lang) || lang; } catch {}
+    return `${name} isn't one of the best-supported languages; results may be less reliable.`;
   }
 
   async function copy() {
