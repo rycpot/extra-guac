@@ -205,6 +205,7 @@ async function groqFetch(key, path, json) {
     throw new Error(err.name === "TimeoutError" ? "Groq took too long to answer; try again" : "Couldn't reach Groq");
   }
   const raw = await res.text();
+  if (res.status !== 401) groqLimits(res, key).catch(() => {});
   let body = null;
   try { body = JSON.parse(raw); } catch {}
   const said = (body?.error?.message || raw.trim().slice(0, 200) || `HTTP ${res.status}`).replace(/\s+/g, " ");
@@ -218,4 +219,23 @@ async function groqFetch(key, path, json) {
   if (res.status === 413 || code === "context_length_exceeded") throw new Error("That's too much text at once; select less");
   if (!res.ok || !body) throw new Error(`Groq: ${said}`);
   return body;
+}
+
+// Groq has no way to ask how much of the free plan is used, but each answer says how many
+// requests are left today, of how many, and when that resets (x-ratelimit-*-requests). Kept in
+// storage.local "rewriteLimits" for settings → polish text: { left, limit, resets, at, key }
+// (key: the key's last 4 characters, so another key's count isn't shown for it).
+async function groqLimits(res, key) {
+  const h = (n) => res.headers.get(n);
+  const left = Number(h("x-ratelimit-remaining-requests") ?? NaN), limit = Number(h("x-ratelimit-limit-requests") ?? NaN);
+  if (!(limit > 0) || !(left >= 0)) return;
+  const resets = Date.now() + groqDuration(h("x-ratelimit-reset-requests"));
+  await chrome.storage.local.set({ rewriteLimits: { left, limit, resets, at: Date.now(), key: key.slice(-4) } });
+}
+
+// "2m59.56s", "7.66s", "1h2m3s", "120ms" → milliseconds (0 when it can't be read).
+function groqDuration(v) {
+  let ms = 0;
+  for (const [, n, unit] of String(v || "").matchAll(/([\d.]+)(ms|h|m|s)/g)) ms += +n * { ms: 1, s: 1e3, m: 6e4, h: 36e5 }[unit];
+  return ms;
 }

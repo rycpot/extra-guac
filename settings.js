@@ -711,6 +711,27 @@
     });
     $("rewriteCheck").onclick = check;
     if (!$("rewriteKey").value.trim()) say(noKey);
+    // How many requests are left today, from Groq's last answer to this key.
+    async function left() {
+      const { rewriteLimits: l } = await chrome.storage.local.get("rewriteLimits");
+      const key = $("rewriteKey").value.trim();
+      const box = $("rewriteLeft");
+      box.hidden = !l || !key || l.key !== key.slice(-4);
+      if (box.hidden) return;
+      const n = (v) => v.toLocaleString("en-US");
+      const over = l.resets && l.resets <= Date.now();
+      const ago = Math.round((Date.now() - l.at) / 60000);
+      box.textContent = over ? `All ${n(l.limit)} requests a day are available again (the daily count has reset).`
+        : `${n(l.left)} of ${n(l.limit)} requests left today${l.resets ? `, resets in ${span(l.resets - Date.now())}` : ""}. As of your last polish${ago >= 1 ? ` ${span(ago * 60000)} ago` : ", just now"}.`;
+    }
+    const span = (ms) => {
+      const min = Math.max(1, Math.round(ms / 60000));
+      return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60} min` : ""}`;
+    };
+    left();
+    setInterval(left, 60000);
+    chrome.storage.onChanged.addListener((c, area) => area === "local" && (c.rewriteLimits || c.tt) && left());
+    $("rewriteKey").addEventListener("input", left);
     async function check() {
       clearTimeout(timer);
       const run = typed;
