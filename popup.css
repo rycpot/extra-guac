@@ -170,15 +170,22 @@ input:disabled, .seg button:disabled { opacity: .55; }
 #shortCount.two { white-space: normal; font-size: 9.5px; line-height: 1.12; text-align: right; }
 #shortCount .warn { color: var(--yellow); }
 
-.volume { flex: 1; justify-content: flex-end; gap: 10px; }
-.volume input { width: 170px; -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; cursor: pointer;
+/* Tab volume: the slider across the section, under it four levels and mute side by side. */
+.volume-controls > input { display: block; width: 100%; margin: 4px 0 12px; -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; cursor: pointer;
   background: linear-gradient(to right, var(--text2) var(--fill, 100%), var(--switch-off) var(--fill, 100%)); }
-.volume input::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+.volume-controls > input::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
   background: #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.25), 0 1px 3px rgba(0,0,0,.35); }
-.volume input:disabled { opacity: .35; cursor: default; }
-[data-section="volume"] { flex-wrap: wrap; }
-[data-section="volume"] .volume { flex-basis: 0; min-width: 0; } /* the hint goes under; the slider stays beside the title */
-.volume-hint { flex-basis: 100%; margin: -10px 0 10px; color: var(--text3); font-size: 11px; }
+.volume-presets { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.volume-presets button, .volume-presets input { height: 28px; padding: 0; border-radius: 9px; background: var(--row); color: var(--text); font: inherit; font-variant-numeric: tabular-nums; }
+.volume-presets button:hover { background: var(--hover); }
+.volume-presets button.active { color: var(--yellow); background: color-mix(in srgb, var(--yellow) 14%, transparent); }
+.volume-presets #volumeMute.active { color: var(--red); background: color-mix(in srgb, var(--red) 14%, transparent); }
+.volume-presets input { width: 100%; min-width: 0; text-align: center; border: 1px solid var(--stroke); outline: none; -moz-appearance: textfield; }
+.volume-presets input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.volume-controls > input:disabled, .volume-presets button:disabled { opacity: .35; cursor: default; }
+.volume-presets button:disabled:hover { background: var(--row); }
+.volume-hint { color: var(--text3); font-size: 11.5px; line-height: 1.4; }
+.volume-hint b { color: var(--text2); font-weight: 500; white-space: nowrap; }
 output { width: 38px; text-align: right; color: var(--text2); font-variant-numeric: tabular-nums; }
 
 .presets button { padding: 5px 6px; border-radius: 9px; color: var(--text); min-width: 28px; }

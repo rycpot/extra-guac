@@ -994,36 +994,123 @@ async function copy(text, message = "Copied") {
 
 // ---- Tab volume -------------------------------------------------------------
 
+// The popup always has the tab (opening it from the icon counts as using Extra Guac there).
+// The side panel stays open across tabs, so it asks: on a tab it can't change yet, the section
+// shows a switch, which adds "Activate volume controls" to that tab's right-click menu; once
+// that's clicked, the slider and buttons show.
 async function initVolume(isWeb) {
   const slider = $("volume");
   const out = $("volumeOut");
+  const sw = $("volumeSwitch");
   const live = scope.signal;
-  slider.disabled = !isWeb;
-  const { volume: vols = {} } = await chrome.storage.session.get("volume");
-  if (live.aborted) return;
+  const levels = [...$("volumePresets").querySelectorAll("button[data-i]")];
+  const mute = $("volumeMute");
+  for (const el of [slider, ...levels, mute]) el.disabled = !isWeb;
+  let level = 100;
   const show = (v) => {
+    level = v;
     slider.value = v;
     slider.style.setProperty("--fill", `${v}%`);
     out.textContent = `${v}%`;
+    const { presets } = settings.volume;
+    levels.forEach((b, i) => {
+      b.textContent = `${presets[i]}%`;
+      b.dataset.v = presets[i];
+      b.classList.toggle("active", presets[i] === v);
+    });
+    mute.textContent = v === 0 ? "unmute" : "mute";
+    mute.classList.toggle("active", v === 0);
   };
-  show(vols[tab.id] ?? 100);
-  // While the page's own media is turned down (no capture yet), the right-click item that
-  // moves the tab over to a capture is pointed out.
-  // Opening the popup from the icon counts as using Extra Guac on the tab, so such a tab
-  // moves over to a capture right away.
-  const hint = async () => {
-    const { volumePage: pages = {} } = await chrome.storage.session.get("volumePage");
-    if (!live.aborted) $("volumeHint").hidden = !pages[tab.id];
-    return !!pages[tab.id];
+  // "controls": the slider and buttons; "switch": off, or on with where to click.
+  const mode = (m, armed = false) => {
+    $("volumeControls").hidden = m !== "controls";
+    out.hidden = m !== "controls";
+    sw.hidden = m !== "switch";
+    setSwitch(sw, armed);
+    $("volumeHint").hidden = m !== "switch" || !armed;
   };
-  if (await hint() && inPopup && !live.aborted) send("setVolume", { volume: vols[tab.id] }).catch(() => {});
-  onStorage((c, area) => { if (area === "session" && c.volumePage) hint(); });
+  const session = () => chrome.storage.session.get(["volume", "volumeArmed"]);
+  const check = async () => {
+    const [{ volume: vols = {}, volumeArmed: armed = {} }, access] = await Promise.all([
+      session(),
+      inPopup || !isWeb ? true : send("volumeAccess").then((r) => r.access, () => false),
+    ]);
+    if (live.aborted) return;
+    show(vols[tab.id] ?? 100);
+    if (access) {
+      mode("controls");
+      if (armed[tab.id]) send("volumeArm", { on: false }).catch(() => {});
+    } else mode("switch", !!armed[tab.id]);
+  };
+  mode(inPopup || !isWeb ? "controls" : ""); // the side panel shows what it asked
+  await check();
+
+  // While the slider is dragged, the levels saved behind it would pull it back: left out.
+  let dragged = 0;
+  onStorage((c, area) => {
+    if (area === "session" && c.volume && Date.now() - dragged > 600) show(c.volume.newValue?.[tab.id] ?? 100);
+    if (area === "session" && c.volumeArmed && !sw.hidden) mode("switch", !!c.volumeArmed.newValue?.[tab.id]);
+    if (area === "session" && c.volumeGrant?.newValue?.tabId === tab.id) check();
+    if (area === "local" && c.tt) { settings = TT.merge(TT.DEFAULTS, c.tt.newValue); show(level); }
+  });
+  sw.onclick = () => {
+    const on = sw.getAttribute("aria-checked") !== "true";
+    mode("switch", on);
+    send("volumeArm", { on }).catch(fail);
+  };
+  // A change Chrome refuses (the tab went to another page since): back to the switch, on.
+  const set = (type, payload) => send(type, payload).catch(async (err) => {
+    await check();
+    if (!$("volumeControls").hidden) return fail(err);
+    mode("switch", true);
+    send("volumeArm", { on: true }).catch(() => {});
+  });
   let pending = 0;
   slider.oninput = () => {
+    dragged = Date.now();
     show(+slider.value);
     clearTimeout(pending);
-    pending = setTimeout(() => send("setVolume", { volume: +slider.value }).catch(fail), 40);
+    pending = setTimeout(() => set("setVolume", { volume: +slider.value }), 40);
   };
+  levels.forEach((b) => {
+    b.onclick = () => set("setVolume", { volume: +b.dataset.v });
+    b.ondblclick = () => editPreset(b, +b.dataset.i, (old, v) => level === old && set("setVolume", { volume: v }));
+  });
+  mute.onclick = () => set("volumeMute");
+}
+
+// Double-click a level to type another in its place (1 to 99): Enter or clicking away keeps it,
+// Esc leaves it as it was. The tab already at the old level moves to the new one (done()).
+function editPreset(button, i, done) {
+  const old = +button.dataset.v;
+  const input = document.createElement("input");
+  input.type = "number";
+  input.min = 1;
+  input.max = 99;
+  input.value = old;
+  input.setAttribute("aria-label", "Volume level");
+  button.hidden = true;
+  button.after(input);
+  input.focus();
+  input.select();
+  let finished = false;
+  const finish = async (keep) => {
+    if (finished) return;
+    finished = true;
+    const v = Math.round(+input.value);
+    input.remove();
+    button.hidden = false;
+    if (!keep || !(v >= 1 && v <= 99) || v === old) return;
+    const presets = [...settings.volume.presets];
+    presets[i] = v;
+    await TT.updateSettings({ volume: { presets } }).catch(fail);
+    done(old, v);
+  };
+  input.onkeydown = (e) => {
+    if (e.key === "Enter") finish(true);
+    if (e.key === "Escape") { e.preventDefault(); finish(false); }
+  };
+  input.onblur = () => finish(true);
 }
 
 // ---- Keep awake -------------------------------------------------------------

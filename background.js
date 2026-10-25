@@ -108,7 +108,7 @@ function syncMenus(s) {
     }
     // QR codes (bg-qr.js): this page, a link, the selected text.
     qrMenuItems(s);
-    // Tab volume (bg-media.js): moves a tab whose media is turned down over to a capture.
+    // Tab volume (bg-media.js): gives the side panel's slider the tab, while its switch is on.
     volumeMenuItem();
     // Userscripts that run from the right-click menu (bg-userscripts.js).
     await usContextItems().catch((err) => console.error("[userscripts] menu", err));
@@ -157,7 +157,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === "redirect") return runManualRedirect(tab);
   if (String(info.menuItemId).startsWith("clippin:")) return onClipMenu(info, tab);
   if (info.menuItemId === "imgControls") return onImgControlsMenu(info, tab);
-  if (info.menuItemId === "volumeFull") return fullVolume(tab.id).catch(() => {});
+  if (info.menuItemId === "volumeActivate") return activateVolume(tab.id).catch(() => {});
   if (String(info.menuItemId).startsWith("qr:")) return onQrMenu(info, tab);
   if (String(info.menuItemId).startsWith("us:")) return usContextRun(info, tab).catch((err) => console.error("[userscripts] menu", err));
   const m = String(info.menuItemId).match(/^upload:(\w+)$/);

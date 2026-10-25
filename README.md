@@ -28,7 +28,7 @@ A Chrome extension. Click its icon to open the side panel (or a popup, in settin
 | **Auto-refresh** | Reloads a tab on a fixed or random timer. Optionally watches for your keywords and alerts you when they appear. |
 | **URL shorten** | Shortens the tab's address with x.gd, spoo.me or dub.sh, copied right away. x.gd and spoo.me work without a key. |
 | **QR code** | A code for the page, a link, text, a phone number or an email, in Extra Guac's avocado look. Static, or dynamic so you can change where it points later. Add your own icon in the middle. |
-| **Tab volume** | Turns one noisy tab down, from 0 to 100%. |
+| **Tab volume** | Turns one noisy tab down, from 0 to 100%, with four quick levels (double-click one to change it) and mute. In the side panel, a switch adds "Activate volume controls" to that tab's right-click menu when Chrome needs it. |
 | **Proxy** | Opens the sites you pick through your own Webshare proxies, in the country you choose. A site can also be given by its name alone, for every real domain ending (google covers google.com, google.co.uk and google.es), for sites that change their ending or have one per country. Free plan: 20 sites and 1 GB a month; paid plans can send every site but a skip list. WebRTC is turned off on proxied sites, so they can't see your own address, and they see the proxy's place: a location in its country, its time zone and its language (each can be switched off). |
 | **Awake** | Keeps the screen on for a set time, or until you stop it. |
 | **Highlight words** | Neon marks for your words, on every site or per site. Several sites can share one list. |

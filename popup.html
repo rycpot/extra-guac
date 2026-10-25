@@ -229,13 +229,25 @@
       </div>
     </section>
 
-    <section data-section="volume" class="row">
-      <div class="label"><svg><use href="#i-volume"/></svg>tab volume</div>
-      <div class="actions volume">
-        <input type="range" id="volume" min="0" max="100" step="1" value="100" aria-label="Tab volume">
-        <output id="volumeOut">100%</output>
+    <section data-section="volume" class="block" id="volumeRow">
+      <div class="row tight">
+        <div class="label"><svg><use href="#i-volume"/></svg>tab volume</div>
+        <div class="actions">
+          <output id="volumeOut">100%</output>
+          <button class="switch" id="volumeSwitch" role="switch" aria-checked="false" aria-label="Tab volume on this tab" hidden></button>
+        </div>
       </div>
-      <div class="volume-hint" id="volumeHint" hidden>Volume control not working? Try right-click › Tab volume: full control</div>
+      <div class="volume-hint" id="volumeHint" hidden>Right-click on the page and select <b>Activate volume controls</b></div>
+      <div class="volume-controls" id="volumeControls">
+        <input type="range" id="volume" min="0" max="100" step="1" value="100" aria-label="Tab volume">
+        <div class="volume-presets" id="volumePresets">
+          <button data-i="0" title="Double-click to change"></button>
+          <button data-i="1" title="Double-click to change"></button>
+          <button data-i="2" title="Double-click to change"></button>
+          <button data-i="3" title="Double-click to change"></button>
+          <button id="volumeMute">mute</button>
+        </div>
+      </div>
     </section>
 
     <section data-section="proxy" class="block" id="proxyRow">

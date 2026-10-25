@@ -34,6 +34,8 @@
       analytics: { xgd: false }, // x.gd with your key: record visits (anyone can see them, adding "+" to the link)
     },
     awake: { lastAmount: 45, lastUnit: "min" },
+    // Tab volume: the four levels on its buttons (beside mute), each changed by double-clicking it.
+    volume: { presets: [1, 5, 25, 50] },
     picker: { selectorFormat: "css" }, // "css" | "xpath"
     // Rules: { domain, find, replace, auto, on }. Auto rules redirect on navigation;
     // manual ones run from the page's right-click menu.
