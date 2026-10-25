@@ -44,6 +44,7 @@
     initNewTab();
     initFocus();
     initOcr();
+    initRewrite();
     initProxy();
     initBackup();
     initLayout();
@@ -686,6 +687,47 @@
           : `couldn't check the key · ${err.message.replace(/\. Check it in settings.*$/, "")}`, "bad", refused);
       } finally {
         $("ocrCheck").disabled = false;
+      }
+    }
+  }
+
+  // ---- Rewrite text: check the Groq key ----
+
+  // Checked by itself a moment after a key is pasted or typed, like the OCR.space key; a key
+  // Groq refuses turns the field red.
+  function initRewrite() {
+    const say = (text, look = "", refused = false) => {
+      $("rewriteState").textContent = text;
+      $("rewriteState").className = `hint ${look === "ok" ? "x02-ok" : look}`;
+      $("rewriteKey").classList.toggle("key-bad", refused);
+    };
+    const noKey = "no key · rewrite needs yours";
+    let timer = 0, typed = 0;
+    $("rewriteKey").addEventListener("input", () => {
+      clearTimeout(timer);
+      typed++;
+      if (!$("rewriteKey").value.trim()) return say(noKey);
+      timer = setTimeout(check, 900);
+    });
+    $("rewriteCheck").onclick = check;
+    if (!$("rewriteKey").value.trim()) say(noKey);
+    async function check() {
+      clearTimeout(timer);
+      const run = typed;
+      const key = $("rewriteKey").value.trim();
+      if (!key) return say(noKey, "bad");
+      say("checking…");
+      $("rewriteCheck").disabled = true;
+      try {
+        const res = await chrome.runtime.sendMessage({ type: "rewriteTest", key });
+        if (!res?.ok) throw new Error(res?.error || "Something went wrong");
+        if (run === typed) say(`✓ key accepted · ${res.model}`, "ok");
+      } catch (err) {
+        const refused = /refused the key/.test(err.message);
+        if (run === typed) say(refused ? "✕ key not accepted · text can't be rewritten until it's fixed"
+          : `couldn't check the key · ${err.message}`, "bad", refused);
+      } finally {
+        $("rewriteCheck").disabled = false;
       }
     }
   }

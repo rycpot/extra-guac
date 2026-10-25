@@ -72,6 +72,10 @@
     // apipro1/apipro2.ocr.space, or endpoint if the welcome email names another; 5 MB per
     // image). Checking the key in settings finds its plan (ocrKeyPlan in bg-ocr.js).
     ocr: { key: "", engine: "2", plan: "free", endpoint: "" },
+    // Rewrite text (bg-rewrite.js, rewrite-card.js): "Rewrite" in the right-click menu on
+    // selected text and in text fields while menu is on; key = your free Groq key; mode
+    // "fix" | "rephrase" and tone, the card's last choice.
+    rewrite: { menu: false, key: "", mode: "fix", tone: "clearer" },
     // Userscripts (bg-userscripts.js): on for all, how often to look for updates (hours, 0 =
     // never), and whether an update that asks for more access waits for an OK.
     us: { enabled: false, interval: 24, ask: true },
@@ -79,7 +83,7 @@
     // general → tools layout). The fourth tab (backup) is fixed.
     layout: {
       tools: ["screenshot", "ocr", "blur", "scratch", "dark", "refresh", "autoRefresh", "shortener", "qr", "volume", "proxy", "awake", "highlight", "clipboard"],
-      page: ["imgzoom", "imgdl", "upload", "color", "font", "element", "remove", "newTab", "redirect", "focus", "unlock"],
+      page: ["imgzoom", "imgdl", "upload", "color", "font", "element", "remove", "newTab", "redirect", "focus", "unlock", "rewrite"],
       extra: ["sessions", "userscripts", "wordsearch"],
     },
   };
@@ -89,7 +93,7 @@
   const SECTIONS = {
     screenshot: "screenshot", blur: "privacy blur", scratch: "scratch pads", dark: "dark mode", refresh: "refresh", autoRefresh: "auto-refresh",
     shortener: "URL shorten", qr: "QR code", volume: "tab volume", proxy: "proxy", awake: "awake", color: "what color?", element: "what element?",
-    font: "what font?", remove: "remove elements", highlight: "highlight words", imgzoom: "zoom & rotate images", imgdl: "save images on click", clipboard: "clipboard history", redirect: "URL auto redirect", upload: "upload images", unlock: "enable copy & right-click", ocr: "text from image", newTab: "open other site urls in new tab", focus: "refresh on focus",
+    font: "what font?", remove: "remove elements", highlight: "highlight words", imgzoom: "zoom & rotate images", imgdl: "save images on click", clipboard: "clipboard history", redirect: "URL auto redirect", upload: "upload images", unlock: "enable copy & right-click", ocr: "text from image", rewrite: "rewrite text", newTab: "open other site urls in new tab", focus: "refresh on focus",
     sessions: "session switch", userscripts: "userscripts", wordsearch: "word search",
   };
 

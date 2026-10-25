@@ -1,7 +1,7 @@
 importScripts(
   "pii-rules.js", "shared.js", "endings.js", "warp/places.js", "redirect-rules.js", "pad-store.js", "shot-store.js", "upload-thumbs.js",
   "bg-capture.js", "bg-refresh.js", "bg-shortener.js", "bg-media.js", "bg-pickers.js", "bg-redirect.js", "bg-upload.js",
-  "bg-remove.js", "bg-dark.js", "bg-backup.js", "bg-dropbox.js", "bg-highlight.js", "bg-clip.js", "bg-imgzoom.js", "bg-imgdl.js", "bg-unlock.js", "bg-ocr.js", "bg-newtab.js", "bg-focus.js", "bg-qr.js", "bg-proxy.js", "bg-sessions.js",
+  "bg-remove.js", "bg-dark.js", "bg-backup.js", "bg-dropbox.js", "bg-highlight.js", "bg-clip.js", "bg-imgzoom.js", "bg-imgdl.js", "bg-unlock.js", "bg-ocr.js", "bg-rewrite.js", "bg-newtab.js", "bg-focus.js", "bg-qr.js", "bg-proxy.js", "bg-sessions.js",
   "us-meta.js", "us-gm.js", "bg-userscripts.js",
 );
 
@@ -46,6 +46,7 @@ const handlers = {
   ...imgDlHandlers,
   ...unlockHandlers,
   ...ocrHandlers,
+  ...rewriteHandlers,
   ...newTabHandlers,
   ...qrHandlers,
   ...proxyHandlers,
@@ -106,6 +107,8 @@ function syncMenus(s) {
     }
     // QR codes (bg-qr.js): this page, a link, the selected text.
     qrMenuItems(s);
+    // Rewrite text (bg-rewrite.js): selected text and text fields, while it's switched on.
+    rewriteMenuItem(s);
     // Tab volume (bg-media.js): gives the side panel's slider the tab, while its switch is on.
     volumeMenuItem();
     // Userscripts that run from the right-click menu (bg-userscripts.js).
@@ -165,7 +168,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local" || !changes.tt) return;
   const before = TT.merge(TT.DEFAULTS, changes.tt.oldValue);
   const after = TT.merge(TT.DEFAULTS, changes.tt.newValue);
-  if (JSON.stringify([before.redirect, before.upload, before.qr.menu]) !== JSON.stringify([after.redirect, after.upload, after.qr.menu])) syncMenus(after);
+  if (JSON.stringify([before.redirect, before.upload, before.qr.menu, before.rewrite.menu]) !== JSON.stringify([after.redirect, after.upload, after.qr.menu, after.rewrite.menu])) syncMenus(after);
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
@@ -173,6 +176,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === "redirect") return runManualRedirect(tab);
   if (String(info.menuItemId).startsWith("clippin:")) return onClipMenu(info, tab);
   if (info.menuItemId === "imgControls") return onImgControlsMenu(info, tab);
+  if (info.menuItemId === "rewrite") return onRewriteMenu(info, tab).catch((err) => console.error("[rewrite] menu", err));
   if (info.menuItemId === "volumeActivate") return activateVolume(tab.id).catch(() => {});
   if (String(info.menuItemId).startsWith("qr:")) return onQrMenu(info, tab);
   if (String(info.menuItemId).startsWith("us:")) return usContextRun(info, tab).catch((err) => console.error("[userscripts] menu", err));

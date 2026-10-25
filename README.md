@@ -50,6 +50,7 @@ A Chrome extension. Click its icon to open the side panel (or a popup, in settin
 | **URL auto redirect** | Rewrites addresses with your own find-and-replace rules, per domain. |
 | **Refresh on focus** | Reloads a page when you come back to it, if it's on your list. Normal or hard, until a date you choose. |
 | **Enable copy & right-click** | Unlocks selecting, copying and right-clicking on sites that block them, one site at a time. |
+| **Rewrite text** | Right-click selected text or a text field: fix its spelling and grammar, or rephrase it in a tone you pick, then replace the text with the result. Uses your own free Groq key. |
 
 **Tab 3**
 

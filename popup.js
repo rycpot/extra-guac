@@ -93,6 +93,7 @@ async function init() {
   initClipboard();
   initImgZoom();
   initImgDl();
+  initRewrite();
   initForTab();
   await new Promise((r) => setTimeout(r, 60)); // their first reads of storage come back
   reveal();
@@ -2038,6 +2039,27 @@ function initImgZoom() {
     TT.updateSettings({ imgZoom: { enabled: on } }).catch(fail);
   };
   $("imgMod").querySelectorAll("button").forEach((b) => (b.onclick = () => TT.updateSettings({ imgZoom: { modifier: b.dataset.mod } }).catch(fail)));
+}
+
+// ---- Rewrite text ----
+
+// The switch puts "Rewrite" in the right-click menu (bg-rewrite.js); it needs a Groq key.
+function initRewrite() {
+  async function render() {
+    const { rewrite } = await TT.getSettings();
+    setSwitch($("rewriteToggle"), rewrite.menu);
+    const hint = $("rewriteHint");
+    hint.textContent = !rewrite.menu ? "" : rewrite.key.trim() ? "right-click selected text → Rewrite" : "add your free Groq key in settings";
+    hint.classList.toggle("warn", rewrite.menu && !rewrite.key.trim());
+  }
+  render();
+  chrome.storage.onChanged.addListener((c, area) => area === "local" && c.tt && render());
+  $("rewriteToggle").onclick = () => {
+    const on = $("rewriteToggle").getAttribute("aria-checked") !== "true";
+    setSwitch($("rewriteToggle"), on);
+    TT.updateSettings({ rewrite: { menu: on } }).catch(fail);
+  };
+  $("rewriteSettings").onclick = () => send("openSettings", { section: "rewrite" }).then(() => closePopup(), fail);
 }
 
 // ---- Save images on click ----
