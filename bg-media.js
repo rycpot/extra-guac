@@ -72,8 +72,9 @@ async function setVolumeNow(tabId, volume) {
 
 // The page's videos and audio, in every frame, at gain × the volume the page gave them
 // (the page's own volume control keeps working); 1 puts them back. Players inside page
-// components (shadow roots) count too: open ones are searched, and ones made later are
-// watched as they're made; any player is caught when it's told to play.
+// components (open shadow roots) count too. A page that keeps putting its own volume back is
+// left alone after a few tries: turning it down again each time made an endless back and
+// forth that froze the browser. The tab then needs a capture (the right-click item).
 async function pageVolume(tabId, gain) {
   await chrome.scripting.executeScript({
     target: { tabId, allFrames: true },
@@ -82,38 +83,39 @@ async function pageVolume(tabId, gain) {
     func: (gain) => {
       const st = (window.__egVolume ||= { gain: 1, els: new Set() });
       st.gain = gain;
-      const set = (el) => { el.__egSet = Math.min(1, el.__egBase * st.gain); el.volume = el.__egSet; };
+      const set = (el) => {
+        if (el.__egOff) return;
+        el.__egSet = Math.min(1, el.__egBase * st.gain);
+        el.volume = el.__egSet;
+      };
       const apply = (el) => {
         if (!(el instanceof HTMLMediaElement)) return;
         if (el.__egBase === undefined) {
           el.__egBase = el.volume;
           st.els.add(el);
           el.addEventListener("volumechange", () => { // the page changed it: that's its volume now
-            if (Math.abs(el.volume - el.__egSet) < 1e-4) return; // the change was ours
+            if (el.__egOff || Math.abs(el.volume - el.__egSet) < 1e-4) return; // the change was ours
+            if (Math.abs(el.volume - el.__egBase) < 1e-4) { // its own volume put back over ours
+              if (++el.__egFights >= 3) { el.__egOff = true; return; }
+            } else el.__egFights = 0;
             el.__egBase = el.volume;
             set(el);
           });
         }
+        el.__egOff = false; // each new level gets a few tries again
+        el.__egFights = 0;
         set(el);
       };
       st.roots ||= new WeakSet();
       // Media events stay inside the shadow root they happen in, so each root is watched itself.
-      const watch = (root) => {
-        if (st.roots.has(root)) return;
-        st.roots.add(root);
-        root.addEventListener("play", st.watch, true);
-        root.addEventListener("loadedmetadata", st.watch, true);
-      };
-      if (!st.watch) { // media added later starts playing: caught as it plays
-        st.watch = (e) => st.apply(e.target);
-        const attach = Element.prototype.attachShadow;
-        Element.prototype.attachShadow = function (...a) { const root = attach.apply(this, a); watch(root); return root; };
-        const play = HTMLMediaElement.prototype.play;
-        HTMLMediaElement.prototype.play = function (...a) { st.apply(this); return play.apply(this, a); };
-      }
+      st.watch ||= (e) => st.apply(e.target); // media added later starts playing: caught as it plays
       st.apply = apply;
       const search = (root) => {
-        watch(root);
+        if (!st.roots.has(root)) {
+          st.roots.add(root);
+          root.addEventListener("play", st.watch, true);
+          root.addEventListener("loadedmetadata", st.watch, true);
+        }
         for (const el of root.querySelectorAll("*")) {
           if (el instanceof HTMLMediaElement) apply(el);
           if (el.shadowRoot) search(el.shadowRoot);
