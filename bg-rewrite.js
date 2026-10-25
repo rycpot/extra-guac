@@ -57,7 +57,9 @@ chrome.runtime.onInstalled.addListener(({ reason, previousVersion }) => {
 // Right-click → Polish text.
 async function onRewriteMenu(info, tab) {
   const { rewrite } = await TT.getSettings();
-  const msg = { type: "egRewriteCard", frameId: info.frameId || 0, mode: rewrite.mode, tone: rewrite.tone };
+  // Where the card was last dragged to, so it opens there at once (rewrite-card.js).
+  const { rewriteCardSpot: spot = null } = await chrome.storage.local.get("rewriteCardSpot");
+  const msg = { type: "egRewriteCard", frameId: info.frameId || 0, mode: rewrite.mode, tone: rewrite.tone, spot };
   try {
     const [r] = await chrome.scripting.executeScript({ target: { tabId: tab.id, frameIds: [info.frameId || 0] }, func: captureRewriteText });
     Object.assign(msg, r?.result || {});
@@ -183,6 +185,8 @@ async function groqChat(key, model, text, mode, tone) {
       { role: "user", content: `<text>\n${text}\n</text>` },
     ],
   });
+  // Cut off at max_completion_tokens: half a text would replace the whole one.
+  if (body?.choices?.[0]?.finish_reason === "length") throw new Error("That's too long to polish in one go; select less");
   let out = body?.choices?.[0]?.message?.content ?? "";
   out = out.replace(/^\s*<text>\n?|\n?<\/text>\s*$/g, "");
   // Keep the edges of the original (a trailing space or new line in a field).
@@ -221,10 +225,6 @@ async function groqFetch(key, path, json) {
   return body;
 }
 
-// Groq has no way to ask how much of the free plan is used, but each answer says how many
-// requests are left today, of how many, and when that resets (x-ratelimit-*-requests). Kept in
-// storage.local "rewriteLimits" for settings → polish text: { left, limit, resets, at, key }
-// (key: the key's last 4 characters, so another key's count isn't shown for it).
 // Any em or en dash that's still there becomes a plain hyphen: " - " between words, "-" in
 // ranges like 1–5. Not when the text had them to begin with (they're the writer's own).
 function plainDashes(out, text) {
@@ -232,11 +232,17 @@ function plainDashes(out, text) {
   return out.replace(/(\d)\s*[–—]\s*(?=\d)/g, "$1-").replace(/[ \t]*[—–][ \t]*/g, " - ").replace(/^ - /gm, "- ");
 }
 
+// Groq has no way to ask how much of the free plan is used, but each answer says how many
+// requests are left today, of how many, and when that resets (x-ratelimit-*-requests). Kept in
+// storage.local "rewriteLimits" for settings → polish text: { left, limit, resets, at, key }
+// (key: the key's last 4 characters, so another key's count isn't shown for it; resets: null
+// when Groq didn't say).
 async function groqLimits(res, key) {
   const h = (n) => res.headers.get(n);
   const left = Number(h("x-ratelimit-remaining-requests") ?? NaN), limit = Number(h("x-ratelimit-limit-requests") ?? NaN);
   if (!(limit > 0) || !(left >= 0)) return;
-  const resets = Date.now() + groqDuration(h("x-ratelimit-reset-requests"));
+  const wait = groqDuration(h("x-ratelimit-reset-requests"));
+  const resets = wait > 0 ? Date.now() + wait : null;
   await chrome.storage.local.set({ rewriteLimits: { left, limit, resets, at: Date.now(), key: key.slice(-4) } });
 }
 

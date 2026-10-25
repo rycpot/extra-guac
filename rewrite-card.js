@@ -14,8 +14,8 @@
   const GAP = 16;
   const TONES = ["clearer", "shorter", "friendly", "formal", "casual"];
   let host = null, root = null, observer = null;
-  let spot = null; // { right, bottom } once dragged; null = the corner
-  chrome.storage.local.get("rewriteCardSpot").then(({ rewriteCardSpot: s }) => { if (s && !spot) { spot = s; if (host) place(); } }).catch(() => {});
+  let boxH = 0; // the text box's height, set once per text from the text itself (see fit)
+  let spot = null; // { right, bottom } once dragged (bg-rewrite.js sends the saved one); null = the corner
   let source = "", frameId = 0, editable = false, mode = "rephrase", tone = "clearer", results = {}, busy = false;
   let seq = 0; // a new right-click while one is being rewritten: the old answer is dropped
 
@@ -27,7 +27,9 @@
     editable = !!msg.editable;
     mode = msg.mode === "fix" ? "fix" : "rephrase";
     tone = TONES.includes(msg.tone) ? msg.tone : "clearer";
+    spot = msg.spot && Number.isFinite(msg.spot.right) && Number.isFinite(msg.spot.bottom) ? msg.spot : null;
     results = {};
+    boxH = 0;
     busy = false;
     seq++;
     show();
@@ -130,8 +132,9 @@
       root.querySelector(".open").onclick = () => chrome.runtime.sendMessage({ type: "openSettings", section: "rewrite" }).catch(() => {});
       for (const b of root.querySelectorAll(".mode button")) b.onclick = () => b.dataset.mode !== mode && pick(b.dataset.mode, tone);
       for (const b of root.querySelectorAll(".tone button")) b.onclick = () => b.dataset.tone !== tone && pick("rephrase", b.dataset.tone);
-      root.querySelector("textarea").addEventListener("input", fit);
       drag(root.querySelector(".head"));
+      // Edits are kept with that mode and tone's result, so switching away and back keeps them.
+      root.querySelector("textarea").addEventListener("input", (e) => { if (!busy && results[key()]) results[key()].text = e.target.value; });
       root.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } });
       addEventListener("keydown", onKey, true);
       addEventListener("resize", place);
@@ -201,15 +204,20 @@
     });
   }
 
-  // The text box shows all of the text when it fits on screen, else as much as fits, and scrolls.
+  // The text box gets its height once, from the text being polished (with room for a result a
+  // little longer), and keeps it while you switch mode or tone or edit, so the card doesn't
+  // change size; a longer result scrolls. Never taller than fits on screen.
   function fit() {
     const ta = root?.querySelector("textarea");
     if (!ta || ta.hidden) return;
     const card = root.querySelector(".card");
     const others = card.getBoundingClientRect().height - ta.getBoundingClientRect().height;
     const room = innerHeight - parseFloat(host.style.bottom || GAP) - GAP - others;
-    ta.style.height = "0px";
-    ta.style.height = `${Math.max(48, Math.min(ta.scrollHeight + 2, room))}px`;
+    if (!boxH && ta.value) {
+      ta.style.height = "0px";
+      boxH = Math.max(72, Math.round((ta.scrollHeight + 2) * 1.25));
+    }
+    ta.style.height = `${Math.max(48, Math.min(boxH || 72, room))}px`;
   }
 
   function close() {
@@ -218,7 +226,7 @@
     removeEventListener("resize", place);
     host?.remove();
     host = null; root = null;
-    source = ""; results = {}; busy = false; seq++; // drops the text (the listener stays for the next one)
+    source = ""; results = {}; busy = false; boxH = 0; seq++; // drops the text (the listener stays for the next one)
   }
 
   // A mode or tone picked on the card is the one it opens with next time.

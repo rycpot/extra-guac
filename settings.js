@@ -719,7 +719,7 @@
       box.hidden = !l || !key || l.key !== key.slice(-4);
       if (box.hidden) return;
       const n = (v) => v.toLocaleString("en-US");
-      const over = l.resets && l.resets <= Date.now();
+      const over = !!l.resets && l.resets <= Date.now();
       const ago = Math.round((Date.now() - l.at) / 60000);
       box.textContent = over ? `All ${n(l.limit)} requests a day are available again (the daily count has reset).`
         : `${n(l.left)} of ${n(l.limit)} requests left today${l.resets ? `, resets in ${span(l.resets - Date.now())}` : ""}. As of your last polish${ago >= 1 ? ` ${span(ago * 60000)} ago` : ", just now"}.`;
