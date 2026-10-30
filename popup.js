@@ -1659,9 +1659,10 @@ function initUploadDrop() {
     hideZones();
     if (zone) start(imagesOf(e.dataTransfer), zone.dataset.host);
   });
-  // Files dropped anywhere else would open in the panel in place of Extra Guac.
-  addEventListener("dragover", (e) => { if (isImageDrag(e) && !sec.contains(e.target)) { e.preventDefault(); e.dataTransfer.dropEffect = "none"; } });
-  addEventListener("drop", (e) => { if (isImageDrag(e) && !sec.contains(e.target)) e.preventDefault(); });
+  // Files dropped anywhere else would open in the panel in place of Extra Guac. A place that
+  // takes drops of its own (Beam's vortex) has already said so (defaultPrevented), and is left alone.
+  addEventListener("dragover", (e) => { if (!e.defaultPrevented && isImageDrag(e) && !sec.contains(e.target)) { e.preventDefault(); e.dataTransfer.dropEffect = "none"; } });
+  addEventListener("drop", (e) => { if (!e.defaultPrevented && isImageDrag(e) && !sec.contains(e.target)) e.preventDefault(); });
 
   $("uploadDrop").onclick = () => pick.click();
   pick.onchange = () => {
