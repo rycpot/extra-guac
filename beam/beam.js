@@ -80,6 +80,68 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 const enc = s => new TextEncoder().encode(s)
 const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)))
 const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0))
+const hexOf = buf => Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, '0')).join('')
+const unhex = h => Uint8Array.from(h.match(/../g) || [], b => parseInt(b, 16))
+
+// ===== Remembered devices =====
+// Two devices that both chose Remember share a secret that only they have. Either one can then
+// connect to the other with a tap, without a code. The secret is kept in this browser's IndexedDB
+// as a key the page can use but never read back (non-extractable), so it never leaves this
+// browser: it isn't shown, sent, synced or backed up. Each browser (and the extension apart from
+// the website) keeps its own list. A device not used for REMEMBER_DAYS is forgotten.
+const REMEMBER_MAX = 10, REMEMBER_DAYS = 90
+const remember = (() => {
+  let db = null
+  const req = r => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error) })
+  const open = () => db || (db = new Promise((res, rej) => {
+    const r = indexedDB.open('beam-remember', 1)
+    r.onupgradeneeded = () => { r.result.createObjectStore('devices', {keyPath: 'id'}); r.result.createObjectStore('me') }
+    r.onsuccess = () => res(r.result)
+    r.onerror = () => rej(r.error)
+  }).catch(e => { db = null; throw e }))
+  const store = async (name, mode) => (await open()).transaction(name, mode).objectStore(name)
+  return {
+    // Newest first; ones unused for too long are forgotten on the way.
+    async list() {
+      const all = await req((await store('devices', 'readonly')).getAll())
+      const old = Date.now() - REMEMBER_DAYS * 86400000
+      const gone = all.filter(r => (r.seen || r.added || 0) < old)
+      if (gone.length) { const s = await store('devices', 'readwrite'); gone.forEach(r => s.delete(r.id)) }
+      return all.filter(r => !gone.includes(r)).sort((a, b) => b.seen - a.seen)
+    },
+    // The same device remembered again (the same home) replaces its old entry.
+    async add(rec) {
+      const all = await this.list()
+      if (all.filter(r => r.home !== rec.home).length >= REMEMBER_MAX) throw Object.assign(new Error('full'), {full: true})
+      const s = await store('devices', 'readwrite')
+      all.filter(r => r.home === rec.home).forEach(r => s.delete(r.id))
+      await req(s.put(rec))
+    },
+    async touch(id, name) {
+      const r = await req((await store('devices', 'readonly')).get(id))
+      if (!r) return
+      r.seen = Date.now()
+      if (name) r.name = name
+      await req((await store('devices', 'readwrite')).put(r))
+    },
+    remove: async id => req((await store('devices', 'readwrite')).delete(id)),
+    // This browser's own random name for where remembered devices find it ("home").
+    async home() {
+      const h = await req((await store('me', 'readonly')).get('home'))
+      if (h) return h
+      const made = hexOf(crypto.getRandomValues(new Uint8Array(16)))
+      try { await req((await store('me', 'readwrite')).add(made, 'home')); return made }
+      catch (e) { return req((await store('me', 'readonly')).get('home')) } // another tab made one first
+    },
+  }
+})()
+// What the shared secret gives, each for one use: an HMAC key (the pair's id, its rooms and the
+// proofs) and an AES key (sealing a call to the other device).
+const pairKey = (key, use, alg, usages) => crypto.subtle.deriveKey({name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: enc('beam pair ' + use)}, key, alg, false, usages)
+const pairMac = key => pairKey(key, 'mac', {name: 'HMAC', hash: 'SHA-256'}, ['sign', 'verify'])
+const pairSeal = key => pairKey(key, 'knock', {name: 'AES-GCM', length: 256}, ['encrypt', 'decrypt'])
+const macHex = async (mac, parts) => hexOf(await crypto.subtle.sign('HMAC', mac, enc(parts.join('|'))))
+const macOk = (mac, parts, h) => typeof h === 'string' && /^[0-9a-f]{64}$/.test(h) ? crypto.subtle.verify('HMAC', mac, unhex(h), enc(parts.join('|'))).catch(() => false) : Promise.resolve(false)
 
 const ICON_QR = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 14h2M14 18h2M18 18h2v2M18 16v2"/></svg>'
 const VORTEX = '<svg viewBox="0 0 220 220" aria-hidden="true"><g class="vortex">' +
@@ -110,6 +172,12 @@ function markup(preview) {
   </div>
 
   <section class="beam-card beam-center" id="beam-pair">
+    <div class="beam-mine" id="beam-mine" hidden>
+      <p class="beam-eyebrow">Your devices</p>
+      <ul class="beam-mine-list" id="beam-mineList"></ul>
+      <div class="beam-mine-foot"><span class="beam-hint">Let them connect to this device<small>Each is forgotten after ${REMEMBER_DAYS} days unused</small></span><button type="button" class="beam-switch" role="switch" id="beam-listen" aria-checked="true" aria-label="Let remembered devices connect to this device"></button></div>
+      <hr class="beam-divider">
+    </div>
     <p class="beam-eyebrow" id="beam-codeLabel">Your code</p>
     <div class="beam-code" id="beam-roomCode">${preview ? '••••••' : '------'}</div>
     <p class="beam-status"><span class="beam-dot" aria-hidden="true"></span><span id="beam-pairStatus">Waiting for the other device…</span></p>
@@ -126,7 +194,7 @@ function markup(preview) {
       <div id="beam-qr" aria-label="QR code that opens Beam with your code"></div>
       <p class="beam-hint">Scan it with the other device's camera to skip steps 1 and 2.</p>
     </div>
-    <hr class="beam-divider">
+    <hr class="beam-divider" id="beam-joinDivider">
     <form id="beam-joinForm" class="beam-join">
       <label for="beam-joinInput" class="beam-eyebrow">Have a code from the other device?</label>
       <div class="beam-row beam-center-row" id="beam-joinRow">
@@ -149,6 +217,7 @@ function markup(preview) {
     <div class="beam-conn">
       <p class="beam-eyebrow" id="beam-connLabel">Connected to</p>
       <ul class="beam-devices" id="beam-devices"></ul>
+      <div class="beam-rem" id="beam-rem" hidden></div>
       ${BCAST}
       <div class="beam-more" id="beam-more" hidden>
         <button type="button" class="beam-btn beam-qr-toggle" id="beam-qrToggle2" aria-expanded="false" aria-controls="beam-qrBox2">${ICON_QR}<span>Show QR code</span></button>
@@ -168,7 +237,7 @@ function markup(preview) {
       <pre id="beam-log" aria-live="polite"></pre>
     </div>
     <div class="beam-row beam-between">
-      <span class="beam-hint">Room <span id="beam-roomSmall"></span></span>
+      <span class="beam-hint"><span id="beam-roomWord">Room</span> <span id="beam-roomSmall"></span></span>
       <button type="button" class="beam-btn small end" id="beam-disconnect">Disconnect</button>
     </div>
   </section>
@@ -354,7 +423,6 @@ const TS = GAME ? GAME.app + '-' : 'beam-' // this tab's room, apart from Beam's
 const randomCode = () => String(crypto.getRandomValues(new Uint32Array(1))[0] % 900000 + 100000)
 const cleanCode = s => (s || '').replace(/\D/g, '').slice(0, 10)
 const validCode = c => /^\d{6,10}$/.test(c)
-const hexOf = buf => Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, '0')).join('')
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2))
 const tabStore = {
   get(k) { try { return sessionStorage.getItem(k) || '' } catch (e) { return '' } },
@@ -375,6 +443,7 @@ function setMode(m) {
   if (m === 'connected') { $('pairStatus').textContent = waitingText(); renderLinks() }
   showBroadcast()
   showChat()
+  syncHome()
 }
 const waitingText = () => isHub() && broadcast ? 'Waiting for devices…' : 'Waiting for the other device…'
 const DIRECT_HINT = 'Files go straight between the devices and are never stored on a server. Keep the screens on while sending.'
@@ -395,7 +464,9 @@ const present = L => [...links.values()].includes(L)
 const newLink = (pub, key, name) => ({pub, key, name, baseName: name, id: '', accepted: false, known: false, selected: true, lanes: [], inX: new Map(), path: '', helloBack: false, lostTimer: 0})
 // known: accepted at some point and still in the room; accepted: reachable right now.
 const roomLinks = () => [...links.values()].filter(L => L.known)
-const direct = L => !!(L && L.lanes[0] && L.lanes[0].open)
+// In a remembered device's room a connection counts only once it's shown to be that device's (laneOk).
+const laneOk = c => !!(c && c.open && (!pairRoom || c._ok))
+const direct = L => !!L && laneOk(L.lanes[0])
 const nameOf = L => (L && L.name) || 'the other device'
 function recipients() {
   if (!isHub()) { const L = hubLink(); return L && L.accepted ? [L] : [] }
@@ -454,6 +525,7 @@ function renderLinks() {
     : to === list.length ? (to === 2 ? 'to both devices' : 'to all ' + to + ' devices') + ' · or drop them into the vortex'
     : to ? 'to ' + to + ' of ' + list.length + ' devices · or drop them into the vortex' : 'tick a device above first'
   $('disconnect').textContent = many ? 'Disconnect all' : 'Disconnect'
+  renderRemember()
   showChecks()
   showBroadcast()
 }
@@ -462,13 +534,13 @@ function showBroadcast() {
   if (life.signal.aborted) return
   const n = roomLinks().length
   root.querySelectorAll('[data-bcast]').forEach(el => {
-    el.hidden = !isHub()
+    el.hidden = !isHub() || !!pairRoom // a remembered device's room is for that device only
     el.querySelector('.beam-switch').setAttribute('aria-checked', String(broadcast))
     el.querySelector('small').textContent = el.closest('#beam-connected')
       ? (broadcast ? n + ' of ' + MAX_DEVICES + ' devices · others can join with code ' + code : 'Turn on to let more devices join')
       : (broadcast ? 'Up to ' + MAX_DEVICES + ' devices can join' : 'Turn on to send to up to ' + MAX_DEVICES + ' devices')
   })
-  $('more').hidden = !(isHub() && broadcast && n < MAX_DEVICES) // room for more: the QR code for them
+  $('more').hidden = !(isHub() && broadcast && !pairRoom && n < MAX_DEVICES) // room for more: the QR code for them
 }
 function setBroadcast(on) {
   broadcast = on
@@ -485,6 +557,226 @@ function showAsk() {
   const n = roomLinks().length
   $('askNote').textContent = (n ? n + ' of ' + MAX_DEVICES + ' devices connected. ' : '') + 'Only accept a device you\'re pairing with right now.' +
     (asks.length > 1 ? ' ' + (asks.length - 1) + ' more waiting.' : '')
+}
+
+// ---------- remembering a device ----------
+// Connected to one device, either side can choose Remember; the other is asked, and once both
+// agree each keeps the secret (see remember, above). It's made on both devices from the key
+// exchange this pairing already did, and fresh random values from each (rem), so it never
+// travels. Offered only once the check code was shown, and only to a device that can do it too.
+let mine = [], remOk = false // remembered devices; whether this browser can keep them
+let remArmed = 0             // the web page: Remember tapped once, waiting for the second tap
+let forgetArmed = {id: '', at: 0} // Forget tapped once on this device, waiting for the second tap
+const ARM_MS = 5000
+async function loadMine() {
+  if (GAME) return false
+  try { mine = await remember.list(); remOk = true }
+  catch (e) { mine = []; remOk = false; dbg('Can\'t remember devices in this browser: ' + (e.message || e)) }
+  if (!life.signal.aborted) { showMine(); renderRemember() }
+  return remOk
+}
+const remReady = loadMine()
+const daysAgo = t => { const d = Math.floor((Date.now() - t) / 86400000); return d < 1 ? 'today' : d === 1 ? 'yesterday' : d + ' days ago' }
+// Your devices: on the pairing card, above this device's code.
+function showMine() {
+  if (life.signal.aborted) return
+  $('mine').hidden = !mine.length || mode !== 'waiting' || intent === 'join' || !!pairRoom
+  const ul = $('mineList')
+  ul.innerHTML = ''
+  for (const r of mine) {
+    const li = document.createElement('li')
+    li.className = 'beam-mine-row'
+    const who = document.createElement('span')
+    who.className = 'who'
+    const n = document.createElement('span')
+    n.className = 'name'; n.textContent = r.name
+    const when = document.createElement('small')
+    when.textContent = 'Last connected ' + daysAgo(r.seen)
+    who.append(n, when)
+    const x = document.createElement('button')
+    x.type = 'button'; x.className = 'beam-btn small beam-remove'; x.innerHTML = ICON_X
+    x.title = 'Forget ' + r.name; x.setAttribute('aria-label', 'Forget ' + r.name)
+    // Forget asks once more first: the button turns into "Forget?" for a few seconds.
+    const armed = forgetArmed.id === r.id && Date.now() - forgetArmed.at < ARM_MS
+    if (armed) { x.classList.add('armed'); x.textContent = 'Forget?' }
+    x.addEventListener('click', () => {
+      if (!armed) { forgetArmed = {id: r.id, at: Date.now()}; showMine(); setTimeout(showMine, ARM_MS + 50); return }
+      forgetArmed = {id: '', at: 0}
+      forgetDevice(r)
+    })
+    const go = document.createElement('button')
+    go.type = 'button'; go.className = 'beam-btn small primary'; go.textContent = 'Connect'
+    go.addEventListener('click', () => { log('Connecting to ' + r.name + '…'); connectPair(r, randomHex(), 'create') })
+    li.append(who, go, x)
+    ul.append(li)
+  }
+  $('listen').setAttribute('aria-checked', String(listenOn()))
+  syncHome()
+}
+async function forgetDevice(r) {
+  try { await remember.remove(r.id) } catch (e) { log('Couldn\'t forget ' + r.name, true); return }
+  // Connected to it right now: it forgets this device too.
+  for (const L of links.values()) if (L.pairId === r.id) { toLink(L, {t: 'forget', id: r.id}); L.pairId = '' }
+  if (pairRoom && pairRoom.rec.id === r.id) pairRoom.forgotten = true // a reconnect in this room doesn't bring it back
+  log('Forgot ' + r.name)
+  await loadMine()
+  renderLinks()
+}
+// The other device forgot this one: so does this one.
+async function onForget(L, m) {
+  if (!L.pairId || m.id !== L.pairId) return
+  L.pairId = ''
+  if (pairRoom && pairRoom.rec.id === m.id) pairRoom.forgotten = true
+  try { await remember.remove(m.id) } catch (e) {}
+  log(nameOf(L) + ' forgot this device, so it\'s forgotten here too')
+  await loadMine()
+  renderLinks()
+}
+// Under the device's name while connected to one device: Remember, the other's request, or done.
+function renderRemember() {
+  if (life.signal.aborted) return
+  const box = $('rem')
+  const list = roomLinks()
+  const L = mode === 'connected' && list.length === 1 ? list[0] : null
+  const can = !!L && !GAME && remOk && L.accepted && (!!L.pairId || (L.canRem && !!L.check))
+  box.hidden = !can
+  box.innerHTML = ''
+  if (!can) return
+  const text = document.createElement('p')
+  text.className = 'beam-hint'
+  const btn = (label, primary, fn) => {
+    const b = document.createElement('button')
+    b.type = 'button'; b.className = 'beam-btn small' + (primary ? ' primary' : ''); b.textContent = label
+    b.addEventListener('click', fn)
+    return b
+  }
+  if (L.pairId) {
+    box.classList.add('done')
+    text.textContent = 'Remembered. Next time, connect to it from Your devices with a tap, no code.'
+    // Forget, here too: both devices forget each other. It asks once more first.
+    const armed = forgetArmed.id === L.pairId && Date.now() - forgetArmed.at < ARM_MS
+    const f = btn(armed ? 'Forget it on both devices?' : 'Forget', false, () => {
+      const r = mine.find(x => x.id === L.pairId)
+      if (!armed) { forgetArmed = {id: L.pairId, at: Date.now()}; renderRemember(); setTimeout(renderRemember, ARM_MS + 50); return }
+      forgetArmed = {id: '', at: 0}
+      forgetDevice(r || {id: L.pairId, name: nameOf(L)})
+    })
+    f.classList.add('beam-forget')
+    box.append(text, f)
+    return
+  }
+  box.classList.remove('done')
+  if (L.remMine) {
+    text.textContent = L.remTheirs ? 'Remembering…' : 'Waiting for ' + nameOf(L) + ' to agree…'
+    box.append(text)
+    if (!L.remTheirs) box.append(btn('Cancel', false, () => { toLink(L, {t: 'remno', why: 'no'}); resetRem(L) }))
+    return
+  }
+  // On the web page anyone using this browser later could connect: the first tap asks to be sure.
+  const armed = !IS_EXTENSION && Date.now() - remArmed < ARM_MS
+  const yes = () => {
+    if (!IS_EXTENSION && !armed) { remArmed = Date.now(); renderRemember(); setTimeout(renderRemember, ARM_MS + 50); return }
+    remArmed = 0
+    askRemember(L)
+  }
+  const label = armed ? 'Yes, it\'s my own device' : L.remTheirs ? 'Remember' : 'Remember this device'
+  const own = IS_EXTENSION ? '' : ' Only on your own device: anyone using this browser later could connect to it.'
+  if (L.remTheirs) {
+    text.textContent = nameOf(L) + ' wants to remember this device, so the two can connect later with a tap.' + own
+    const row = document.createElement('div')
+    row.className = 'beam-row'
+    row.append(btn('Not now', false, () => declineRemember(L)), btn(label, true, yes))
+    box.append(text, row)
+  } else {
+    text.textContent = 'Connect to it again later with a tap, no code. Both devices have to agree.' + own
+    box.append(btn(label, armed, yes), text)
+  }
+}
+async function askRemember(L) {
+  if (L.remMine || L.pairId || !present(L) || !L.accepted) return
+  // (Room for it is checked when it's kept: it may replace this device's earlier entry for it.)
+  let home
+  try { home = await remember.home() } catch (e) { log('This browser can\'t remember devices (its site storage may be off)', true); return }
+  if (L.remMine || !present(L) || !L.accepted) return
+  L.remMine = randomHex()
+  toLink(L, {t: 'rem', n: L.remMine, home})
+  log(L.remTheirs ? 'Remembering ' + nameOf(L) + '…' : 'Asked ' + nameOf(L) + ' to remember this device')
+  renderRemember()
+  finishRemember(L)
+}
+function declineRemember(L) {
+  L.remTheirs = null
+  toLink(L, {t: 'remno', why: 'no'})
+  renderRemember()
+}
+// The other device chose Remember (n: its random value, home: where it can be found later).
+function onRem(L, m) {
+  // Remember is for two devices on their own: not with several in the room.
+  if (!GAME && isHub() && roomLinks().length > 1) { toLink(L, {t: 'remno', why: 'many'}); return }
+  if (GAME || !remOk || !L.canRem || !L.check || L.pairId || L.remBusy || !isHex(m.n, 32) || !isHex(m.home, 32)) return
+  if (!L.remTheirs && !L.remMine) log(nameOf(L) + ' wants to remember this device')
+  L.remTheirs = {n: m.n, home: m.home}
+  renderRemember()
+  finishRemember(L)
+}
+// Both agreed: each side makes the same secret and keeps it.
+async function finishRemember(L) {
+  if (L.remBusy || !L.remMine || !L.remTheirs || !L.rem || L.pairId) return
+  L.remBusy = true
+  const gen = generation, theirs = L.remTheirs
+  try {
+    const bits = await crypto.subtle.deriveBits({name: 'HKDF', hash: 'SHA-256', salt: enc([L.remMine, theirs.n].sort().join(':')), info: enc(APP + ' remember')}, L.rem, 256)
+    const key = await crypto.subtle.importKey('raw', bits, 'HKDF', false, ['deriveKey', 'deriveBits'])
+    const id = (await macHex(await pairMac(key), ['id'])).slice(0, 32)
+    if (gen !== generation || !present(L)) return
+    const now = Date.now()
+    await remember.add({id, key, name: (isHub() ? L.baseName : L.name) || nameOf(L), home: theirs.home, added: now, seen: now})
+    if (gen !== generation || !present(L)) { remember.remove(id).catch(() => {}); return }
+    // Kept only once the other side says it kept the same one ("remd"), so the two don't end up
+    // with one remembering and the other not.
+    toLink(L, {t: 'remd', id})
+    for (const end = Date.now() + 20000; !L.remdTheirs && Date.now() < end && gen === generation && present(L) && L.remTheirs === theirs;) await sleep(200)
+    if (L.remdTheirs !== id) {
+      remember.remove(id).catch(() => {})
+      if (gen !== generation || !present(L) || L.remTheirs !== theirs) return // it said no meanwhile (onRemno), or it's gone
+      toLink(L, {t: 'remno', why: 'failed'}) // a different one (it shouldn't), or its word never came: neither keeps it
+      resetRem(L)
+      log('Couldn\'t remember ' + nameOf(L) + '. Try again.', true)
+      return
+    }
+    L.pairId = id
+    L.remFresh = id // kept, unless the other side's word that it kept it too never came (onRemno)
+    L.remMine = ''; L.remTheirs = null; L.remdTheirs = ''
+    log('Remembered ' + nameOf(L) + '. Next time, connect to it from Your devices.')
+  } catch (e) {
+    toLink(L, {t: 'remno', why: e.full ? 'full' : 'failed'})
+    resetRem(L)
+    log(e.full ? 'Couldn\'t remember ' + nameOf(L) + ': this device already remembers ' + REMEMBER_MAX + '. Forget one first.' : 'Couldn\'t remember ' + nameOf(L), true)
+    dbg(e.message || String(e), true)
+  } finally {
+    L.remBusy = false
+    loadMine()
+  }
+}
+// A request still on its way is dropped when the link drops or the other device starts over
+// (a new key): either side can ask again once they're back.
+function resetRem(L) { L.remMine = ''; L.remTheirs = null; L.remdTheirs = ''; renderRemember() }
+function onRemd(L, m) { if (isHex(m.id, 32) && L.remMine && !L.pairId) L.remdTheirs = m.id }
+// The other device didn't remember this one: not now, no room for more, or it failed there.
+function onRemno(L, m) {
+  // Kept here just now, but the other side didn't keep it: this side lets it go too.
+  if (L.remFresh && L.remFresh === L.pairId && m.why === 'failed') {
+    remember.remove(L.pairId).catch(() => {})
+    L.pairId = ''; L.remFresh = ''
+    log('Couldn\'t remember ' + nameOf(L) + '. Try again.', true)
+    renderRemember()
+    return loadMine()
+  }
+  if (!L.remMine && !L.remTheirs) return // nothing asked or being made
+  const had = !!L.remMine
+  resetRem(L)
+  if (had) log(m.why === 'full' ? nameOf(L) + ' already remembers ' + REMEMBER_MAX + ' devices' : m.why === 'many' ? nameOf(L) + ' is connected to several devices. Remember works with one at a time.' : m.why === 'no' ? nameOf(L) + ' chose not to remember this device' : 'Couldn\'t remember ' + nameOf(L) + '. Try again.', m.why !== 'no')
+  loadMine()
 }
 
 // ---------- chat ----------
@@ -863,24 +1155,28 @@ function cleanAddressBar() { if (!IS_EXTENSION && location.hash) history.replace
 
 // intent: 'create' = this device made the code: it's the hub, which accepts whoever joins;
 //         'join'   = the code came from the other device (QR or typed).
+// pair: a room with a remembered device (connectPair): its code is made from the two devices'
+// secret, and it isn't kept for a reload.
 let intent = 'create', reclaims = 0
-function setRoom(newCode, how, reclaim) {
+let pairRoom = null
+function setRoom(newCode, how, reclaim, pair) {
   if (life.signal.aborted) return // disposed: a late timer (a device that didn't come back, a decline) mustn't start a new code
   stopScan()
   reclaims = reclaim ? 5 : 0
-  const c = cleanCode(newCode)
-  intent = validCode(c) ? (how || 'join') : 'create'
-  code = validCode(c) ? c : randomCode()
-  tabStore.set(TS + 'room', code)
+  pairRoom = pair || null
+  const c = pair ? '' : cleanCode(newCode)
+  intent = pair ? how : validCode(c) ? (how || 'join') : 'create'
+  code = pair ? pair.code : validCode(c) ? c : randomCode()
+  tabStore.set(TS + 'room', pair ? '' : code)
   tabStore.set(TS + 'intent', intent)
   generation++
   closeAllLanes()
   for (const L of links.values()) clearTimeout(L.lostTimer)
   links.clear(); asks = []; declined.clear()
   if (intent === 'join') links.set('hub', newLink('', null, ''))
-  $('roomCode').textContent = code
-  $('roomSmall').textContent = code
-  $('pairStatus').textContent = intent === 'join' ? 'Connecting…' : waitingText()
+  $('roomWord').textContent = pair ? 'Private room with a remembered device' : 'Room'
+  $('roomSmall').textContent = pair ? '' : code
+  $('pairStatus').textContent = pair && intent === 'create' ? 'Waiting for it to answer…' : intent === 'join' ? 'Connecting…' : waitingText()
   $('joinCheck').hidden = true
   showChecks()
   showAsk()
@@ -896,12 +1192,25 @@ function setRoom(newCode, how, reclaim) {
     const gen = generation, tried = code
     setTimeout(() => {
       const L = hubLink()
-      if (gen !== generation || mode !== 'waiting' || (L && L.pub)) return
+      if (gen !== generation || mode !== 'waiting' || (L && (pair ? L.known : L.pub))) return
       leaveJoin()
       if (startOver('gone')) return
       setRoom('', 'create')
-      $('pairStatus').textContent = 'Nobody answered on ' + tried + '. Check the code on the other device and try again, or share this code of yours.'
+      $('pairStatus').textContent = pair ? 'Couldn\'t connect to ' + pair.rec.name + '. Try again from that device.'
+        : 'Nobody answered on ' + tried + '. Check the code on the other device and try again, or share this code of yours.'
     }, JOIN_GIVE_UP)
+  }
+  if (pair && intent === 'create') knock(pair, generation)
+  // Answering a call that nobody holds any more (it was given up as this device answered): back
+  // to this device's own code after 30 s rather than 2 minutes.
+  if (pair && intent === 'join') {
+    const gen = generation
+    setTimeout(() => {
+      const L = hubLink()
+      if (gen !== generation || mode !== 'waiting' || (L && L.pub)) return
+      log(pair.rec.name + '\'s call had ended')
+      setRoom('', 'create')
+    }, 30000)
   }
 }
 const JOIN_GIVE_UP = 120000
@@ -915,17 +1224,24 @@ function startOver(why) {
 const notify = () => { if (GAME && !life.signal.aborted) GAME.onChange() }
 // While joining, the code shown is the one being joined, and Cancel goes back to one of this device's own.
 function paintJoining() {
-  const joining = intent === 'join' && mode === 'waiting'
-  $('codeLabel').textContent = joining ? 'Joining' : 'Your code'
+  const calling = !!pairRoom && mode === 'waiting' // connecting to a remembered device: its name, no code
+  const joining = (intent === 'join' && mode === 'waiting') || calling
+  $('codeLabel').textContent = calling ? 'Connecting to' : joining ? 'Joining' : 'Your code'
+  const rc = $('roomCode')
+  rc.textContent = calling ? pairRoom.rec.name : code
+  rc.classList.toggle('name', calling)
   $('joinCancel').hidden = !joining
   // The steps and the QR code are for sharing this device's own code: not while joining another.
   $('steps').hidden = joining
   $('qrToggle').hidden = joining
+  $('joinForm').hidden = calling
+  $('joinDivider').hidden = calling
   if (joining) {
     $('qrBox').hidden = true
     $('qrToggle').setAttribute('aria-expanded', 'false')
     $('qrToggle').querySelector('span').textContent = 'Show QR code'
   }
+  showMine()
 }
 // The QR code while waiting, and once connected with Broadcast on, for more devices to join.
 // In Extra Guac's look (lib/qr-render.js: avocado-half corners, leaf squares) with Beam's
@@ -1096,9 +1412,11 @@ async function sessionFor(pub) {
   const k = await keys
   const theirs = await crypto.subtle.importKey('raw', unb64(pub), {name: 'ECDH', namedCurve: 'P-256'}, false, [])
   const bits = await crypto.subtle.deriveBits({name: 'ECDH', public: theirs}, k.privateKey, 256)
-  const hk = await crypto.subtle.importKey('raw', bits, 'HKDF', false, ['deriveKey'])
-  return crypto.subtle.deriveKey({name: 'HKDF', hash: 'SHA-256', salt: enc(APP + ':' + code), info: enc('beam relay')},
+  const hk = await crypto.subtle.importKey('raw', bits, 'HKDF', false, ['deriveKey', 'deriveBits'])
+  const key = await crypto.subtle.deriveKey({name: 'HKDF', hash: 'SHA-256', salt: enc(APP + ':' + code), info: enc('beam relay')},
     hk, {name: 'AES-GCM', length: 256}, false, ['encrypt', 'decrypt'])
+  // rem: what the two devices' secret is made from, if both choose Remember (finishRemember).
+  return {key, rem: hk}
 }
 // The check code: six digits, the same on both devices, made from both public keys, the room code
 // and a fresh random value from each side. Someone else who got hold of the room code (or sat
@@ -1161,7 +1479,9 @@ function showChecks() {
 async function helloMsg(t) {
   await keys
   const m = {t, v: APP, name: shownName(), pub: myPub, intent, relay: serverIndex}
-  if (intent === 'join') m.commit = await myCommit
+  if (intent === 'join' && !pairRoom) m.commit = await myCommit // a remembered device's room checks the secret instead
+  await within(remReady, 1500)
+  if (remOk) m.rem = 1 // this device can remember others (older versions don't say so)
   return m
 }
 
@@ -1181,8 +1501,8 @@ async function hubHello(m, name, via, gen, conn, base) {
   const relay = base || (Number.isInteger(m.relay) && PIPE_SERVERS[m.relay]) || ''
   let L = links.get(m.pub)
   if (!L) {
-    let key, id
-    try { key = await sessionFor(m.pub); id = (await sha256hex(m.pub)).slice(0, 16) } catch (e) { dbg('Bad public key from a device', true); return }
+    let sk, id
+    try { sk = await sessionFor(m.pub); id = (await sha256hex(m.pub)).slice(0, 16) } catch (e) { dbg('Bad public key from a device', true); return }
     if (gen !== generation) return
     L = links.get(m.pub) // the same hello can arrive both ways at once
     if (!L) {
@@ -1190,20 +1510,24 @@ async function hubHello(m, name, via, gen, conn, base) {
       const taken = new Set([...links.values()].map(l => l.name))
       let shown = name
       for (let k = 2; taken.has(shown); k++) shown = name + ' (' + k + ')'
-      L = newLink(m.pub, key, shown)
-      L.id = id; L.baseName = name; L.relay = relay
+      L = newLink(m.pub, sk.key, shown)
+      L.id = id; L.baseName = name; L.relay = relay; L.rem = sk.rem
       if (isHex(m.commit, 64)) L.commit = m.commit
       if (conn) { conn._link = L; L.lanes[0] = conn }
       // A game's full room: a player that dropped and hasn't come back gives up its place (most
       // often this same player, reloaded with a new key; the game knows it again by its id).
+      // A remembered device's room: ones that never proved the secret don't keep it out.
+      // (Only far past the room's size, so the real device, whose proof may be on its way, isn't the one let go.)
+      if (pairRoom && links.size >= 4 * MAX_DEVICES) { const odd = [...links.values()].find(l => !l.accepted && !pairRoom.proven.has(l.pub)); if (odd) removeLink(odd, 'Stopped') }
       if (GAME && links.size >= MAX_DEVICES) { const gone = [...links.values()].find(l => l.known && !l.accepted); if (gone) { removeLink(gone, 'Connection lost'); notify() } }
       // With Broadcast off, a device that dropped and is only waiting to come back doesn't keep
       // others out: a device that reloads comes back with a new key, so it looks like a new one.
       const holding = [...links.values()].filter(l => l.accepted || asks.includes(l)).length
-      const why = declined.has(m.pub) ? 'declined' : links.size >= MAX_DEVICES ? 'full' : !broadcast && holding ? 'closed' : ''
+      const why = declined.has(m.pub) ? 'declined' : links.size >= MAX_DEVICES && !pairRoom ? 'full' : (!broadcast || pairRoom) && holding ? 'closed' : ''
       if (why) return turnAway(L, why)
       links.set(m.pub, L)
       if (GAME) L.letIn = true // a game lets in whoever has the code
+      else if (pairRoom) {} // let in once it proves it has the secret (onProve): nobody is asked
       else {
         asks.push(L)
         showAsk()
@@ -1212,11 +1536,13 @@ async function hubHello(m, name, via, gen, conn, base) {
       }
     }
   }
+  L.canRem = m.rem === 1
   if (relay) L.relay = relay
   else if (name && L.known && name !== L.baseName) renameLink(L, name) // renamed while its link was down
   if (conn && L.lanes[0] !== conn) {
     // A device's direct link is its own: another connection can't take it over while it's open.
-    if (direct(L) && L.lanes[0].peer !== conn.peer) { try { conn.close() } catch (e) {} return }
+    // (In a remembered device's room, an open one isn't given up even before its proof.)
+    if ((pairRoom ? L.lanes[0] && L.lanes[0].open : direct(L)) && L.lanes[0].peer !== conn.peer) { try { conn.close() } catch (e) {} return }
     const old = L.lanes[0]
     conn._link = L; L.lanes[0] = conn
     if (old) { try { old.close() } catch (e) {} }
@@ -1225,7 +1551,8 @@ async function hubHello(m, name, via, gen, conn, base) {
   // who it's waiting for.
   if (via === 'relay' && !L.helloBack) { L.helloBack = true; postHandshake(L, await helloMsg('hello')) }
   if (present(L)) sendNonce(L, via)
-  if (L.known || L.letIn) { L.letIn = false; welcome(L) } // back after a dropped link, or let straight in
+  if (pairRoom && present(L)) sendProve(L, via)
+  if (L.known || L.letIn || (pairRoom && pairRoom.proven.has(L.pub))) { L.letIn = false; welcome(L) } // back after a dropped link, or let straight in
 }
 function turnAway(L, why) {
   declined.add(L.pub) // it asks again only with a new key, which means entering the code again
@@ -1245,14 +1572,17 @@ async function joinerHello(m, name, via, gen) {
   // a new key means the hub started over (it reloaded): it asks again, and this device follows.
   if (L.known && L.accepted && m.pub !== L.pub) return
   if (m.pub !== L.pub) {
-    let key
-    try { key = await sessionFor(m.pub) } catch (e) { dbg('Bad public key from the other device', true); return }
+    let sk
+    try { sk = await sessionFor(m.pub) } catch (e) { dbg('Bad public key from the other device', true); return }
     if (gen !== generation) return
-    L.key = key; L.pub = m.pub; L.check = ''
+    L.key = sk.key; L.rem = sk.rem; L.pub = m.pub; L.check = ''
+    resetRem(L)
     updateCheck(L) // the hub's value may have come first
   }
   L.name = name
-  if (!L.accepted) { $('pairStatus').textContent = 'Waiting for ' + name + ' to accept…'; showCheck($('joinCheck'), L.check) }
+  L.canRem = m.rem === 1
+  if (pairRoom) sendProve(L, via)
+  else if (!L.accepted) { $('pairStatus').textContent = 'Waiting for ' + name + ' to accept…'; showCheck($('joinCheck'), L.check) }
   if (via === 'relay' && !helloSentByRelay) sendHelloByRelay(gen)
 }
 function acceptAsk() {
@@ -1270,6 +1600,8 @@ function welcome(L) {
     for (const o of [...links.values()]) if (o !== L && o.known && !o.accepted) { removeLink(o, 'Connection lost'); log('Let go of the earlier connection to ' + nameOf(o)) }
     if (L.name !== L.baseName && ![...links.values()].some(o => o !== L && o.name === L.baseName)) L.name = L.baseName
   }
+  // Another device in the room now: a Remember being asked with one already there stops.
+  for (const o of links.values()) if (o !== L && o.known && (o.remMine || o.remTheirs) && !o.remBusy) { toLink(o, {t: 'remno', why: 'many'}); resetRem(o) }
   sendCtl(L, {t: 'welcome'})
   helloMsg('welcome').then(m => postHandshake(L, {...m, to: L.pub}))
   if (fresh) enterConnected(L)
@@ -1282,6 +1614,8 @@ function onWelcome(m, gen) {
   if (L.accepted) return dialExtraLanes(L, gen)
   const go = () => {
     if (gen !== generation || L.accepted) return
+    // A remembered device's room: only once the hub has shown it has the secret (onProve).
+    if (pairRoom && !pairRoom.proven.has(L.pub)) { L.welcomed = true; return }
     L.accepted = true; L.known = true
     enterConnected(L)
     dialExtraLanes(L, gen)
@@ -1289,7 +1623,8 @@ function onWelcome(m, gen) {
   // Through the relay the welcome carries the hub's key, in case its hello never arrived.
   if (m && m.pub && m.pub !== L.pub) {
     L.name = String(m.name || L.name || 'Device').slice(0, 40)
-    sessionFor(m.pub).then(k => { if (gen !== generation) return; L.key = k; L.pub = m.pub; L.check = ''; updateCheck(L); go() }, () => {})
+    L.canRem = m.rem === 1
+    sessionFor(m.pub).then(sk => { if (gen !== generation) return; L.key = sk.key; L.rem = sk.rem; L.pub = m.pub; L.check = ''; resetRem(L); updateCheck(L); go() }, () => {})
   } else if (L.pub) go()
 }
 function onReject(m, gen) {
@@ -1318,7 +1653,12 @@ function decline() {
 }
 function enterConnected(L) {
   if (mode !== 'connected') setMode('connected')
-  log('Connected to ' + nameOf(L) + (direct(L) ? '' : ' through the encrypted relay'))
+  if (pairRoom) doneKnocks.add(pairRoom.n)
+  if (pairRoom && !pairRoom.forgotten) {
+    L.pairId = pairRoom.rec.id
+    remember.touch(L.pairId, (isHub() ? L.baseName : L.name) || '').then(loadMine, () => {})
+  }
+  log('Connected to ' + nameOf(L) + (pairRoom ? ' (remembered device)' : direct(L) ? '' : ' through the encrypted relay'))
   if (direct(L)) checkPath(L, L.lanes[0], generation, 0)
   renderLinks()
 }
@@ -1340,7 +1680,7 @@ function removeLink(L, note) {
 // its code; otherwise it moves to a fresh code, so nobody reconnects by accident.
 function afterLeave(what) {
   if (roomLinks().length) return
-  if (broadcast || asks.length) { setMode('waiting'); $('pairStatus').textContent = what + '. Others can still join with this code.'; return }
+  if (!pairRoom && (broadcast || asks.length)) { setMode('waiting'); $('pairStatus').textContent = what + '. Others can still join with this code.'; return }
   setRoom('', 'create')
   $('pairStatus').textContent = what + '. Share this new code to connect again.'
 }
@@ -1373,6 +1713,7 @@ function linkLost(L) {
   showLaneCount()
   if (!L.accepted) return
   L.accepted = false
+  if (!L.remBusy) resetRem(L)
   log('Lost the connection to ' + nameOf(L) + '. Waiting for it to come back…', true)
   renderLinks()
   clearTimeout(L.lostTimer)
@@ -1484,7 +1825,7 @@ const hostId = () => APP + '-' + code
 
 function showLaneCount() {
   notify()
-  const n = [...links.values()].reduce((s, L) => s + L.lanes.filter(c => c && c.open).length, 0)
+  const n = [...links.values()].reduce((s, L) => s + L.lanes.filter(laneOk).length, 0)
   pillIn($('laneState'), n + ' open', n ? 'good' : 'muted')
 }
 function closeAllLanes() {
@@ -1549,6 +1890,13 @@ function claimHost(gen) {
       p.destroy()
       // Back after a reload: the old session can hold the code for a few seconds, so try again.
       if (reclaims > 0) { reclaims--; setTimeout(() => { if (gen === generation) claimHost(gen) }, 3000); return }
+      // A remembered device's room can't be held (it shouldn't happen): the call ends.
+      if (pairRoom) {
+        const name = pairRoom.rec.name
+        setRoom('', 'create')
+        $('pairStatus').textContent = 'Couldn\'t call ' + name + '. Try again.'
+        return
+      }
       // A code this device just made is already in use by someone else: pick another.
       dbg('Code ' + code + ' was already in use, picking another')
       setRoom(randomCode(), 'create')
@@ -1665,6 +2013,7 @@ function setupLane(L, c, i, gen) {
     if (gen !== generation) return
     c._opened = true
     showLaneCount()
+    if (pairRoom) sendLaneProof(c, gen)
     if (i !== 0) return
     clearTimeout(timer)
     helloMsg('hello').then(m => { if (gen === generation) { try { c.send(JSON.stringify(m)) } catch (e) {} } })
@@ -1673,7 +2022,7 @@ function setupLane(L, c, i, gen) {
     if (c._retry) log('Switched to a direct connection')
     dbg('Direct link connected')
     const own = c._link
-    if (own && own.accepted) { renderLinks(); checkPath(own, c, gen, 0) }
+    if (own && own.accepted && direct(own)) { renderLinks(); checkPath(own, c, gen, 0) }
   })
   c.on('data', d => onPeerData(d, gen, c))
   c.on('close', () => {
@@ -1692,6 +2041,7 @@ function setupLane(L, c, i, gen) {
     own.lanes = []
     showLaneCount()
     own.accepted = false // the hub lets this device back in without asking
+    if (!own.remBusy) resetRem(own)
     helloSentByRelay = false // if the direct link doesn't come back, it says hello through the relay again
     setMode('waiting')
     $('pairStatus').textContent = 'Reconnecting…'
@@ -1762,7 +2112,9 @@ async function checkPath(L, c, gen, tries) {
   if (tries < 10) setTimeout(() => checkPath(L, c, gen, tries + 1), 1000)
 }
 
-function sendCtl(L, obj) { const c = L && L.lanes[0]; try { if (c && c.open) c.send(JSON.stringify(obj)) } catch (e) {} }
+// In a remembered device's room, only the handshake goes on a connection not yet shown to be its.
+const BEFORE_OK = new Set(['welcome', 'reject', 'bye', 'prove'])
+function sendCtl(L, obj) { const c = L && L.lanes[0]; try { if (c && c.open && (laneOk(c) || BEFORE_OK.has(obj.t))) c.send(JSON.stringify(obj)) } catch (e) {} }
 
 // ----- receiving direct -----
 // Each link keeps its own incoming transfers (L.inX: transfer number -> record), and the ids of
@@ -1779,9 +2131,18 @@ const OPEN_BLOCKS = 24 // blocks being gathered at once; the sender keeps far fe
 
 function onPeerData(d, gen, c) {
   const L = c._link
+  // A remembered device's room: until a connection is shown to be that device's (onLaneProof),
+  // only the handshake is taken from it; the rest waits, and is let through once it is.
+  if (pairRoom && !c._ok) {
+    let t = null
+    if (typeof d === 'string') { try { t = JSON.parse(d).t } catch (e) { return } }
+    if (t !== 'lp' && t !== 'hello' && t !== 'bye' && !BEFORE_OK.has(t)) { if (!c._held) c._held = []; if (c._held.length < 64) c._held.push(d); return }
+  }
   if (typeof d === 'string') {
     let m; try { m = JSON.parse(d) } catch (e) { return }
+    if (m.t === 'lp') return onLaneProof(c, m, gen)
     if (m.t === 'hello') return onHello(m, 'direct', gen, c)
+    if (m.t === 'prove') return onProve(m, gen)
     if (!L) return
     switch (m.t) {
       case 'welcome': if (!isHub()) onWelcome(m, gen); return
@@ -1805,6 +2166,10 @@ function onPeerData(d, gen, c) {
       case 'g': if (GAME) { markActive(true); GAME.onData(isHub() ? L.pub : 'hub', m.d) } break
       case 'chat': if (!GAME) onChat(L, m); break
       case 'name': if (!GAME) onName(L, m); break
+      case 'rem': onRem(L, m); break
+      case 'remd': onRemd(L, m); break
+      case 'remno': onRemno(L, m); break
+      case 'forget': onForget(L, m); break
       case 'ready': { const f = readyWaiters.get(m.id); if (f) f(m); break }
       case 'got': { const o = storedOut.get(m.id); if (o && Number.isInteger(m.n) && m.n > o.n) o.n = m.n; break }
       case 'ack': { const f = peerAcks.get(m.id); if (f) f(m); break }
@@ -1813,7 +2178,7 @@ function onPeerData(d, gen, c) {
     }
     return
   }
-  if (L && L.accepted) onChunk(L, d)
+  if (L && L.accepted && laneOk(c)) onChunk(L, d)
 }
 // The other device stopped a file: one coming in here (gone through the relay instead, or
 // canceled), or one going out from here.
@@ -2109,7 +2474,7 @@ async function sendDirect(file, id, num, x, isCanceled, L) {
   // Over a TURN relay, parallel connections only fight each other for a slow, far-off path (and
   // lost pieces sent again count against the relay's allowance), so one does.
   const want = L.path === 'relay' ? 1 : parseInt($('lanes').value, 10) || 1
-  const active = L.lanes.slice(0, want).filter(c => c && c.open)
+  const active = L.lanes.slice(0, want).filter(laneOk)
   if (!active.length) throw new Error('not connected')
   const dcs = active.map(c => c.dataChannel)
   // Use the largest message every connection allows (Chrome allows 256 KB).
@@ -2173,7 +2538,7 @@ async function sendDirect(file, id, num, x, isCanceled, L) {
 let codeKey = null, pipeBase = '', pipePath = '', myInbox = ''
 let inboxReqs = [], listening = 0, helloSentByRelay = false // listening: which round of listening is current
 const acceptWaiters = new Map(), ackWaiters = new Map(), outgoingPipe = new Map(), incomingPipe = new Map(), seenOffers = new Set()
-const HANDSHAKE = new Set(['hello', 'welcome', 'reject', 'bye', 'check'])
+const HANDSHAKE = new Set(['hello', 'welcome', 'reject', 'bye', 'check', 'prove'])
 // The hub listens on every relay, so a device reaches it whichever relay it uses (the default when
 // it typed the code, or the one in the QR code), and answers each device on that device's relay.
 const inboxTo = L => pipeBase && pipePath && L ? (isHub() ? (L.relay || pipeBase) + '/' + pipePath + '-to-' + L.id : pipeBase + '/' + pipePath + '-to-hub') : ''
@@ -2333,6 +2698,7 @@ function handleControl(msg, gen, from, base) {
   if (msg.sealedBy === 'code') {
     if (msg.t === 'hello') return onHello(msg, 'relay', gen, null, base)
     if (msg.t === 'check') return gen === generation && onCheck(isHub() ? links.get(msg.pub) : hubLink(), msg, 'relay')
+    if (msg.t === 'prove') return onProve(msg, gen)
     if (isHub()) return
     if (msg.t === 'welcome') return onWelcome(msg, gen)
     if (msg.t === 'reject') return onReject(msg, gen)
@@ -2346,6 +2712,10 @@ function handleControl(msg, gen, from, base) {
   if (msg.t === 'active') return markActive(true)
   if (msg.t === 'chat') return GAME ? undefined : onChat(L, msg)
   if (msg.t === 'name') return GAME ? undefined : onName(L, msg)
+  if (msg.t === 'rem') return onRem(L, msg)
+  if (msg.t === 'remd') return onRemd(L, msg)
+  if (msg.t === 'remno') return onRemno(L, msg)
+  if (msg.t === 'forget') return onForget(L, msg)
   if (msg.t === 'accept') { const f = acceptWaiters.get(msg.id); if (f) f(true) }
   if (msg.t === 'ack') { const f = ackWaiters.get(msg.id); if (f) f(true) }
   if (msg.t === 'prog') { const o = outgoingPipe.get(msg.id); if (o) o.progress(msg.n) }
@@ -2362,6 +2732,175 @@ function tellProgress(L, id, n) {
 // Relay file addresses must be on one of Beam's relays (files go through the fastest one, which
 // needn't be the room's).
 const onRelay = path => typeof path === 'string' && PIPE_SERVERS.some(b => path.startsWith(b + '/'))
+
+// ---------- connecting to a remembered device ----------
+// A tap on Connect (Your devices) calls that device: this one opens a room whose code is made
+// from the two devices' secret and a fresh random value (connectPair), and keeps "knocking" for up
+// to 2 minutes: a short message, sealed with a key from the secret, posted on every relay to the
+// other device's home (a relay address only the two of them know). That device, open in Beam and
+// not busy, hears it (listenHome) and joins the room. Nobody else is asked or let in: in that room
+// each side has to prove it has the secret, for its key (prove) and for each direct connection
+// (lp), so neither the connection service nor a relay, which see the room, can stand in for it.
+const KNOCK_FRESH = 15 * 60000 // a knock older (or newer) than this, by the two clocks, is ignored
+const homePath = async home => (await sha256hex(APP + ':home:' + home)).slice(0, 40)
+async function connectPair(rec, n, how, ts) {
+  let mac, roomCode
+  try { mac = await pairMac(rec.key); roomCode = 'p' + (await macHex(mac, ['room', n])).slice(0, 24) }
+  catch (e) { log('Couldn\'t use what this browser keeps for ' + rec.name + '. Forget it and remember it again.', true); return }
+  if (life.signal.aborted) return
+  // Called by the other device: only if this one is still free (it may have started something meanwhile).
+  if (how === 'join' && !free() && !rejoining(rec)) return
+  setRoom(roomCode, how, false, {rec, n, ts: ts || Date.now(), mac, code: roomCode, proven: new Set()})
+}
+// Still joining a call from this device, not yet in: a newer call from it replaces that one (the
+// first may have been left behind, or the caller started again).
+const rejoining = rec => !!pairRoom && pairRoom.rec.id === rec.id && intent === 'join' && mode === 'waiting' && !(hubLink() && hubLink().known)
+// Free to answer a call: showing this device's own code with nobody here or asking (or calling the
+// same device, see onKnock).
+const free = () => mode === 'waiting' && intent === 'create' && !asks.length && !roomLinks().length
+// The calling side: knock until that device comes, or give up after 2 minutes.
+async function knock(pair, gen) {
+  const live = () => gen === generation && mode === 'waiting' && !life.signal.aborted
+  let key, path
+  try { key = await pairSeal(pair.rec.key); path = await homePath(pair.rec.home) } catch (e) { return }
+  const end = Date.now() + JOIN_GIVE_UP
+  // A device that answered and proved it has the secret is on its way in: no more knocking meanwhile.
+  const coming = () => [...links.values()].some(l => pair.proven.has(l.pub))
+  while (live() && (Date.now() < end || (coming() && Date.now() < end + 60000))) {
+    if (coming()) { await sleep(1000); continue }
+    const body = await seal(enc(JSON.stringify({id: pair.rec.id, n: pair.n, ts: Date.now()})), key)
+    const reqs = PIPE_SERVERS.map(b => request('POST', b + '/' + path, body, {timeout: 20000}))
+    // A knock still waiting on a relay once the call is over is taken back, so the other device
+    // doesn't answer a call that's gone.
+    let heard = null
+    Promise.any(reqs.map(r => r.promise)).then(() => { heard = true }, () => { heard = false })
+    while (heard === null && live()) await sleep(250)
+    reqs.forEach(r => r.abort())
+    // Heard: it should come within seconds. Not heard, or it was busy: knock again.
+    for (let t = Date.now() + (heard ? 10000 : 2000); live() && !coming() && Date.now() < t;) await sleep(250)
+  }
+  if (!live()) return
+  log(pair.rec.name + ' didn\'t answer', true)
+  setRoom('', 'create')
+  $('pairStatus').textContent = pair.rec.name + ' didn\'t answer. Open Beam on it, check that it lets remembered devices connect, and try again.'
+}
+// The answering side: while free, it listens at its home on every relay. Only one Beam in this
+// browser listens (a lock): a relay address takes one listener at a time.
+const LISTEN_KEY = 'beam-remember-listen'
+const listenOn = () => { try { return localStorage.getItem(LISTEN_KEY) !== '0' } catch (e) { return true } }
+let homeRun = null
+const doneKnocks = new Set() // calls that connected: the same knock again (left on a relay) isn't answered
+const answering = new Set()  // calls being answered right now
+function syncHome() {
+  if (life.signal.aborted) return
+  // A knock while busy is ignored (free); one joining a call keeps listening, for a newer call (rejoining).
+  const want = !GAME && remOk && mine.length > 0 && listenOn() && mode === 'waiting' && (intent === 'create' || (!!pairRoom && !(hubLink() && hubLink().known)))
+  if (want && !homeRun) startHome()
+  else if (!want && homeRun) stopHome()
+}
+function startHome() {
+  const run = homeRun = {stop: false, reqs: [], ac: new AbortController()}
+  const go = async () => {
+    const url = '/' + await homePath(await remember.home())
+    await Promise.all(PIPE_SERVERS.map(b => listenHome(run, b + url)))
+  }
+  // Couldn't start (its storage failed): tried again on the next change of screen.
+  const failed = () => { if (homeRun === run) { homeRun = null; run.stop = true } }
+  if (navigator.locks) navigator.locks.request('beam-home', {signal: run.ac.signal}, go).catch(failed)
+  else go().catch(failed)
+}
+function stopHome() {
+  const run = homeRun
+  homeRun = null
+  if (!run) return
+  run.stop = true
+  run.ac.abort()
+  run.reqs.forEach(r => r.abort())
+}
+async function listenHome(run, url) {
+  while (!run.stop) {
+    const r = request('GET', url)
+    run.reqs.push(r)
+    try { const xhr = await r.promise; if (!run.stop) onKnock(xhr.response) }
+    catch (e) { if (run.stop) return; await sleep(e.status ? 2000 : 5000) } // busy (another listener) or unreachable
+    finally { run.reqs = run.reqs.filter(x => x !== r) }
+  }
+}
+const knockKeys = new Map() // remembered device id -> its knock key
+const knockKeyOf = r => { if (!knockKeys.has(r.id)) knockKeys.set(r.id, pairSeal(r.key)); return knockKeys.get(r.id) }
+async function onKnock(buf) {
+  let m = null, rec = null
+  for (const r of mine) {
+    try { m = JSON.parse(new TextDecoder().decode(await unseal(buf, await knockKeyOf(r)))); rec = r; break } catch (e) {}
+  }
+  if (!m || m.id !== rec.id || !isHex(m.n, 32) || typeof m.ts !== 'number' || !(Math.abs(Date.now() - m.ts) < KNOCK_FRESH) || doneKnocks.has(m.n)) return
+  if (!homeRun || answering.has(m.n) || (pairRoom && pairRoom.n === m.n)) return // already answering this one (it came on each relay)
+  if (rejoining(rec)) { if (m.ts <= pairRoom.ts) return }
+  else if (!free()) return // busy now: the caller knocks again
+  // Both called each other at once: the room with the lower number is the one both use.
+  else if (pairRoom && (pairRoom.rec.id !== rec.id || m.n > pairRoom.n || links.size)) return
+  answering.add(m.n)
+  setTimeout(() => answering.delete(m.n), 30000)
+  log(rec.name + ' is connecting')
+  connectPair(rec, m.n, 'join', m.ts)
+}
+// Proofs. Each says "I have the secret", for one role (hub or join) in this room only, bound to
+// the two devices' keys (prove) or to one direct connection's own encryption (lp: the
+// fingerprints of both ends' certificates, which differ if anyone sits between them).
+const proveParts = (role, hubPub, joinPub) => ['prove', role, code, hubPub, joinPub]
+async function sendProve(L, via) {
+  const p = pairRoom
+  if (!p || !L.pub) return
+  await keys
+  const mac = await macHex(p.mac, isHub() ? proveParts('hub', myPub, L.pub) : proveParts('join', L.pub, myPub))
+  if (p !== pairRoom) return
+  const msg = {t: 'prove', mac, pub: myPub}
+  if (via === 'direct') sendCtl(L, msg)
+  else postHandshake(L, isHub() ? {...msg, to: L.pub} : msg)
+}
+async function onProve(m, gen) {
+  const p = pairRoom
+  if (!p || gen !== generation || typeof m.pub !== 'string' || !m.pub || !forMe(m) || p.proven.has(m.pub)) return
+  await keys
+  const ok = await macOk(p.mac, isHub() ? proveParts('join', myPub, m.pub) : proveParts('hub', m.pub, myPub), m.mac)
+  if (p !== pairRoom || gen !== generation) return
+  // One that doesn't match is turned away on its own (the room goes on, for the real device).
+  if (!ok) {
+    if (!p.warned) { p.warned = true; log('Turned away something without this pairing that tried to connect', true) }
+    const L = isHub() && links.get(m.pub)
+    return
+  }
+  p.proven.add(m.pub)
+  if (isHub()) { const L = links.get(m.pub); if (L && present(L) && !L.accepted) welcome(L) }
+  else { const L = hubLink(); if (L && L.pub === m.pub && L.welcomed) onWelcome(null, gen) }
+}
+const fingerprint = sdp => (((sdp || '').match(/^a=fingerprint:\S+ (\S+)/im) || [])[1] || '').toLowerCase()
+function laneParts(c, role) {
+  const pc = c.peerConnection
+  const a = fingerprint(pc && pc.localDescription && pc.localDescription.sdp), b = fingerprint(pc && pc.remoteDescription && pc.remoteDescription.sdp)
+  return a && b ? ['lane', role, code, ...[a, b].sort()] : null
+}
+async function sendLaneProof(c, gen) {
+  const p = pairRoom, parts = laneParts(c, isHub() ? 'hub' : 'join')
+  if (!p || !parts) return
+  const mac = await macHex(p.mac, parts)
+  if (p === pairRoom && gen === generation) { try { c.send(JSON.stringify({t: 'lp', mac})) } catch (e) {} }
+}
+async function onLaneProof(c, m, gen) {
+  const p = pairRoom, parts = p && laneParts(c, isHub() ? 'join' : 'hub')
+  if (!parts || c._ok) return
+  const ok = await macOk(p.mac, parts, m.mac)
+  if (p !== pairRoom || gen !== generation) return
+  if (!ok) { dbg('A direct connection that isn\'t the remembered device\'s', true); c._held = null; try { c.close() } catch (e) {} return }
+  c._ok = true
+  const held = c._held || []
+  c._held = null
+  for (const d of held) onPeerData(d, gen, c)
+  showLaneCount()
+  // Lane 0 of a device already in: its direct link is good now.
+  const L = c._link
+  if (L && L.lanes[0] === c && L.accepted) { renderLinks(); checkPath(L, c, gen, 0); dialExtraLanes(L, gen) }
+}
 
 // ---------- data usage: this device, this month ----------
 // Every file this device sent and received (direct or through a relay), and, apart, what went
@@ -2839,6 +3378,12 @@ $('scanCancel').addEventListener('click', stopScan)
 // The camera is let go when the page is hidden (another app, the screen off); scanning starts again from the button.
 document.addEventListener('visibilitychange', () => { if (document.hidden) stopScan() }, {signal: life.signal})
 $('accept').addEventListener('click', acceptAsk)
+$('listen').addEventListener('click', () => {
+  const on = !listenOn()
+  try { localStorage.setItem(LISTEN_KEY, on ? '1' : '0') } catch (e) {}
+  log(on ? 'Remembered devices can connect to this device' : 'Remembered devices can\'t connect to this device now')
+  showMine()
+})
 root.querySelectorAll('[data-bcast] .beam-switch').forEach(b => b.addEventListener('click', () => setBroadcast(!broadcast)))
 $('clearDone').addEventListener('click', clearFinished)
 $('decline').addEventListener('click', decline)
@@ -2965,6 +3510,7 @@ return {
     stopScan()
     for (const x of rows) if (x.url) URL.revokeObjectURL(x.url)
     disk.close()
+    stopHome()
     tabStore.set(TS + 'room', '')
   },
 }
