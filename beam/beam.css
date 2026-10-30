@@ -14,6 +14,10 @@
 .beam-code { font: 600 40px/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace; letter-spacing: .14em; padding-left: .14em; font-variant-numeric: tabular-nums; }
 /* The dot sits in the line, before the first word, however the text wraps. */
 .beam-status { max-width: 320px; font-size: 11.5px; line-height: 1.45; color: var(--text3); text-align: center; }
+/* The check code: the same six digits on both devices. */
+.beam-check { display: grid; justify-items: center; gap: 2px; margin: 0; font-size: 11.5px; color: var(--text2); text-align: center; }
+.beam-check b { font: 600 18px/1.2 ui-monospace, "SF Mono", Menlo, Consolas, monospace; letter-spacing: .08em; color: var(--text); font-variant-numeric: tabular-nums; }
+.beam-check small { max-width: 300px; font-size: 11px; line-height: 1.4; color: var(--text3); }
 .beam-dot { display: inline-block; width: 7px; height: 7px; margin-right: 7px; vertical-align: 1px; border-radius: 50%; background: var(--green); animation: beam-pulse 1.6s ease-in-out infinite; }
 @keyframes beam-pulse { 50% { opacity: .3; } }
 .beam-hint { font-size: 11px; line-height: 1.4; color: var(--text3); }
@@ -113,7 +117,8 @@
 .beam-xfer { display: grid; gap: 6px; padding: 10px 12px; border-radius: 12px; background: var(--row); min-width: 0; }
 .beam-xfer .top { display: flex; justify-content: space-between; gap: 10px; min-width: 0; }
 .beam-xfer .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; font-weight: 500; }
-.beam-xfer .dir { color: var(--text3); font-size: 11px; white-space: nowrap; }
+.beam-xfer .dir { display: inline-flex; align-items: center; gap: 6px; color: var(--text3); font-size: 11px; white-space: nowrap; }
+.beam-xfer .dir .beam-pill { padding: 0 6px; font-size: 10.5px; line-height: 16px; cursor: default; }
 .beam-bar { height: 5px; border-radius: 3px; background: var(--field); overflow: hidden; }
 .beam-bar > i { display: block; width: 0; height: 100%; background: var(--text2); transition: width .15s linear; }
 .beam-xfer.done .beam-bar > i { background: var(--green); } .beam-xfer.warn .beam-bar > i { background: var(--yellow); } .beam-xfer.failed .beam-bar > i { background: var(--red); }

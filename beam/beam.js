@@ -71,6 +71,9 @@ const RELAY_MAX = (MOBILE ? 500 : 1024) * 1024 * 1024
 // page (the extension runs on computers). jsQR reads it where the browser has no QR reader of its own.
 const CAN_SCAN = !IS_EXTENSION && MOBILE && window.isSecureContext && !!navigator.mediaDevices?.getUserMedia
 const JSQR_URL = new URL('lib/jsQR.min.js', document.currentScript?.src || location.href).href
+// Received files from this size up go to disk as they arrive (disk.js), not into memory.
+const DISK_URL = new URL('disk.js', document.currentScript?.src || location.href).href
+const DISK_MIN = 16 * 1024 * 1024
 const BEAM_ICON = new URL('icons/icon-128.png', document.currentScript?.src || location.href).href
 const $ = id => document.getElementById('beam-' + id)
 const sleep = ms => new Promise(r => setTimeout(r, ms))
@@ -98,6 +101,7 @@ function markup(preview) {
 
   <div class="beam-ask" id="beam-ask" role="alert" hidden>
     <p><b id="beam-askName">A device</b> wants to connect.</p>
+    <p class="beam-check" id="beam-askCheck" hidden>Check code <b></b><small>Accept only if that device shows the same code.</small></p>
     <div class="beam-row beam-center-row">
       <button type="button" class="beam-btn" id="beam-decline">Decline</button>
       <button type="button" class="beam-btn primary" id="beam-accept">Accept</button>
@@ -109,6 +113,7 @@ function markup(preview) {
     <p class="beam-eyebrow" id="beam-codeLabel">Your code</p>
     <div class="beam-code" id="beam-roomCode">${preview ? '••••••' : '------'}</div>
     <p class="beam-status"><span class="beam-dot" aria-hidden="true"></span><span id="beam-pairStatus">Waiting for the other device…</span></p>
+    <p class="beam-check" id="beam-joinCheck" hidden>Check code <b></b><small>It should match the code on the other device.</small></p>
     <button type="button" class="beam-btn small" id="beam-joinCancel" hidden>Cancel</button>
     ${BCAST}
     <ol class="beam-steps" id="beam-steps">
@@ -191,6 +196,7 @@ function markup(preview) {
         <dt>Parallel links</dt><dd id="beam-laneState"><span class="beam-pill muted">0 open</span></dd>
         <dt>Relay</dt><dd id="beam-pipeState"><span class="beam-pill muted">Starting</span></dd>
         <dt>Relay speeds</dt><dd id="beam-relaySpeeds" class="beam-hint">Measured before the first file goes through a relay</dd>
+        <dt>Check code</dt><dd id="beam-checkCodes" class="beam-hint">Shown once a device connects</dd>
       </dl>
       <div class="beam-row"><label for="beam-lanes" class="beam-hint">Parallel connections</label>
         <select id="beam-lanes"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4" selected>4</option></select></div>
@@ -348,6 +354,7 @@ const TS = GAME ? GAME.app + '-' : 'beam-' // this tab's room, apart from Beam's
 const randomCode = () => String(crypto.getRandomValues(new Uint32Array(1))[0] % 900000 + 100000)
 const cleanCode = s => (s || '').replace(/\D/g, '').slice(0, 10)
 const validCode = c => /^\d{6,10}$/.test(c)
+const hexOf = buf => Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, '0')).join('')
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(16).slice(2))
 const tabStore = {
   get(k) { try { return sessionStorage.getItem(k) || '' } catch (e) { return '' } },
@@ -427,6 +434,7 @@ function renderLinks() {
     }
     const n = document.createElement('span')
     n.className = 'name'; n.textContent = L.name || 'Other device'
+    if (L.check) n.title = 'Check code ' + L.check
     const p = document.createElement('span')
     pill(p, ...routeOf(L))
     li.append(n, p)
@@ -446,6 +454,7 @@ function renderLinks() {
     : to === list.length ? (to === 2 ? 'to both devices' : 'to all ' + to + ' devices') + ' · or drop them into the vortex'
     : to ? 'to ' + to + ' of ' + list.length + ' devices · or drop them into the vortex' : 'tick a device above first'
   $('disconnect').textContent = many ? 'Disconnect all' : 'Disconnect'
+  showChecks()
   showBroadcast()
 }
 // The Broadcast switch is the hub's: off, one device can connect; on, up to MAX_DEVICES.
@@ -472,6 +481,7 @@ function showAsk() {
   $('ask').hidden = !L
   if (!L) return
   $('askName').textContent = L.name
+  showCheck($('askCheck'), L.check)
   const n = roomLinks().length
   $('askNote').textContent = (n ? n + ' of ' + MAX_DEVICES + ' devices connected. ' : '') + 'Only accept a device you\'re pairing with right now.' +
     (asks.length > 1 ? ' ' + (asks.length - 1) + ' more waiting.' : '')
@@ -599,26 +609,37 @@ function sizeChat() {
 // ---------- transfers UI ----------
 const activeX = new Set() // transfers still running, so Disconnect can stop them
 const rows = new Set()    // every transfer in the list; a received file's blob lives until it's discarded or cleared
+// The way a file goes, on its row: straight between the devices, or through a relay (a Piping
+// relay, or the TURN relay a direct link runs through). Either way only the two devices can read it.
+const VIA = {
+  direct: ['Direct', 'good', 'Sent straight between the devices, never stored on a server'],
+  turn: ['Via TURN relay', 'warn', 'The direct link runs through a TURN relay on this network. Encrypted end to end, nothing is stored'],
+  relay: ['Via relay', 'warn', 'Passed through a relay, encrypted with a key only the two devices have. Nothing is stored'],
+}
 function getXfer(id, name, size, dir, via, L) {
   $('xferSec').hidden = false
   const el = document.createElement('div'); el.className = 'beam-xfer'
-  el.innerHTML = '<div class="top"><span class="name"></span><span class="dir"></span></div><div class="beam-bar"><i></i></div>' +
+  el.innerHTML = '<div class="top"><span class="name"></span><span class="dir"><span class="beam-pill"></span><span class="info"></span></span></div><div class="beam-bar"><i></i></div>' +
     '<div class="stats"><span class="pct"></span><span class="beam-row"><span class="rate"></span><button type="button" class="beam-btn small cancel">Cancel</button></span></div>'
   $('transfers').prepend(el)
-  const x = {id, el, size, dir, link: L, start: performance.now(), ms: 0, lastUI: 0, finished: false, cancel: null, abort: null}
+  const x = {id, el, size, dir, link: L, start: performance.now(), ms: 0, base: 0, lastUI: 0, finished: false, cancel: null, abort: null, free: null}
   // With several devices in the room, each row says which one it's to or from.
   const who = isHub() && roomLinks().length > 1 ? (dir === 'in' ? ' · from ' : ' · to ') + nameOf(L) : ''
   el.querySelector('.name').textContent = name
-  el.querySelector('.dir').textContent = (dir === 'in' ? '↓ ' : '↑ ') + via + who + (size ? ' · ' + fmtBytes(size) : '')
+  const [label, tone, tip] = VIA[via === 'Relay' ? 'relay' : L && L.path === 'relay' ? 'turn' : 'direct']
+  const p = el.querySelector('.dir .beam-pill')
+  pill(p, label, tone); p.title = tip
+  el.querySelector('.dir .info').textContent = (dir === 'in' ? '↓' : '↑') + who + (size ? ' · ' + fmtBytes(size) : '')
   el.querySelector('.cancel').addEventListener('click', () => { if (x.cancel && !x.finished) x.cancel() })
   activeX.add(x)
   rows.add(x)
   return x
 }
-// A row leaves the list; a received file it held is let go of (its memory is freed).
+// A row leaves the list; a received file it held is let go of (its memory or disk space is freed).
 function dropRow(x) {
   if (x.url) URL.revokeObjectURL(x.url)
   x.url = ''
+  if (x.free) { x.free(); x.free = null }
   x.el.remove()
   rows.delete(x)
   if (!rows.size) $('xferSec').hidden = true
@@ -634,7 +655,7 @@ function updateXfer(x, bytes, total, force) {
   x.lastUI = now
   x.el.querySelector('.beam-bar > i').style.width = (done * 100).toFixed(1) + '%'
   x.el.querySelector('.pct').textContent = (done * 100).toFixed(0) + '% · ' + fmtBytes(bytes)
-  x.el.querySelector('.rate').innerHTML = '<b>' + fmtRate(bytes, x.ms) + '</b>'
+  x.el.querySelector('.rate').innerHTML = '<b>' + fmtRate(bytes - x.base, x.ms) + '</b>' // base: what was already there when it carried on
 }
 function finishXfer(x, state, text) {
   if (x.finished) return
@@ -644,7 +665,7 @@ function finishXfer(x, state, text) {
   if (state === 'done' && x.size) addTotal(x.dir === 'in' ? 0 : x.size, x.dir === 'in' ? x.size : 0)
   if (state === 'done' || state === 'warn') {
     x.el.querySelector('.beam-bar > i').style.width = '100%'
-    if (x.size) x.el.querySelector('.rate').innerHTML = '<b>' + fmtRate(x.size, x.ms) + '</b>'
+    if (x.size) x.el.querySelector('.rate').innerHTML = '<b>' + fmtRate(x.size - x.base, x.ms) + '</b>'
   }
   x.el.querySelector('.pct').textContent = text
   const c = x.el.querySelector('.cancel'); if (c) c.remove()
@@ -692,6 +713,109 @@ function clearFinished() {
   done.forEach(dropRow)
 }
 
+// ---------- where received files are kept ----------
+// A store takes a file's blocks as they're done (put) and gives the whole file back as a Blob
+// (finish). Large files go to disk: the browser's private storage for this page (the origin private
+// file system), written by disk.js in a worker, so they never have to fit in memory; the Blob it
+// gives back reads from disk. Smaller files, and any where that storage isn't there (some private
+// windows) or hasn't room, are kept in memory as before.
+// Each Beam has its own folder there, held with a lock while it's open; folders whose lock nobody
+// holds any more (a closed tab) are cleared the first time a file goes to disk.
+const disk = (() => {
+  const dir = Date.now() + '-' + uid()
+  let worker = null, ready = null, n = 0, release = null
+  const waits = new Map()
+  const LOCK = 'beam-disk-'
+  function call(m, transfer) {
+    return new Promise((resolve, reject) => {
+      const k = ++n
+      waits.set(k, {resolve, reject})
+      worker.postMessage({...m, n: k, dir}, transfer || [])
+    })
+  }
+  async function sweep(root) {
+    for await (const [name] of root.entries()) {
+      if (name === dir) continue
+      const remove = () => root.removeEntry(name, {recursive: true}).catch(() => {})
+      // Without locks, a folder is taken as left over once it's a day old.
+      if (!navigator.locks) { if (Date.now() - parseInt(name, 10) > 86400000) await remove(); continue }
+      await navigator.locks.request(LOCK + name, {ifAvailable: true}, l => l ? remove() : null)
+    }
+  }
+  function start() {
+    return ready || (ready = (async () => {
+      if (!navigator.storage || !navigator.storage.getDirectory || typeof Worker !== 'function') throw new Error('no private storage in this browser')
+      const root = await (await navigator.storage.getDirectory()).getDirectoryHandle('beam', {create: true})
+      if (navigator.locks) await new Promise(held => navigator.locks.request(LOCK + dir, () => { held(); return new Promise(r => (release = r)) }).catch(() => held()))
+      await sweep(root).catch(() => {}) // before the space check below, so left-over files don't count
+      worker = new Worker(DISK_URL)
+      worker.onmessage = ({data: m}) => {
+        const w = waits.get(m.n); if (!w) return
+        waits.delete(m.n)
+        if (m.ok) w.resolve()
+        else w.reject(Object.assign(new Error(m.quota ? 'not enough storage space' : m.error), {quota: m.quota}))
+      }
+      worker.onerror = e => { e.preventDefault(); for (const w of waits.values()) w.reject(new Error('the disk writer stopped')); waits.clear() }
+    })().catch(e => { ready = null; throw e }))
+  }
+  async function store(size, type) {
+    await start()
+    if (navigator.storage.estimate) {
+      const {quota, usage} = await navigator.storage.estimate()
+      if (quota && quota - (usage || 0) < size + 64 * 1024 * 1024) throw new Error('not enough room in this browser\'s storage')
+    }
+    const key = 'f' + (++n)
+    await call({op: 'open', key})
+    let gone = false
+    return {
+      onDisk: true,
+      put: (at, bytes) => call({op: 'write', key, at, data: bytes.buffer}, [bytes.buffer]),
+      async finish() {
+        await call({op: 'close', key})
+        const root = await (await navigator.storage.getDirectory()).getDirectoryHandle('beam')
+        const file = await (await (await root.getDirectoryHandle(dir)).getFileHandle(key)).getFile()
+        return file.slice(0, file.size, type || 'application/octet-stream')
+      },
+      discard() { if (!gone && worker) { gone = true; call({op: 'remove', key}).catch(() => {}) } },
+    }
+  }
+  // Beam closes here (another took over, or the page is going): its folder goes with it.
+  function close() {
+    if (!worker) return
+    const w = worker
+    worker = null
+    navigator.storage.getDirectory().then(r => r.getDirectoryHandle('beam')).then(r => {
+      w.terminate() // its files are closed with it, so the folder can go
+      return r.removeEntry(dir, {recursive: true})
+    }).catch(() => {}).finally(() => { if (release) release() })
+  }
+  // Shortly after Beam opens: files left by Beams that have closed go, without waiting for the
+  // next large file. Nothing is created if Beam never put anything there.
+  function tidy() {
+    if (ready || !navigator.storage || !navigator.storage.getDirectory) return
+    navigator.storage.getDirectory().then(r => r.getDirectoryHandle('beam')).then(sweep).catch(() => {})
+  }
+  return {store, close, tidy}
+})()
+if (!GAME) setTimeout(() => { if (!life.signal.aborted) disk.tidy() }, 5000)
+function memStore(size, type) {
+  let buf = new Uint8Array(size) // throws when there isn't that much memory
+  return {
+    onDisk: false,
+    put: async (at, bytes) => { buf.set(bytes, at) },
+    // The Blob is a copy: the buffer is let go of, so the file isn't held twice.
+    finish: async () => { const b = new Blob([buf], {type: type || 'application/octet-stream'}); buf = null; return b },
+    discard() { buf = null },
+  }
+}
+async function storeFor(size, type) {
+  if (size >= DISK_MIN) {
+    try { return await disk.store(size, type) }
+    catch (e) { dbg('Keeping it in memory: ' + (e.message || e)) }
+  }
+  return memStore(size, type)
+}
+
 // ---------- room ----------
 // The room number lives in this tab only. The QR link carries it to the other device, which then cleans its address bar.
 let code = ''
@@ -734,6 +858,8 @@ function setRoom(newCode, how, reclaim) {
   $('roomCode').textContent = code
   $('roomSmall').textContent = code
   $('pairStatus').textContent = intent === 'join' ? 'Connecting…' : waitingText()
+  $('joinCheck').hidden = true
+  showChecks()
   showAsk()
   drawQR()
   dbg('Room ' + code + ' · this device: ' + myName)
@@ -936,6 +1062,8 @@ function joinScanned(r) {
 // declines; a device that joined waits for "welcome".
 let keys = null, myPub = ''
 function resetHandshake() {
+  myNonce = randomHex()
+  myCommit = sha256hex(myNonce)
   keys = crypto.subtle.generateKey({name: 'ECDH', namedCurve: 'P-256'}, false, ['deriveBits']).then(async k => {
     myPub = b64(await crypto.subtle.exportKey('raw', k.publicKey))
     return k
@@ -949,9 +1077,70 @@ async function sessionFor(pub) {
   return crypto.subtle.deriveKey({name: 'HKDF', hash: 'SHA-256', salt: enc(APP + ':' + code), info: enc('beam relay')},
     hk, {name: 'AES-GCM', length: 256}, false, ['encrypt', 'decrypt'])
 }
+// The check code: six digits, the same on both devices, made from both public keys, the room code
+// and a fresh random value from each side. Someone else who got hold of the room code (or sat
+// between the two) ends up with other keys, so a different code: the hub compares it before
+// Accept, and it stays in Details.
+// So that a go-between can't try key after key until the two codes happen to match, neither side
+// can know the code before the other's value is fixed: the joining device first sends only a hash
+// of its value ("commit", in its hello), the hub then sends its own value for that device
+// ("check" with nh), and only then does the device show its value ("check" with nj), which the hub
+// checks against the hash.
+let myNonce = '', myCommit = null
+const randomHex = () => hexOf(crypto.getRandomValues(new Uint8Array(16)))
+const isHex = (v, len) => typeof v === 'string' && v.length === len && /^[0-9a-f]+$/.test(v)
+async function updateCheck(L) {
+  const nj = isHub() ? L.nj : myNonce
+  if (!L.pub || !L.nh || !nj) return
+  await keys
+  const pub = L.pub
+  const h = await crypto.subtle.digest('SHA-256', enc([APP, 'check', code, ...[myPub, pub].sort(), L.nh, nj].join(':')))
+  if (L.pub !== pub) return
+  const n = new DataView(h).getUint32(0) % 1000000
+  L.check = String(n).padStart(6, '0').replace(/^(\d{3})/, '$1 ')
+  if (isHub()) { if (asks[0] === L) showAsk() }
+  else if (!L.accepted) showCheck($('joinCheck'), L.check)
+  renderLinks()
+}
+// The hub: a device's hello came with its commit, so it gets the hub's value (the same one each time).
+function sendNonce(L, via) {
+  if (!L.commit || L.check) return
+  if (!L.nh) L.nh = randomHex()
+  if (via === 'direct') sendCtl(L, {t: 'check', nh: L.nh})
+  else postHandshake(L, {t: 'check', nh: L.nh, to: L.pub})
+}
+// Both sides: the other's value. A device that joined answers with its own.
+async function onCheck(L, m, via) {
+  if (!L) return
+  if (isHub()) {
+    if (!isHex(m.nj, 32) || L.nj || !L.commit || (await sha256hex(m.nj)) !== L.commit) return
+    L.nj = m.nj
+  } else {
+    if (!forMe(m) || !isHex(m.nh, 32)) return
+    if (L.nh !== m.nh) { L.nh = m.nh; L.check = '' }
+    if (via === 'direct') sendCtl(L, {t: 'check', nj: myNonce})
+    else postHandshake(L, {t: 'check', nj: myNonce, pub: myPub})
+  }
+  updateCheck(L)
+}
+function showCheck(el, check) {
+  el.hidden = !check
+  el.querySelector('b').textContent = check || ''
+}
+function showChecks() {
+  const list = [...links.values()].filter(L => L.known && L.check)
+  const dd = $('checkCodes')
+  if (!list.length) { dd.textContent = 'Shown once a device connects'; return }
+  dd.textContent = list.map(L => (list.length > 1 ? nameOf(L) + ': ' : '') + L.check).join(' · ')
+}
 // "relay": the relay this device listens on (it may have come from a QR code, or be the default
 // when the code was typed), so the hub answers it there.
-async function helloMsg(t) { await keys; return {t, v: APP, name: shownName(), pub: myPub, intent, relay: serverIndex} }
+async function helloMsg(t) {
+  await keys
+  const m = {t, v: APP, name: shownName(), pub: myPub, intent, relay: serverIndex}
+  if (intent === 'join') m.commit = await myCommit
+  return m
+}
 
 async function onHello(m, via, gen, conn, base) {
   if (gen !== generation) return
@@ -980,6 +1169,7 @@ async function hubHello(m, name, via, gen, conn, base) {
       for (let k = 2; taken.has(shown); k++) shown = name + ' (' + k + ')'
       L = newLink(m.pub, key, shown)
       L.id = id; L.baseName = name; L.relay = relay
+      if (isHex(m.commit, 64)) L.commit = m.commit
       if (conn) { conn._link = L; L.lanes[0] = conn }
       // A game's full room: a player that dropped and hasn't come back gives up its place (most
       // often this same player, reloaded with a new key; the game knows it again by its id).
@@ -1011,6 +1201,7 @@ async function hubHello(m, name, via, gen, conn, base) {
   // Through the relay the device hasn't heard from the hub yet: say hello back, so it can show
   // who it's waiting for.
   if (via === 'relay' && !L.helloBack) { L.helloBack = true; postHandshake(L, await helloMsg('hello')) }
+  if (present(L)) sendNonce(L, via)
   if (L.known || L.letIn) { L.letIn = false; welcome(L) } // back after a dropped link, or let straight in
 }
 function turnAway(L, why) {
@@ -1034,10 +1225,11 @@ async function joinerHello(m, name, via, gen) {
     let key
     try { key = await sessionFor(m.pub) } catch (e) { dbg('Bad public key from the other device', true); return }
     if (gen !== generation) return
-    L.key = key; L.pub = m.pub
+    L.key = key; L.pub = m.pub; L.check = ''
+    updateCheck(L) // the hub's value may have come first
   }
   L.name = name
-  if (!L.accepted) $('pairStatus').textContent = 'Waiting for ' + name + ' to accept…'
+  if (!L.accepted) { $('pairStatus').textContent = 'Waiting for ' + name + ' to accept…'; showCheck($('joinCheck'), L.check) }
   if (via === 'relay' && !helloSentByRelay) sendHelloByRelay(gen)
 }
 function acceptAsk() {
@@ -1074,7 +1266,7 @@ function onWelcome(m, gen) {
   // Through the relay the welcome carries the hub's key, in case its hello never arrived.
   if (m && m.pub && m.pub !== L.pub) {
     L.name = String(m.name || L.name || 'Device').slice(0, 40)
-    sessionFor(m.pub).then(k => { if (gen !== generation) return; L.key = k; L.pub = m.pub; go() }, () => {})
+    sessionFor(m.pub).then(k => { if (gen !== generation) return; L.key = k; L.pub = m.pub; L.check = ''; updateCheck(L); go() }, () => {})
   } else if (L.pub) go()
 }
 function onReject(m, gen) {
@@ -1111,7 +1303,7 @@ function enterConnected(L) {
 function removeLink(L, note) {
   clearTimeout(L.lostTimer)
   for (const x of [...activeX]) if (x.link === L) stopXfer(x, note)
-  L.inX.clear()
+  for (const r of [...L.inX.values()]) endIn(L, r)
   links.delete(L.pub)
   asks = asks.filter(a => a !== L)
   showAsk()
@@ -1152,8 +1344,7 @@ function kick(L) {
 // The hub lost a device's direct link: it's let back in without asking when it says hello again
 // (directly or through the relay), and given up after 2 minutes.
 function linkLost(L) {
-  for (const r of L.inX.values()) finishXfer(r.x, 'failed', 'Connection lost')
-  L.inX.clear()
+  holdAllIn(L) // files coming in wait for it, to carry on
   L.lanes.forEach(c => { try { c && c.close() } catch (e) {} })
   L.lanes = []
   showLaneCount()
@@ -1473,8 +1664,7 @@ function setupLane(L, c, i, gen) {
     if (isHub()) return linkLost(own)
     log('Connection lost. Trying to reconnect…', true)
     pillIn($('peerState'), 'Disconnected', 'warn')
-    for (const r of own.inX.values()) finishXfer(r.x, 'failed', 'Connection lost')
-    own.inX.clear()
+    holdAllIn(own) // files coming in wait for it, to carry on
     own.lanes.forEach(l => { try { l && l.close() } catch (e) {} })
     own.lanes = []
     showLaneCount()
@@ -1552,8 +1742,17 @@ async function checkPath(L, c, gen, tries) {
 function sendCtl(L, obj) { const c = L && L.lanes[0]; try { if (c && c.open) c.send(JSON.stringify(obj)) } catch (e) {} }
 
 // ----- receiving direct -----
-// Each link keeps its own incoming transfers (L.inX: transfer number -> {id, num, meta, buf, received, x, began}).
-const readyWaiters = new Map(), peerAcks = new Map(), peerCanceled = new Set()
+// Each link keeps its own incoming transfers (L.inX: transfer number -> record), and the ids of
+// files it has had in full (L.gotIds, id -> checked), in case the sender asks again.
+// A file comes in BLOCK by BLOCK: a block's pieces are gathered in memory, and once it's whole it
+// goes to the file's store (storeFor) and, when the sender gave one, is checked against that
+// block's SHA-256. The file is done when every block is in and checked.
+// A transfer cut off by a lost connection is held for HOLD_MS: the sender, once it's back, carries
+// on from the first block that hadn't come in (resumeIn) rather than starting over.
+const readyWaiters = new Map(), peerAcks = new Map(), peerCanceled = new Map()
+const storedOut = new Map() // a file this device is sending: id -> {n: blocks the other device has stored}
+const HOLD_MS = 120000
+const OPEN_BLOCKS = 24 // blocks being gathered at once; the sender keeps far fewer in flight
 
 function onPeerData(d, gen, c) {
   const L = c._link
@@ -1565,6 +1764,7 @@ function onPeerData(d, gen, c) {
       case 'welcome': if (!isHub()) onWelcome(m, gen); return
       case 'reject': if (!isHub()) onReject(m, gen); return
       case 'bye': if (isHub()) onLinkBye(L); else onBye(); return
+      case 'check': onCheck(L, m, 'direct'); return
     }
     if (!L.accepted) return // nothing else until this device is accepted
     switch (m.t) {
@@ -1577,52 +1777,102 @@ function onPeerData(d, gen, c) {
         }
         break
       case 'meta': if (!GAME) onMeta(L, m); break // a game room takes no files
+      case 'bh': onBlockHash(L, m); break
+      case 'hold': { const r = findIn(L, m.id); if (r) holdIn(L, r); break }
       case 'g': if (GAME) { markActive(true); GAME.onData(isHub() ? L.pub : 'hub', m.d) } break
       case 'chat': if (!GAME) onChat(L, m); break
       case 'name': if (!GAME) onName(L, m); break
-      case 'ready': { const f = readyWaiters.get(m.id); if (f) f(true); break }
-      case 'ack': { const f = peerAcks.get(m.id); if (f) f(true); break }
+      case 'ready': { const f = readyWaiters.get(m.id); if (f) f(m); break }
+      case 'got': { const o = storedOut.get(m.id); if (o && Number.isInteger(m.n) && m.n > o.n) o.n = m.n; break }
+      case 'ack': { const f = peerAcks.get(m.id); if (f) f(m); break }
       case 'prog': { const o = outgoingPipe.get(m.id); if (o) o.progress(m.n); break } // a relay file's progress, told over the direct link
-      case 'cancel': {
-        for (const [num, r] of L.inX) {
-          if (r.id === m.id) { L.inX.delete(num); finishXfer(r.x, 'failed', 'Canceled by sender'); log(nameOf(L) + ' canceled ' + r.meta.name) }
-        }
-        if (peerAcks.has(m.id)) peerCanceled.add(m.id) // only for a file this device is sending; dropped when it ends
-        const a = readyWaiters.get(m.id); if (a) a(false)
-        const k = peerAcks.get(m.id); if (k) k(false)
-        break
-      }
+      case 'cancel': cancelIn(L, m); break
     }
     return
   }
   if (L && L.accepted) onChunk(L, d)
 }
+// The other device stopped a file: one coming in here (gone through the relay instead, or
+// canceled), or one going out from here.
+function cancelIn(L, m) {
+  const r = findIn(L, m.id)
+  if (r && m.why === 'relay') { endIn(L, r); finishXfer(r.x, 'failed', ''); dropRow(r.x) } // it comes again as a relay row
+  else if (r) { endIn(L, r); finishXfer(r.x, 'failed', 'Canceled by sender'); log(nameOf(L) + ' canceled ' + r.meta.name) }
+  if (peerAcks.has(m.id)) peerCanceled.set(m.id, m.why || '') // only for a file this device is sending; dropped when it ends
+  const a = readyWaiters.get(m.id); if (a) a(false)
+  const k = peerAcks.get(m.id); if (k) k(false)
+}
 
-// A file's description is checked before any memory is set aside for it.
+// A file's description is checked before any memory or disk is set aside for it.
 const validId = id => typeof id === 'string' && id.length > 0 && id.length <= 64
 const validSize = n => Number.isSafeInteger(n) && n >= 0
-function onMeta(L, m) {
+const findIn = (L, id) => [...L.inX.values()].find(r => r.id === id)
+async function onMeta(L, m) {
   if (!validId(m.id) || !validSize(m.size) || !Number.isInteger(m.num) || m.num < 0 || m.num > 0xffffffff || L.inX.has(m.num)) {
     dbg('Ignored a file description that didn\'t make sense', true)
     if (validId(m.id)) sendCtl(L, {t: 'cancel', id: m.id})
     return
   }
+  // Asked again for a file already here (its confirmation got lost): it's confirmed again.
+  if (L.gotIds && L.gotIds.has(m.id)) { sendCtl(L, {t: 'ready', id: m.id, num: m.num, from: m.size}); sendCtl(L, {t: 'ack', id: m.id, checked: L.gotIds.get(m.id)}); return }
+  // One canceled here (perhaps while the connection was down, so the sender never heard): no again.
+  if (L.droppedIds && L.droppedIds.has(m.id)) { sendCtl(L, {t: 'cancel', id: m.id}); return }
+  const had = findIn(L, m.id)
+  if (had) return resumeIn(L, had, m)
+  // Its store is still being set up: the sender asked again (under a new number), which is the one answered.
+  if (!L.opening) L.opening = new Map()
+  if (L.opening.has(m.id)) { L.opening.set(m.id, m); return }
   m.name = String(m.name || 'file').slice(0, 255)
   m.type = typeof m.type === 'string' ? m.type.slice(0, 100) : ''
-  let buf
-  try { buf = new Uint8Array(m.size) }
-  catch (e) { sendCtl(L, {t: 'cancel', id: m.id}); log('This device doesn\'t have enough memory for ' + m.name, true); return }
+  const gen = generation
+  let store
+  L.opening.set(m.id, m)
+  try { store = await storeFor(m.size, m.type) }
+  catch (e) { L.opening.delete(m.id); sendCtl(L, {t: 'cancel', id: m.id, why: 'space'}); log('This device doesn\'t have enough memory for ' + m.name, true); return }
+  const last = L.opening.get(m.id)
+  L.opening.delete(m.id)
+  if (gen !== generation || !present(L) || !L.accepted || L.inX.has(last.num)) { store.discard(); return }
+  m.num = last.num
   const x = getXfer(m.id, m.name, m.size, 'in', 'Direct', L)
   setStatus(x, 'Starting…')
-  const r = {id: m.id, num: m.num, meta: m, buf, received: 0, x, began: false}
+  const blocks = Math.ceil(m.size / BLOCK)
+  // stored: per block, 0 not yet, 1 whole and on its way into the store, 2 in the store.
+  // want: the sender's SHA-256 per block, got: this side's, ok: blocks whose two match.
+  const r = {id: m.id, num: m.num, meta: m, store, x, began: false, blocks, open: new Map(), partial: 0,
+    stored: new Uint8Array(blocks), nStored: 0, storedBytes: 0, check: m.check === 'sha256', want: new Map(), got: new Map(), ok: new Set(),
+    holdTimer: 0, over: false}
   L.inX.set(m.num, r)
   x.cancel = () => {
-    sendCtl(L, {t: 'cancel', id: m.id}); L.inX.delete(m.num)
+    tellDropped(L, r.id); endIn(L, r)
     finishXfer(x, 'failed', 'Canceled'); log('Canceled ' + m.name)
   }
-  x.abort = () => L.inX.delete(m.num)
-  sendCtl(L, {t: 'ready', id: m.id})
-  if (m.size === 0) completeIn(L, r)
+  x.abort = () => endIn(L, r)
+  // got: this side says how many blocks it has stored, so the sender doesn't run too far ahead.
+  sendCtl(L, {t: 'ready', id: m.id, num: m.num, got: true})
+  doneIn(L, r) // an empty file is already whole
+}
+// The transfer is over here (done, failed or canceled): it takes no more pieces, and unless it
+// was done, its store is let go of.
+function endIn(L, r) {
+  if (r.over) return
+  r.over = true
+  clearTimeout(r.holdTimer)
+  if (L.inX.get(r.num) === r) L.inX.delete(r.num)
+  r.open.clear()
+  if (!r.done) r.store.discard()
+}
+// Told directly or through the relay, and remembered, in case the sender comes back with it later.
+function tellDropped(L, id, why) {
+  if (!L.droppedIds) L.droppedIds = new Set()
+  L.droppedIds.add(id)
+  toLink(L, {t: 'cancel', id, why})
+}
+function failIn(L, r, text, why = 'failed') {
+  if (r.over) return
+  tellDropped(L, r.id, why)
+  endIn(L, r)
+  finishXfer(r.x, 'failed', text)
+  log('Couldn\'t receive ' + r.meta.name + ': ' + text.replace(/^Failed: /, ''), true)
 }
 
 function onChunk(L, d) {
@@ -1632,25 +1882,111 @@ function onChunk(L, d) {
   else return
   if (view.byteLength < HDR) return
   const r = L.inX.get(view.getUint32(0))
-  if (!r) return // a canceled or unknown transfer
+  if (!r || r.over) return // a canceled or unknown transfer
   const off = view.getFloat64(4)
   const data = new Uint8Array(view.buffer, view.byteOffset + HDR, view.byteLength - HDR)
-  if (!Number.isInteger(off) || off < 0 || off + data.length > r.buf.length) return
-  if (!r.began) { r.began = true; r.x.start = performance.now() }
-  r.buf.set(data, off)
-  r.received += data.length
-  updateXfer(r.x, r.received)
-  if (r.received >= r.meta.size) completeIn(L, r)
+  if (!Number.isInteger(off) || off < 0 || off + data.length > r.meta.size) return
+  const i = Math.floor(off / BLOCK), from = i * BLOCK, len = Math.min(BLOCK, r.meta.size - from)
+  if (off + data.length > from + len || r.stored[i]) return // across a block (never sent so), or a block already here
+  let b = r.open.get(i)
+  if (!b) {
+    if (r.open.size >= OPEN_BLOCKS) return failIn(L, r, 'Failed: pieces came in too far out of order')
+    b = {buf: new Uint8Array(len), got: 0}
+    r.open.set(i, b)
+  }
+  if (!r.began) { r.began = true; r.x.start = performance.now(); r.x.base = r.storedBytes }
+  b.buf.set(data, off - from)
+  b.got += data.length
+  r.partial += data.length
+  updateXfer(r.x, r.storedBytes + r.partial)
+  if (b.got >= len) { r.open.delete(i); r.partial -= b.got; blockIn(L, r, i, b.buf) }
+}
+// A whole block: checked (when the sender gives SHA-256s) and put in the store.
+async function blockIn(L, r, i, buf) {
+  r.stored[i] = 1
+  r.storedBytes += buf.length
+  try {
+    if (r.check) r.got.set(i, hexOf(await crypto.subtle.digest('SHA-256', buf)))
+    await r.store.put(i * BLOCK, buf) // a block going to disk is handed over, not copied
+  } catch (e) {
+    return failIn(L, r, e.quota ? 'Failed: not enough storage space on this device' : 'Failed: couldn\'t save it (' + (e.message || e) + ')', 'space')
+  }
+  if (r.over) return
+  r.stored[i] = 2
+  r.nStored++
+  sendCtl(L, {t: 'got', id: r.id, n: r.nStored})
+  checkBlock(L, r, i)
+}
+// The sender's SHA-256 for one block, sent along with it.
+function onBlockHash(L, m) {
+  const r = findIn(L, m.id)
+  if (!r || r.over || !Number.isInteger(m.i) || m.i < 0 || m.i >= r.blocks || !/^[0-9a-f]{64}$/.test(m.h)) return
+  r.want.set(m.i, m.h)
+  checkBlock(L, r, m.i)
+}
+function checkBlock(L, r, i) {
+  if (r.check) {
+    const want = r.want.get(i), got = r.got.get(i)
+    if (!want || !got || r.stored[i] !== 2) return
+    if (want !== got) return failIn(L, r, 'Failed: it didn\'t arrive intact. Send it again.', 'check')
+    r.ok.add(i)
+  }
+  doneIn(L, r)
+}
+async function doneIn(L, r) {
+  if (r.over || r.nStored < r.blocks || (r.check && r.ok.size < r.blocks)) return
+  r.done = true
+  endIn(L, r)
+  let blob
+  try { blob = await r.store.finish() }
+  catch (e) { r.store.discard(); sendCtl(L, {t: 'cancel', id: r.id, why: 'space'}); finishXfer(r.x, 'failed', 'Failed: couldn\'t save it (' + (e.message || e) + ')'); return }
+  if (!L.gotIds) L.gotIds = new Map()
+  L.gotIds.set(r.id, r.check)
+  updateXfer(r.x, r.meta.size, r.meta.size, true)
+  finishXfer(r.x, 'done', 'Received in ' + fmtTime(r.x.ms) + (r.check ? ' · Checked' : ''))
+  r.x.free = () => r.store.discard()
+  offerSave(r.x, blob, r.meta.name)
+  sendCtl(L, {t: 'ack', id: r.id, checked: r.check})
+  log('Received ' + r.meta.name + (r.check ? ', checked: every part matches what was sent' : ''))
+  dbg('Direct at ' + fmtRate(r.meta.size - r.x.base, r.x.ms) + (r.store.onDisk ? ', written to disk' : ', kept in memory'))
 }
 
-function completeIn(L, r) {
+// The connection to the sender dropped (or the sender says it will carry on later): what came in
+// whole is kept, pieces of blocks still open are let go, and it waits for the sender to come back.
+function holdIn(L, r) {
+  if (r.over) return
+  r.open.clear()
+  r.partial = 0
+  updateXfer(r.x, r.storedBytes, 0, true)
+  setStatus(r.x, 'Connection lost · waiting to carry on…')
+  clearTimeout(r.holdTimer)
+  r.holdTimer = setTimeout(() => {
+    if (r.over) return
+    tellDropped(L, r.id)
+    endIn(L, r)
+    finishXfer(r.x, 'failed', 'Connection lost')
+    log('Couldn\'t receive ' + r.meta.name + ': the connection didn\'t come back', true)
+  }, HOLD_MS)
+}
+const holdAllIn = L => { for (const r of [...L.inX.values()]) holdIn(L, r) }
+// The sender is back with a file this device has part of: it goes on from the first block not
+// here yet (or whose SHA-256 never came), under its new transfer number.
+function resumeIn(L, r, m) {
+  if (r.over || m.size !== r.meta.size || L.inX.has(m.num)) { sendCtl(L, {t: 'cancel', id: m.id}); return }
+  clearTimeout(r.holdTimer)
   L.inX.delete(r.num)
-  updateXfer(r.x, r.meta.size, r.meta.size, true)
-  finishXfer(r.x, 'done', 'Received in ' + fmtTime(r.x.ms))
-  offerSave(r.x, new Blob([r.buf], {type: r.meta.type || 'application/octet-stream'}), r.meta.name)
-  sendCtl(L, {t: 'ack', id: r.id})
-  log('Received ' + r.meta.name)
-  dbg('Direct at ' + fmtRate(r.meta.size, r.x.ms))
+  r.num = m.num
+  L.inX.set(r.num, r)
+  r.open.clear()
+  r.partial = 0
+  r.began = false
+  let i = 0
+  while (i < r.blocks && r.stored[i] && (!r.check || r.want.has(i))) i++
+  const from = Math.min(i * BLOCK, r.meta.size)
+  setStatus(r.x, from ? 'Carrying on from ' + Math.floor(from / r.meta.size * 100) + '%…' : 'Starting again…')
+  log('Carrying on with ' + r.meta.name + (from ? ' from ' + fmtBytes(from) : ''))
+  sendCtl(L, {t: 'ready', id: r.id, num: r.num, from, got: true})
+  doneIn(L, r)
 }
 
 // ----- sending direct -----
@@ -1689,8 +2025,10 @@ async function pickLane(dcs) {
 }
 const queued = dcs => dcs.reduce((s, dc) => s + dc.bufferedAmount, 0)
 
-async function sendViaPeer(file, L) {
-  const id = uid(), num = (++sendNum) >>> 0
+// again: the id of a file this device was sending to L when the connection dropped; the other
+// device keeps what it has of it, so it carries on from there.
+async function sendViaPeer(file, L, again) {
+  const id = again || uid(), num = (++sendNum) >>> 0
   const x = getXfer(id, file.name, file.size, 'out', 'Direct', L)
   let canceled = false
   const stopWaits = () => {
@@ -1702,30 +2040,48 @@ async function sendViaPeer(file, L) {
   try {
     await sendDirect(file, id, num, x, () => canceled, L)
   } catch (e) {
-    sendCtl(L, {t: 'cancel', id})
+    // The other device holds on to what it has, for a send that carries on (sendTo); one that
+    // doesn't tells it to let go (dropSend).
+    sendCtl(L, {t: 'hold', id})
     finishXfer(x, 'failed', 'Failed: ' + (e.message || e))
     e.xfer = x // the automatic retry replaces this row
+    e.sendId = id
     throw e
-  } finally { readyWaiters.delete(id); peerAcks.delete(id); peerCanceled.delete(id) }
+  } finally { readyWaiters.delete(id); peerAcks.delete(id); peerCanceled.delete(id); storedOut.delete(id) }
 }
 
 async function sendDirect(file, id, num, x, isCanceled, L) {
   const stopped = () => isCanceled() || peerCanceled.has(id)
   const stop = () => {
     if (x.finished) return
+    const why = peerCanceled.get(id)
     if (isCanceled()) { sendCtl(L, {t: 'cancel', id}); finishXfer(x, 'failed', 'Canceled'); log('Canceled ' + file.name) }
+    else if (why === 'check') { finishXfer(x, 'failed', 'Failed: it didn\'t arrive intact. Send it again.'); log(file.name + ' didn\'t arrive intact on ' + nameOf(L), true) }
+    else if (why === 'space') { finishXfer(x, 'failed', 'Failed: no room for it on ' + nameOf(L)); log(nameOf(L) + ' has no room for ' + file.name, true) }
+    else if (why) { finishXfer(x, 'failed', 'Failed on ' + nameOf(L)); log(nameOf(L) + ' couldn\'t take ' + file.name, true) }
     else { finishXfer(x, 'failed', 'Canceled by receiver'); log(nameOf(L) + ' canceled ' + file.name) }
   }
-  const ready = waiter(readyWaiters, id)
+  // An answer for an earlier try at this file (another transfer number) isn't this one's.
+  let readyFor = null
+  const ready = new Promise(res => { readyFor = res })
+  readyWaiters.set(id, m => { if (!m || m.num === undefined || m.num === num) readyFor(m) })
   const acked = waiter(peerAcks, id)
   let gotAck = false
   acked.then(v => { if (v) gotAck = true })
   if (!direct(L)) throw new Error('not connected')
-  L.lanes[0].send(JSON.stringify({t: 'meta', id, num, name: file.name, size: file.size, type: file.type}))
+  // check: each block's SHA-256 goes along with it ("bh"), and the other device checks what came in.
+  L.lanes[0].send(JSON.stringify({t: 'meta', id, num, name: file.name, size: file.size, type: file.type, check: 'sha256'}))
   setStatus(x, 'Waiting for the other device…')
   const ok = await within(ready, 10000)
   if (stopped()) return stop()
   if (!ok) throw new Error('the other device did not answer')
+  // Carrying on: the other device already has everything before "from" (always a whole number of blocks).
+  const from = Number.isSafeInteger(ok.from) && ok.from > 0 && ok.from <= file.size && (ok.from % BLOCK === 0 || ok.from === file.size) ? ok.from : 0
+  // A receiver that says how many blocks it has stored (got) is kept at most AHEAD blocks behind,
+  // so blocks waiting to be checked and written there never pile up in its memory.
+  const paced = ok.got === true, AHEAD = 16
+  const out = {n: Math.floor(from / BLOCK)}
+  if (paced) storedOut.set(id, out)
 
   // Over a TURN relay, parallel connections only fight each other for a slow, far-off path (and
   // lost pieces sent again count against the relay's allowance), so one does.
@@ -1736,15 +2092,23 @@ async function sendDirect(file, id, num, x, isCanceled, L) {
   // Use the largest message every connection allows (Chrome allows 256 KB).
   const maxMsg = Math.min(...active.map(c => (c.peerConnection && c.peerConnection.sctp && c.peerConnection.sctp.maxMessageSize) || 65536))
   const chunk = Math.max(16 * 1024, Math.min(256 * 1024, maxMsg) - HDR)
-  log('Sending ' + file.name + (isHub() && roomLinks().length > 1 ? ' to ' + nameOf(L) : ''))
+  if (from) log('Carrying on with ' + file.name + ' from ' + fmtBytes(from))
+  else log('Sending ' + file.name + (isHub() && roomLinks().length > 1 ? ' to ' + nameOf(L) : ''))
   dbg('Using ' + dcs.length + ' parallel connection' + (dcs.length > 1 ? 's' : ''))
 
   x.start = performance.now()
-  let offset = 0
+  x.base = from
+  let offset = from
   outer:
   while (offset < file.size) {
     if (stopped()) break
+    while (paced && offset / BLOCK - out.n >= AHEAD) {
+      if (stopped()) break outer
+      if (dcs.some(dc => dc.readyState !== 'open')) throw new Error('a connection closed during the transfer')
+      await sleep(30)
+    }
     const block = await file.slice(offset, offset + BLOCK).arrayBuffer()
+    sendCtl(L, {t: 'bh', id, i: offset / BLOCK, h: hexOf(await crypto.subtle.digest('SHA-256', block))})
     for (let o = 0; o < block.byteLength; o += chunk) {
       if (stopped()) break outer
       const dc = await pickLane(dcs)
@@ -1770,7 +2134,11 @@ async function sendDirect(file, id, num, x, isCanceled, L) {
   const confirmed = await within(acked, ACK_TIMEOUT)
   if (stopped()) return stop()
   x.ms = performance.now() - x.start // includes the receiver finishing, so the speed is end to end
-  if (confirmed) { finishXfer(x, 'done', 'Delivered in ' + fmtTime(x.ms)); log('Delivered ' + file.name); dbg('Direct at ' + fmtRate(file.size, x.ms) + ' over ' + dcs.length + ' connection(s)') }
+  if (confirmed) {
+    finishXfer(x, 'done', 'Delivered in ' + fmtTime(x.ms) + (confirmed.checked ? ' · Checked' : ''))
+    log('Delivered ' + file.name + (confirmed.checked ? ', checked on ' + nameOf(L) : ''))
+    dbg('Direct at ' + fmtRate(file.size - from, x.ms) + ' over ' + dcs.length + ' connection(s)')
+  }
   else { finishXfer(x, 'warn', 'Sent, but not confirmed'); log(file.name + ' was sent, but ' + nameOf(L) + ' didn\'t confirm it', true) }
 }
 
@@ -1782,7 +2150,7 @@ async function sendDirect(file, id, num, x, isCanceled, L) {
 let codeKey = null, pipeBase = '', pipePath = '', myInbox = ''
 let inboxReqs = [], listening = 0, helloSentByRelay = false // listening: which round of listening is current
 const acceptWaiters = new Map(), ackWaiters = new Map(), outgoingPipe = new Map(), incomingPipe = new Map(), seenOffers = new Set()
-const HANDSHAKE = new Set(['hello', 'welcome', 'reject', 'bye'])
+const HANDSHAKE = new Set(['hello', 'welcome', 'reject', 'bye', 'check'])
 // The hub listens on every relay, so a device reaches it whichever relay it uses (the default when
 // it typed the code, or the one in the QR code), and answers each device on that device's relay.
 const inboxTo = L => pipeBase && pipePath && L ? (isHub() ? (L.relay || pipeBase) + '/' + pipePath + '-to-' + L.id : pipeBase + '/' + pipePath + '-to-hub') : ''
@@ -1795,8 +2163,7 @@ function resetPipeState() {
   seenOffers.clear()
 }
 async function sha256hex(s) {
-  const h = await crypto.subtle.digest('SHA-256', enc(s))
-  return Array.from(new Uint8Array(h), b => b.toString(16).padStart(2, '0')).join('')
+  return hexOf(await crypto.subtle.digest('SHA-256', enc(s)))
 }
 async function deriveCodeKey(c) {
   const base = await crypto.subtle.importKey('raw', enc(c), 'PBKDF2', false, ['deriveKey'])
@@ -1942,6 +2309,7 @@ function handleControl(msg, gen, from, base) {
   }
   if (msg.sealedBy === 'code') {
     if (msg.t === 'hello') return onHello(msg, 'relay', gen, null, base)
+    if (msg.t === 'check') return gen === generation && onCheck(isHub() ? links.get(msg.pub) : hubLink(), msg, 'relay')
     if (isHub()) return
     if (msg.t === 'welcome') return onWelcome(msg, gen)
     if (msg.t === 'reject') return onReject(msg, gen)
@@ -1959,6 +2327,7 @@ function handleControl(msg, gen, from, base) {
   if (msg.t === 'ack') { const f = ackWaiters.get(msg.id); if (f) f(true) }
   if (msg.t === 'prog') { const o = outgoingPipe.get(msg.id); if (o) o.progress(msg.n) }
   if (msg.t === 'cancel') {
+    if (validId(msg.id) && findIn(L, msg.id)) cancelIn(L, msg) // a direct file this device was holding
     const o = outgoingPipe.get(msg.id); if (o) o.remoteCancel(msg.why)
     const i = incomingPipe.get(msg.id); if (i) i.remoteCancel()
   }
@@ -2145,7 +2514,8 @@ async function onOffer(L, msg) {
     const {meta, data} = await unpack(xhr.response, L.key)
     xhr = null
     updateXfer(x, meta.size, meta.size, true)
-    finishXfer(x, 'done', 'Received in ' + fmtTime(x.ms))
+    // Sealed with AES-GCM, it opens only if every byte is what was sent: it's checked.
+    finishXfer(x, 'done', 'Received in ' + fmtTime(x.ms) + ' · Checked')
     offerSave(x, new Blob([data], {type: meta.type || 'application/octet-stream'}), meta.name)
     log('Received ' + meta.name)
     dbg('Relay at ' + fmtRate(meta.size, x.ms))
@@ -2225,7 +2595,7 @@ async function sendViaPipe(file, L) {
     if (canceled) return
     x.ms = performance.now() - x.start
     if (confirmed) {
-      finishXfer(x, 'done', 'Delivered in ' + fmtTime(x.ms)); log('Delivered ' + file.name); dbg('Relay at ' + fmtRate(file.size, x.ms))
+      finishXfer(x, 'done', 'Delivered in ' + fmtTime(x.ms) + ' · Checked'); log('Delivered ' + file.name); dbg('Relay at ' + fmtRate(file.size, x.ms)) // it confirms only once it opened the sealed file
       // A real transfer is the best measure of a relay; tiny files are mostly waiting, so they don't count.
       if (file.size >= PROBE_BYTES) noteSpeed(base, file.size / (performance.now() - t0), 'file')
     }
@@ -2288,6 +2658,9 @@ async function backAgain(L, gen, ms) {
   }
   return false
 }
+// A direct send that won't carry on: the other device lets go of what it kept. why 'relay': the
+// file goes through the relay instead, so its row there just goes.
+function dropSend(L, id, why) { if (id && present(L)) toLink(L, {t: 'cancel', id, why}) }
 async function sendTo(file, L, gen) {
   if (!L.accepted) {
     log('Waiting for ' + nameOf(L) + ' to reconnect before sending ' + file.name + '…')
@@ -2311,11 +2684,19 @@ async function sendTo(file, L, gen) {
   } catch (e) {
     dbg('Sending ' + file.name + ' failed: ' + (e.message || e), true)
     if (gen !== generation || !present(L)) return
+    // Direct only: once the device is back on a direct link, the file carries on where it stopped.
+    if (route === 'peer' && e.sendId) {
+      if (e.xfer) dropRow(e.xfer)
+      if (!L.accepted) log('Lost the link to ' + nameOf(L) + ' while sending ' + file.name + '. Waiting for it to come back…')
+      if (!(await backAgain(L, gen, 60000)) || !direct(L)) { dropSend(L, e.sendId); if (gen === generation) log('Couldn\'t send ' + file.name + ': ' + nameOf(L) + ' didn\'t reconnect directly', true); return }
+      try { await sendViaPeer(file, L, e.sendId) } catch (e2) { dropSend(L, e2.sendId); log('Couldn\'t send ' + file.name + '. Try again.', true); dbg(e2.message || String(e2), true) }
+      return
+    }
     if (relayFirst) {
       if (e.xfer) dropRow(e.xfer)
       if (!direct(L)) { log('Couldn\'t send ' + file.name + '. Try again.', true); return }
       log('The relay didn\'t work for ' + file.name + ', so it goes over the direct link')
-      try { await sendViaPeer(file, L) } catch (e2) { log('Couldn\'t send ' + file.name + '. Try again.', true); dbg(e2.message || String(e2), true) }
+      try { await sendViaPeer(file, L) } catch (e2) { dropSend(L, e2.sendId); log('Couldn\'t send ' + file.name + '. Try again.', true); dbg(e2.message || String(e2), true) }
       return
     }
     if (route === 'auto' && directReady) {
@@ -2324,14 +2705,16 @@ async function sendTo(file, L, gen) {
       // relay): wait for that first, then send again the way that works now.
       if (!L.accepted) {
         log('Lost the link to ' + nameOf(L) + ' while sending ' + file.name + '. Waiting for it to come back…')
-        if (!(await backAgain(L, gen, 60000))) { if (gen === generation) log('Couldn\'t send ' + file.name + ': ' + nameOf(L) + ' didn\'t reconnect', true); return }
+        if (!(await backAgain(L, gen, 60000))) { dropSend(L, e.sendId); if (gen === generation) log('Couldn\'t send ' + file.name + ': ' + nameOf(L) + ' didn\'t reconnect', true); return }
       }
+      // Back on a direct link, it carries on where it stopped; otherwise it goes through the relay.
       try {
-        if (direct(L)) { log('Sending ' + file.name + ' again'); await sendViaPeer(file, L) }
-        else { log('Switching to the relay for ' + file.name); await queueRelay(file, L) }
+        if (direct(L)) await sendViaPeer(file, L, e.sendId)
+        else { dropSend(L, e.sendId, 'relay'); log('Switching to the relay for ' + file.name); await queueRelay(file, L) }
       } catch (e2) {
         if (e2.xfer) dropRow(e2.xfer)
         if (gen !== generation || !present(L)) return
+        dropSend(L, e2.sendId, 'relay')
         try { log('Switching to the relay for ' + file.name); await queueRelay(file, L) }
         catch (e3) { log('Couldn\'t send ' + file.name + '. Try again.', true); dbg(e3.message || String(e3), true) }
       }
@@ -2555,6 +2938,7 @@ return {
     keepAwake(false)
     stopScan()
     for (const x of rows) if (x.url) URL.revokeObjectURL(x.url)
+    disk.close()
     tabStore.set(TS + 'room', '')
   },
 }
