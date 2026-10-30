@@ -89,14 +89,23 @@ const unhex = h => Uint8Array.from(h.match(/../g) || [], b => parseInt(b, 16))
 // as a key the page can use but never read back (non-extractable), so it never leaves this
 // browser: it isn't shown, sent, synced or backed up. Each browser (and the extension apart from
 // the website) keeps its own list. A device not used for REMEMBER_DAYS is forgotten.
-const REMEMBER_MAX = 10, REMEMBER_DAYS = 90
+const REMEMBER_MAX = 10, REMEMBER_DAYS = 90, GONE_MAX = 20, GONE_DAYS = 30
 const remember = (() => {
   let db = null
   const req = r => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error) })
   const open = () => db || (db = new Promise((res, rej) => {
-    const r = indexedDB.open('beam-remember', 1)
-    r.onupgradeneeded = () => { r.result.createObjectStore('devices', {keyPath: 'id'}); r.result.createObjectStore('me') }
-    r.onsuccess = () => res(r.result)
+    const r = indexedDB.open('beam-remember', 2)
+    r.onupgradeneeded = () => {
+      const d = r.result
+      if (!d.objectStoreNames.contains('devices')) d.createObjectStore('devices', {keyPath: 'id'})
+      if (!d.objectStoreNames.contains('me')) d.createObjectStore('me')
+      if (!d.objectStoreNames.contains('gone')) d.createObjectStore('gone', {keyPath: 'id'})
+    }
+    r.onsuccess = () => {
+      // A newer Beam in another tab needs to change the storage: this one lets go of it.
+      r.result.onversionchange = () => { r.result.close(); db = null }
+      res(r.result)
+    }
     r.onerror = () => rej(r.error)
   }).catch(e => { db = null; throw e }))
   const store = async (name, mode) => (await open()).transaction(name, mode).objectStore(name)
@@ -125,6 +134,23 @@ const remember = (() => {
       await req((await store('devices', 'readwrite')).put(r))
     },
     remove: async id => req((await store('devices', 'readwrite')).delete(id)),
+    // Forgotten devices: only the key that opens a call from that device is kept (it can't
+    // connect to anything), so this one can tell it "forgotten" if it calls; kept GONE_DAYS,
+    // at most GONE_MAX.
+    async forget(rec, knock) {
+      const t = (await open()).transaction(['devices', 'gone'], 'readwrite')
+      t.objectStore('devices').delete(rec.id)
+      t.objectStore('gone').put({id: rec.id, home: rec.home, knock, at: Date.now()})
+      await new Promise((res, rej) => { t.oncomplete = res; t.onerror = t.onabort = () => rej(t.error || new Error('not saved')) })
+    },
+    async gone() {
+      const all = await req((await store('gone', 'readonly')).getAll())
+      const old = Date.now() - GONE_DAYS * 86400000
+      all.sort((a, b) => b.at - a.at)
+      const drop = all.filter((g, i) => g.at < old || i >= GONE_MAX)
+      if (drop.length) { const s = await store('gone', 'readwrite'); drop.forEach(g => s.delete(g.id)) }
+      return all.filter(g => !drop.includes(g))
+    },
     // This browser's own random name for where remembered devices find it ("home").
     async home() {
       const h = await req((await store('me', 'readonly')).get('home'))
@@ -565,13 +591,13 @@ function showAsk() {
 // exchange this pairing already did, and fresh random values from each (rem), so it never
 // travels. Offered only once the check code was shown, and only to a device that can do it too.
 let mine = [], remOk = false // remembered devices; whether this browser can keep them
-let remArmed = 0             // the web page: Remember tapped once, waiting for the second tap
+let gone = []                // devices forgotten here (remember.forget), to tell them if they call
 let forgetArmed = {id: '', at: 0} // Forget tapped once on this device, waiting for the second tap
 const ARM_MS = 5000
 async function loadMine() {
   if (GAME) return false
-  try { mine = await remember.list(); remOk = true }
-  catch (e) { mine = []; remOk = false; dbg('Can\'t remember devices in this browser: ' + (e.message || e)) }
+  try { mine = await remember.list(); gone = await remember.gone(); remOk = true }
+  catch (e) { mine = []; gone = []; remOk = false; dbg('Can\'t remember devices in this browser: ' + (e.message || e)) }
   if (!life.signal.aborted) { showMine(); renderRemember() }
   return remOk
 }
@@ -583,6 +609,7 @@ function showMine() {
   $('mine').hidden = !mine.length || mode !== 'waiting' || intent === 'join' || !!pairRoom
   const ul = $('mineList')
   ul.innerHTML = ''
+  ul.classList.toggle('scroll', mine.length > 3)
   for (const r of mine) {
     const li = document.createElement('li')
     li.className = 'beam-mine-row'
@@ -614,10 +641,21 @@ function showMine() {
   syncHome()
 }
 async function forgetDevice(r) {
-  try { await remember.remove(r.id) } catch (e) { log('Couldn\'t forget ' + r.name, true); return }
-  // Connected to it right now: it forgets this device too.
-  for (const L of links.values()) if (L.pairId === r.id) { toLink(L, {t: 'forget', id: r.id}); L.pairId = '' }
+  let told = null
+  try {
+    if (r.key && r.home) {
+      const g = {id: r.id, home: r.home, knock: await knockKeyOf(r)}
+      await remember.forget(r, g.knock)
+      told = g
+    } else await remember.remove(r.id)
+  } catch (e) { log('Couldn\'t forget ' + r.name, true); return }
+  knockKeys.delete(r.id)
+  // Connected to it right now: it forgets this device too. Otherwise it's told at its home, in
+  // case it's open in Beam now (if not, it's told when it next calls).
+  let linked = false
+  for (const L of links.values()) if (L.pairId === r.id) { toLink(L, {t: 'forget', id: r.id}); L.pairId = ''; linked = true }
   if (pairRoom && pairRoom.rec.id === r.id) pairRoom.forgotten = true // a reconnect in this room doesn't bring it back
+  if (told && !linked) tellForgot(told)
   log('Forgot ' + r.name)
   await loadMine()
   renderLinks()
@@ -638,7 +676,8 @@ function renderRemember() {
   const box = $('rem')
   const list = roomLinks()
   const L = mode === 'connected' && list.length === 1 ? list[0] : null
-  const can = !!L && !GAME && remOk && L.accepted && (!!L.pairId || (L.canRem && !!L.check))
+  // Remembered: said (with Forget) only right after it's done; later connections show nothing here.
+  const can = !!L && !GAME && remOk && L.accepted && (L.pairId ? L.remFresh === L.pairId : L.canRem && !!L.check)
   box.hidden = !can
   box.innerHTML = ''
   if (!can) return
@@ -672,24 +711,18 @@ function renderRemember() {
     if (!L.remTheirs) box.append(btn('Cancel', false, () => { toLink(L, {t: 'remno', why: 'no'}); resetRem(L) }))
     return
   }
-  // On the web page anyone using this browser later could connect: the first tap asks to be sure.
-  const armed = !IS_EXTENSION && Date.now() - remArmed < ARM_MS
-  const yes = () => {
-    if (!IS_EXTENSION && !armed) { remArmed = Date.now(); renderRemember(); setTimeout(renderRemember, ARM_MS + 50); return }
-    remArmed = 0
-    askRemember(L)
-  }
-  const label = armed ? 'Yes, it\'s my own device' : L.remTheirs ? 'Remember' : 'Remember this device'
+  const yes = () => askRemember(L)
+  // The web page can be open on anyone's computer: it says so.
   const own = IS_EXTENSION ? '' : ' Only on your own device: anyone using this browser later could connect to it.'
   if (L.remTheirs) {
     text.textContent = nameOf(L) + ' wants to remember this device, so the two can connect later with a tap.' + own
     const row = document.createElement('div')
     row.className = 'beam-row'
-    row.append(btn('Not now', false, () => declineRemember(L)), btn(label, true, yes))
+    row.append(btn('Not now', false, () => declineRemember(L)), btn('Remember', true, yes))
     box.append(text, row)
   } else {
     text.textContent = 'Connect to it again later with a tap, no code. Both devices have to agree.' + own
-    box.append(btn(label, armed, yes), text)
+    box.append(btn('Remember this device', false, yes), text)
   }
 }
 async function askRemember(L) {
@@ -2743,6 +2776,8 @@ const onRelay = path => typeof path === 'string' && PIPE_SERVERS.some(b => path.
 // (lp), so neither the connection service nor a relay, which see the room, can stand in for it.
 const KNOCK_FRESH = 15 * 60000 // a knock older (or newer) than this, by the two clocks, is ignored
 const homePath = async home => (await sha256hex(APP + ':home:' + home)).slice(0, 40)
+// A message to a device's home, on every relay (it listens on all of them).
+const toHome = (path, body, timeout) => PIPE_SERVERS.map(b => request('POST', b + '/' + path, body, {timeout}))
 async function connectPair(rec, n, how, ts) {
   let mac, roomCode
   try { mac = await pairMac(rec.key); roomCode = 'p' + (await macHex(mac, ['room', n])).slice(0, 24) }
@@ -2758,6 +2793,7 @@ const rejoining = rec => !!pairRoom && pairRoom.rec.id === rec.id && intent === 
 // Free to answer a call: showing this device's own code with nobody here or asking (or calling the
 // same device, see onKnock).
 const free = () => mode === 'waiting' && intent === 'create' && !asks.length && !roomLinks().length
+const calling = () => !!pairRoom && intent === 'create' && mode === 'waiting'
 // The calling side: knock until that device comes, or give up after 2 minutes.
 async function knock(pair, gen) {
   const live = () => gen === generation && mode === 'waiting' && !life.signal.aborted
@@ -2769,7 +2805,7 @@ async function knock(pair, gen) {
   while (live() && (Date.now() < end || (coming() && Date.now() < end + 60000))) {
     if (coming()) { await sleep(1000); continue }
     const body = await seal(enc(JSON.stringify({id: pair.rec.id, n: pair.n, ts: Date.now()})), key)
-    const reqs = PIPE_SERVERS.map(b => request('POST', b + '/' + path, body, {timeout: 20000}))
+    const reqs = toHome(path, body, 20000)
     // A knock still waiting on a relay once the call is over is taken back, so the other device
     // doesn't answer a call that's gone.
     let heard = null
@@ -2793,8 +2829,11 @@ const doneKnocks = new Set() // calls that connected: the same knock again (left
 const answering = new Set()  // calls being answered right now
 function syncHome() {
   if (life.signal.aborted) return
-  // A knock while busy is ignored (free); one joining a call keeps listening, for a newer call (rejoining).
-  const want = !GAME && remOk && mine.length > 0 && listenOn() && mode === 'waiting' && (intent === 'create' || (!!pairRoom && !(hubLink() && hubLink().known)))
+  // A knock while busy is ignored (free); one joining a call keeps listening, for a newer call
+  // (rejoining). Calling, it listens even with the switch off: for word that the other device
+  // forgot this one, or a call from it at the same moment.
+  const answers = listenOn() && (mine.length > 0 || gone.length > 0) && (intent === 'create' || (!!pairRoom && !(hubLink() && hubLink().known)))
+  const want = !GAME && remOk && mode === 'waiting' && (answers || calling())
   if (want && !homeRun) startHome()
   else if (!want && homeRun) stopHome()
 }
@@ -2828,12 +2867,29 @@ async function listenHome(run, url) {
 }
 const knockKeys = new Map() // remembered device id -> its knock key
 const knockKeyOf = r => { if (!knockKeys.has(r.id)) knockKeys.set(r.id, pairSeal(r.key)); return knockKeys.get(r.id) }
+// What comes to this device's home: a call (a knock: {id, n, ts}) from a remembered device, or
+// word from one that it forgot this device ({t: 'forgot', id, ts}).
 async function onKnock(buf) {
+  const read = async key => { try { return JSON.parse(new TextDecoder().decode(await unseal(buf, await key))) } catch (e) { return null } }
   let m = null, rec = null
-  for (const r of mine) {
-    try { m = JSON.parse(new TextDecoder().decode(await unseal(buf, await knockKeyOf(r)))); rec = r; break } catch (e) {}
+  for (const r of mine) if ((m = await read(knockKeyOf(r)))) { rec = r; break }
+  const fresh = k => k.id && typeof k.ts === 'number' && Math.abs(Date.now() - k.ts) < KNOCK_FRESH
+  if (!m) {
+    // A call from a device forgotten here: it's told so (at most every few seconds), and stops calling.
+    if (!listenOn()) return
+    for (const g of gone) {
+      const k = await read(g.knock)
+      if (!k) continue
+      if (k.id === g.id && isHex(k.n, 32) && fresh(k) && !(Date.now() - (toldGone.get(k.n) || 0) < 5000)) { toldGone.set(k.n, Date.now()); tellForgot(g) }
+      return
+    }
+    return
   }
-  if (!m || m.id !== rec.id || !isHex(m.n, 32) || typeof m.ts !== 'number' || !(Math.abs(Date.now() - m.ts) < KNOCK_FRESH) || doneKnocks.has(m.n)) return
+  if (m.id !== rec.id || !fresh(m)) return
+  if (m.t === 'forgot') return onForgotten(rec)
+  if (!isHex(m.n, 32) || doneKnocks.has(m.n)) return
+  // Switched off: only a call from the device this one is calling right now (both at once).
+  if (!listenOn() && !(calling() && pairRoom.rec.id === rec.id)) return
   if (!homeRun || answering.has(m.n) || (pairRoom && pairRoom.n === m.n)) return // already answering this one (it came on each relay)
   if (rejoining(rec)) { if (m.ts <= pairRoom.ts) return }
   else if (!free()) return // busy now: the caller knocks again
@@ -2844,6 +2900,33 @@ async function onKnock(buf) {
   log(rec.name + ' is connecting')
   connectPair(rec, m.n, 'join', m.ts)
 }
+const toldGone = new Map() // a forgotten device's call -> when it was last told
+// Tells a device forgotten here, at its home, sealed with the key that opened its calls.
+async function tellForgot(g) {
+  try {
+    const reqs = toHome(await homePath(g.home), await seal(enc(JSON.stringify({t: 'forgot', id: g.id, ts: Date.now()})), g.knock), 8000)
+    await Promise.any(reqs.map(r => r.promise)).catch(() => {})
+    reqs.forEach(r => r.abort())
+  } catch (e) {}
+}
+// The other device forgot this one (while this one was calling it, or as it forgot): so does this
+// one, and a call to it stops.
+const forgetting = new Set()
+async function onForgotten(rec) {
+  if (forgetting.has(rec.id)) return // the same word came on each relay
+  forgetting.add(rec.id)
+  const gen = generation
+  knockKeys.delete(rec.id)
+  log(rec.name + ' forgot this device, so it\'s forgotten here too. Pair with a code and remember it again to connect with a tap.', true)
+  const wasCalling = !!pairRoom && pairRoom.rec.id === rec.id && mode === 'waiting'
+  try { await remember.remove(rec.id) } catch (e) {}
+  await loadMine()
+  forgetting.delete(rec.id)
+  if (!wasCalling || gen !== generation || life.signal.aborted) return
+  setRoom('', 'create')
+  $('pairStatus').textContent = rec.name + ' forgot this device. Pair with a code and remember it again.'
+}
+
 // Proofs. Each says "I have the secret", for one role (hub or join) in this room only, bound to
 // the two devices' keys (prove) or to one direct connection's own encryption (lp: the
 // fingerprints of both ends' certificates, which differ if anyone sits between them).

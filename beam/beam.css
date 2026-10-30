@@ -91,7 +91,9 @@
 .beam-mine { display: grid; gap: 8px; width: 100%; max-width: 320px; text-align: left; }
 .beam-mine .beam-eyebrow { text-align: center; }
 .beam-mine-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.beam-mine-row { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 6px 6px 12px; border-radius: 10px; background: var(--field); }
+/* Three rows show; more scroll (up to ten). */
+.beam-mine-list.scroll { max-height: calc(3 * 46px + 2 * 6px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding-right: 4px; }
+.beam-mine-row { display: flex; align-items: center; gap: 8px; min-width: 0; height: 46px; box-sizing: border-box; padding: 6px 6px 6px 12px; border-radius: 10px; background: var(--field); }
 .beam-mine-row .who { display: grid; flex: 1; min-width: 0; }
 .beam-mine-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; }
 .beam-mine-row small { font-size: 11px; color: var(--text3); }
