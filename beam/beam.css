@@ -126,9 +126,17 @@
 .beam-xfer .stats b { color: var(--text); font-weight: 500; }
 .beam-xfer.failed .pct { color: var(--red); } .beam-xfer.warn .pct { color: var(--yellow); }
 .beam-xfer > .actions { gap: 6px; }
-/* Chat: a gray bar until a device is connected, then as tall as the window allows (beam.js sizeChat) */
+/* Chat: a gray bar until a device is connected, then folded to that bar (shut) until opened;
+   open, as tall as the window allows (beam.js sizeChat) */
 .beam-chat { grid-template-rows: auto 1fr auto; gap: 10px; padding: 12px; min-height: 0; }
-.beam-chat.off { grid-template-rows: auto; }
+.beam-chat.off, .beam-chat.shut { grid-template-rows: auto; }
+.beam-chat.shut .beam-chat-head { cursor: pointer; }
+.beam-chat-toggle { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px 3px 9px; border: 0; border-radius: 8px; background: var(--field);
+  color: var(--text2); font: inherit; font-size: 11.5px; font-weight: 500; cursor: pointer; }
+.beam-chat-toggle:hover { background: var(--hover); color: var(--text); }
+.beam-chat-toggle svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }
+.beam-chat-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.beam-unread { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--green); color: #fff; font-size: 10.5px; font-weight: 600; line-height: 16px; text-align: center; box-sizing: border-box; }
 .beam-chat.off .beam-eyebrow, .beam-chat.off .beam-hint { opacity: .55; }
 .beam-chat-head { flex-wrap: nowrap; }
 .beam-chat-who { flex: 0 1 auto; display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -140,7 +148,7 @@
 .beam-me svg { width: 12px; height: 12px; color: var(--text3); }
 .beam .beam-me-edit { width: 11em; padding: 2px 8px; font-family: inherit; font-size: 11.5px; font-weight: 600; }
 .beam-chat-head .beam-hint { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.beam-chat.off .beam-msgs, .beam-chat.off .beam-compose { display: none; }
+.beam-chat.off .beam-msgs, .beam-chat.off .beam-compose, .beam-chat.shut .beam-msgs, .beam-chat.shut .beam-compose { display: none; }
 .beam-msgs { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 0 2px; }
 .beam-msgs > :first-child { margin-top: auto; }
 .beam-m { max-width: 85%; align-self: flex-start; padding: 6px 10px; border-radius: 12px 12px 12px 4px; background: var(--field); line-height: 1.35; overflow-wrap: anywhere; }

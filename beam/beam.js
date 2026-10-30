@@ -174,7 +174,7 @@ function markup(preview) {
   </section>
 
   <section class="beam-card beam-chat off" id="beam-chat" aria-label="Chat">
-    <div class="beam-row beam-between beam-chat-head"><div class="beam-chat-who"><p class="beam-eyebrow">Chat as</p><button type="button" class="beam-me" id="beam-me" title="Change the name others see"><span id="beam-meName"></span>${ICON_PEN}</button></div><span class="beam-hint" id="beam-chatNote">Connect to chat</span></div>
+    <div class="beam-row beam-between beam-chat-head"><div class="beam-chat-who"><p class="beam-eyebrow">Chat as</p><button type="button" class="beam-me" id="beam-me" title="Change the name others see"><span id="beam-meName"></span>${ICON_PEN}</button></div><span class="beam-hint" id="beam-chatNote">Connect to chat</span><button type="button" class="beam-chat-toggle" id="beam-chatToggle" aria-expanded="false" aria-controls="beam-msgs" hidden><span class="beam-unread" id="beam-unread" hidden></span><span id="beam-chatToggleText">Open</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9.5l6 6 6-6"/></svg></button></div>
     <div class="beam-msgs" id="beam-msgs" aria-live="polite"></div>
     <form class="beam-compose" id="beam-compose">
       <input type="text" id="beam-chatInput" placeholder="Message" maxlength="500" autocomplete="off" aria-label="Message" disabled>
@@ -569,6 +569,7 @@ function addChat(line) {
   box.append(chatRow(line))
   while (box.childElementCount > CHAT_KEEP) box.firstElementChild.remove()
   if (atEnd || !line.name) box.scrollTop = box.scrollHeight
+  if (!chatOpen && line.name) { unread++; showChatToggle() } // folded: the bar counts what came in
 }
 function chatRow(line) {
   const row = document.createElement('div')
@@ -577,17 +578,39 @@ function chatRow(line) {
   row.append(document.createTextNode(line.text))
   return row
 }
-// Folded to a gray bar until a device is connected; then as tall as the window has room for
-// below the Beam box (the panel, Beam's tab, the web page), and never shorter than 260 px.
+// A gray bar until a device is connected. Once connected it stays folded to its bar, which
+// counts messages that come in, until it's opened (the bar's Open, or a tap on the bar); open,
+// it's as tall as the window has room for below the Beam box (the panel, Beam's tab, the web
+// page), and never shorter than 260 px. Close folds it again; each new connection starts folded.
+let chatOpen = false, unread = 0
 function showChat() {
   if (life.signal.aborted) return
   const on = mode === 'connected'
   const c = $('chat')
   if (!on && chatLines.length) { chatLines.length = 0; $('msgs').replaceChildren() }
+  if (!on) { chatOpen = false; unread = 0 }
   c.classList.toggle('off', !on)
-  $('chatNote').textContent = on ? '' : 'Connect to chat'
+  c.classList.toggle('shut', on && !chatOpen)
+  $('chatNote').hidden = on
   $('chatInput').disabled = !on
+  showChatToggle()
   sizeChat()
+}
+function showChatToggle() {
+  const t = $('chatToggle')
+  t.hidden = mode !== 'connected'
+  t.setAttribute('aria-expanded', String(chatOpen))
+  t.setAttribute('aria-label', chatOpen ? 'Close chat' : unread ? 'Open chat, ' + unread + ' new' : 'Open chat')
+  $('chatToggleText').textContent = chatOpen ? 'Close' : 'Open'
+  $('unread').hidden = chatOpen || !unread
+  $('unread').textContent = unread > 99 ? '99+' : String(unread)
+}
+function setChatOpen(open) {
+  if (mode !== 'connected' || open === chatOpen) return
+  chatOpen = open
+  if (open) unread = 0
+  showChat()
+  if (open) { const box = $('msgs'); box.scrollTop = box.scrollHeight; $('chatInput').focus({preventScroll: true}) }
 }
 function scrollerOf(el) {
   for (let p = el.parentElement; p && p !== document.body && p !== document.documentElement; p = p.parentElement) {
@@ -598,7 +621,7 @@ function scrollerOf(el) {
 }
 function sizeChat() {
   const c = $('chat')
-  if (GAME || c.classList.contains('off') || !c.offsetParent) { c.style.height = ''; return }
+  if (GAME || c.classList.contains('off') || c.classList.contains('shut') || !c.offsetParent) { c.style.height = ''; return }
   const s = scrollerOf(c), r = c.getBoundingClientRect()
   const top = s ? r.top - s.getBoundingClientRect().top + s.scrollTop : r.top + scrollY
   const room = (s ? s.clientHeight : innerHeight) - top - 16
@@ -2823,6 +2846,9 @@ $('disconnect').addEventListener('click', endSession)
 $('route').addEventListener('change', () => renderLinks())
 showMe()
 $('me').addEventListener('click', editMe)
+$('chatToggle').addEventListener('click', e => { e.stopPropagation(); setChatOpen(!chatOpen) })
+// A tap anywhere on the folded bar opens it too (not on the name, which edits it).
+$('chat').querySelector('.beam-chat-head').addEventListener('click', e => { if (!chatOpen && !e.target.closest('.beam-me, .beam-me-edit')) setChatOpen(true) })
 // The word search (or another Beam) changed the name: shown here too.
 addEventListener('storage', e => { if (e.key === NAME_KEY && !GAME) announceMe() }, {signal: life.signal})
 $('compose').addEventListener('submit', e => { e.preventDefault(); sayChat($('chatInput').value); $('chatInput').value = '' })
