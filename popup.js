@@ -1352,7 +1352,7 @@ function initProxy(isWeb) {
           }
           save((p) => {
             if (on) p.skip = p.skip.filter((s) => s.site !== host);
-            else if (p.skip.length >= max()) toast(`Up to ${max()} skipped sites`, true);
+            else if (p.skip.filter((s) => s.on).length >= max()) toast(`Up to ${max()} skipped sites`, true);
             else p.skip.push({ site: host, on: true, country: "" });
           });
         }));
@@ -1369,8 +1369,8 @@ function initProxy(isWeb) {
       };
       return subRow(el("span", { className: "px-site" }, el("span", { textContent: host })), add);
     }
-    // Past the plan's limit (left from a paid plan): kept, but not used.
-    if (cfg.sites.indexOf(entry) >= max()) {
+    // Switched on past the plan's limit (left from a paid plan): kept, but not used.
+    if (entry.on && cfg.sites.filter((s) => s.on).indexOf(entry) >= max()) {
       const note = el("small", { className: "warn", textContent: `over the ${max()}-site limit: not used` });
       return subRow(el("span", { className: "px-site" }, el("span", { textContent: TT.proxyLabel(entry.site, true) }), note));
     }
@@ -1391,21 +1391,28 @@ function initProxy(isWeb) {
       end.append(sel);
       if (c.ok) note.textContent = "";
     }
-    end.append(sw(entry.on, `${TT.proxyLabel(entry.site, true)} through the proxy`, (on) => save((p) => { const e = p.sites.find((e) => e.site === entry.site); if (e) e.on = on; })));
+    end.append(sw(entry.on, `${TT.proxyLabel(entry.site, true)} through the proxy`, (on) => {
+      // Switching it on takes a place (switched-off sites don't), unless its site and country already have one.
+      if (on && slots().used >= total() && !slots().has(entry.site, TT.proxyCountry(cfg, [], entry).want)) {
+        toast(`All ${total()} sites are switched on; switch one off first`, true);
+        return render();
+      }
+      save((p) => { const e = p.sites.find((e) => e.site === entry.site); if (e) e.on = on; });
+    }));
     return subRow(el("span", { className: "px-site" }, el("span", { textContent: TT.proxyLabel(entry.site, true) }), note), end);
   }
 
-  // The plan's sites are all taken: remove one, and this site takes its place.
+  // The plan's sites are all taken: remove a switched-on one, and this site takes its place.
   function makeRoom() {
     const pills = el("div", { className: "px-pills" });
-    for (const s of cfg.sites) {
+    for (const s of cfg.sites.filter((s) => s.on)) {
       const b = el("button", { title: `Remove ${TT.proxyLabel(s.site, true)} and add ${host}` }, TT.proxyLabel(s.site, true), el("i", { textContent: "×" }));
       b.onclick = () => { making = false; save((p) => { p.sites = p.sites.filter((e) => e.site !== s.site); p.sites.push({ site: host, on: true, country: "" }); }); };
       pills.append(b);
     }
     const cancel = el("button", { className: "px-cancel", textContent: "not now" });
     cancel.onclick = () => { making = false; render(); };
-    return el("div", { className: "px-full" }, el("p", {}, "All ", el("b", { textContent: String(total()) }), ` sites are used (one per site and country, session switch profiles included). Remove one to add `, el("b", { textContent: host }), ":"), pills, cancel);
+    return el("div", { className: "px-full" }, el("p", {}, "All ", el("b", { textContent: String(total()) }), ` sites are switched on (one per site and country, session switch profiles included). Remove one to add `, el("b", { textContent: host }), ":"), pills, cancel);
   }
 
   function render() {

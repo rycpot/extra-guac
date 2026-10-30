@@ -956,7 +956,7 @@
         if (!full()) {
           const c = TT.proxyCountry(cfg, st.proxies, s);
           if (!c.ok && st.proxies) name.append(el("small", { textContent: c.use ? `${TT.countryName(c.want)} unavailable · using ${TT.countryName(c.use)}` : `${TT.countryName(c.want)} unavailable · waiting for it` }));
-          else if (i >= max() && s.on) name.append(el("small", { textContent: `over the ${max()}-site limit of this plan: not used` }));
+          else if (s.on && list.filter((e) => e.on).indexOf(s) >= max()) name.append(el("small", { textContent: `over the ${max()}-site limit of this plan: not used` }));
           else if (ss.some((e) => e.domains.includes(s.site))) name.append(el("small", { className: "px-note", textContent: "while a session switch profile with a proxy is in use, its country goes first" }));
         }
         const label = TT.proxyLabel(s.site, true);
@@ -966,7 +966,15 @@
         // A site without a country of its own shows the one it uses (the one last chosen for
         // every site); picking one keeps it for that site.
         if (perSite) r.append(countryMenu(s.country === "*" ? "" : s.country || cfg.country, (v) => save((p) => { const e = p.sites.find((e) => e.site === s.site); if (e) e.country = v || "*"; }), { cls: "sm" }));
-        r.append(x, sw(s.on, `${label} ${full() ? "skips the proxy" : "uses the proxy"}`, (on) => save((p) => { const e = p[key].find((e) => e.site === s.site); if (e) e.on = on; })));
+        r.append(x, sw(s.on, `${label} ${full() ? "skips the proxy" : "uses the proxy"}`, (on) => {
+          // Switching one on takes a place (switched-off sites don't), unless its site and country already have one.
+          const country = full() ? "" : TT.proxyCountry(cfg, [], s).want;
+          if (on && !full() && slots().used >= total() && !slots().has(s.site, country)) {
+            alert(`${free() ? "The free plan takes" : "Up to"} ${total()} switched-on sites (one per site and country, session switch profiles included). Switch one off or remove one to switch on ${label}.`);
+            return void render();
+          }
+          save((p) => { const e = p[key].find((e) => e.site === s.site); if (e) e.on = on; });
+        }));
         return r;
       };
       const rows = [], nameRows = [];
@@ -984,8 +992,8 @@
           // Already going through that country for a session switch profile: no new place taken.
           const country = full() ? "" : TT.proxyCountry(cfg, [], { country: "" }).want;
           if (slots().used >= total() && !slots().has(site, country)) return void alert(free()
-            ? `The free plan takes up to ${total()} sites (one per site and country, session switch profiles included). Remove one to add ${label}.`
-            : `Up to ${total()} sites (one per site and country, session switch profiles included). Remove one to add ${label}.`);
+            ? `The free plan takes up to ${total()} switched-on sites (one per site and country, session switch profiles included). Switch one off or remove one to add ${label}.`
+            : `Up to ${total()} switched-on sites (one per site and country, session switch profiles included). Switch one off or remove one to add ${label}.`);
           refocus = focus;
           save((p) => p[key].push({ site, on: true, country: "" }));
         };

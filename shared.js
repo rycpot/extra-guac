@@ -254,9 +254,10 @@
   function proxySlots(cfg, st, ssSites = []) {
     const free = st?.plan?.free !== false;
     const max = PROXY_LIMITS[free ? "free" : "paid"];
-    if (!free && cfg.mode === "full") return { used: cfg.skip.length, max, own: max, has: () => true };
+    if (!free && cfg.mode === "full") return { used: cfg.skip.filter((s) => s.on).length, max, own: max, has: () => true };
     const key = (site, country) => `${site}|${country || ""}`;
-    const own = new Set(cfg.sites.map((s) => key(s.site, proxyCountry(cfg, [], s).want)));
+    // Only switched-on sites take a place; switched-off ones stay listed for later.
+    const own = new Set(cfg.sites.filter((s) => s.on).map((s) => key(s.site, proxyCountry(cfg, [], s).want)));
     const profiles = new Set((ssSites || []).flatMap((e) => e.profiles.map((p) => key(e.site, p.country))));
     const all = new Set([...own, ...profiles]);
     const profilesOnly = [...profiles].filter((k) => !own.has(k)).length;

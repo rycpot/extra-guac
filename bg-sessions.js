@@ -1556,7 +1556,7 @@ async function assertProxyRoom(site, country) {
   if (await proxyRoom(site, country)) return;
   const { st } = await getProxy();
   const free = st.plan?.free !== false;
-  throw new Error(`All ${TT.PROXY_LIMITS[free ? "free" : "paid"]} proxy sites of the ${free ? "free plan" : "plan"} are in use. Remove one in the proxy settings to give this site a proxy.`);
+  throw new Error(`All ${TT.PROXY_LIMITS[free ? "free" : "paid"]} proxy sites of the ${free ? "free plan" : "plan"} are in use. Switch one off or remove one in the proxy settings to give this site a proxy.`);
 }
 
 // How each profile's proxy stands: null for none, else { ok, country, reason }.

@@ -9,7 +9,7 @@
 // listed site goes to the proxies of its country, then the backup countries in order (Chrome
 // moves to the next when one doesn't answer), never straight out; everything else goes
 // direct. On a paid plan, mode "full" turns it around. The script carries no logins: they're
-// given when a proxy asks (onAuthRequired). Free plans: up to 20 sites, "only these sites".
+// given when a proxy asks (onAuthRequired). Free plans: up to 20 switched-on sites, "only these sites".
 // A site on any ending ("xmovy.*", TT.proxyName) is its name followed by any real domain ending
 // (endings.js): the script carries the endings for it. Page scripts (WebRTC, the proxy's place)
 // can only be given whole addresses, so each such site's addresses are learned as they're opened
@@ -189,9 +189,10 @@ const proxyActive = (cfg, st) => !!(cfg.key && cfg.on && st.plan && (st.proxies?
   && !(proxyOut(st) && cfg.whenOut === "direct"));
 const proxyMode = (cfg, st) => (proxyFree(st) ? "sites" : cfg.mode);
 // Session Switch profiles with a proxy take some of the plan's sites (TT.proxySlots): how many of
-// the list's entries are left for it, as last worked out (null: not yet, the plan's limit).
+// the list's switched-on entries are left for it, as last worked out (null: not yet, the plan's
+// limit). Switched-off entries take no place.
 let sessionOwnLimit = null;
-const proxySites = (cfg, st) => cfg.sites.slice(0, sessionOwnLimit ?? TT.PROXY_LIMITS[proxyFree(st) ? "free" : "paid"]).filter((s) => s.on);
+const proxySites = (cfg, st) => cfg.sites.filter((s) => s.on).slice(0, sessionOwnLimit ?? TT.PROXY_LIMITS[proxyFree(st) ? "free" : "paid"]);
 
 // Whether a page's host goes through a proxy now (for the toolbar icon and the panel).
 // This computer and its network: always direct (as in the routing script).
