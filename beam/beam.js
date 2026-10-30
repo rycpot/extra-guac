@@ -1578,6 +1578,7 @@ async function hubHello(m, name, via, gen, conn, base) {
     if ((pairRoom ? L.lanes[0] && L.lanes[0].open : direct(L)) && L.lanes[0].peer !== conn.peer) { try { conn.close() } catch (e) {} return }
     const old = L.lanes[0]
     conn._link = L; L.lanes[0] = conn
+    freshRoute(L)
     if (old) { try { old.close() } catch (e) {} }
   }
   // Through the relay the device hasn't heard from the hub yet: say hello back, so it can show
@@ -2026,7 +2027,7 @@ function setupLane(L, c, i, gen) {
   }
   let timer = null
   if (i === 0) {
-    if (L) { L.path = ''; L.relayName = ''; L.theirRelay = '' } // a new link: its route is looked at afresh
+    if (L) freshRoute(L) // a new link: its route is looked at afresh
     if (!isHub()) pillIn($('peerState'), 'Connecting…', 'muted')
     timer = setTimeout(() => {
       if (gen !== generation || c.open) return
@@ -2054,6 +2055,7 @@ function setupLane(L, c, i, gen) {
     directWorks()
     if (c._retry) log('Switched to a direct connection')
     dbg('Direct link connected')
+    watchPath(c, gen)
     const own = c._link
     if (own && own.accepted && direct(own)) { renderLinks(); checkPath(own, c, gen, 0) }
   })
@@ -2088,14 +2090,17 @@ function iceConfig() {
   const via = $('turnVia').value
   return TURN[via] ? {iceServers: [...STUN, TURN[via]], iceTransportPolicy: 'relay'} : {iceServers: ICE_SERVERS}
 }
-function showPath(L, v, via) {
-  if (L.path === 'lan' && v === 'internet') return // if either device saw a same-Wi-Fi link, that is the true path
-  // A relay on the other side is named by that device (its "path" message, kept in L.theirRelay,
-  // which can arrive before this side has looked at its own connection).
-  if (v === 'relay') L.relayName = via || L.relayName || L.theirRelay || ''
-  else L.relayName = ''
-  L.path = v
-  renderLinks()
+// A direct link's route: what this device sees of its connection (L.myPath) and what the other
+// device says it sees (its "path" message, L.theirPath). A TURN relay on either side makes it
+// relayed; otherwise if either saw a same-Wi-Fi link, that is the true path. Both look again when
+// the connection moves (a phone leaving Wi-Fi for mobile data), so the two stay current.
+function freshRoute(L) { L.path = L.myPath = L.theirPath = L.relayName = L.myRelay = L.theirRelay = '' }
+function showPath(L) {
+  const a = L.myPath || '', b = L.theirPath || ''
+  const v = a === 'relay' || b === 'relay' ? 'relay' : a === 'lan' || b === 'lan' ? 'lan' : a || b
+  // Only the device whose side is relayed knows which relay.
+  const name = v === 'relay' ? L.myRelay || L.theirRelay || '' : ''
+  if (v !== L.path || name !== L.relayName) { L.path = v; L.relayName = name; renderLinks() }
   if (!isHub()) {
     const [text, tone] = routeOf(L)
     pillIn($('peerState'), 'Connected · ' + text.replace('Direct · ', '').replace('Direct via ', 'via '), tone)
@@ -2117,11 +2122,26 @@ function sameNetwork(a, b) {
   return !!pa && pa === pb
 }
 
+// A direct link can move to another network without dropping: its route is looked at again when
+// its connection says it moved, and every 5 seconds in case a browser doesn't say.
+function watchPath(c, gen) {
+  const pc = c.peerConnection
+  if (!pc) return
+  const again = () => { const L = c._link; if (L && L.lanes[0] === c && L.accepted && direct(L)) checkPath(L, c, gen, 10) }
+  pc.addEventListener('iceconnectionstatechange', again)
+  try { pc.sctp.transport.iceTransport.addEventListener('selectedcandidatepairchange', again) } catch (e) {}
+}
+function recheckPaths() { for (const L of links.values()) if (L.accepted && direct(L)) checkPath(L, L.lanes[0], generation, 10) }
+setInterval(() => { if (!document.hidden) recheckPaths() }, 5000)
+document.addEventListener('visibilitychange', () => { if (!document.hidden) recheckPaths() })
 async function checkPath(L, c, gen, tries) {
   const pc = c && c.peerConnection
   if (!pc || gen !== generation || L.lanes[0] !== c) return
+  // Looks can overlap (the timer, the connection's own word): only the latest one started counts.
+  const seq = c._pathSeq = (c._pathSeq || 0) + 1
   try {
     const stats = await pc.getStats()
+    if (gen !== generation || L.lanes[0] !== c || seq !== c._pathSeq) return
     let pairId = null, pair = null
     stats.forEach(r => { if (r.type === 'transport' && r.selectedCandidatePairId) pairId = r.selectedCandidatePairId })
     if (pairId) pair = stats.get(pairId)
@@ -2137,8 +2157,11 @@ async function checkPath(L, c, gen, tries) {
       // data and a computer on Wi-Fi often both have public addresses and reach each other over
       // the internet. Two public addresses count as the same network only when they share it.
       const lan = privateAddr || sameNetwork((l.address || l.ip) || '', addr)
-      showPath(L, relay ? 'relay' : lan ? 'lan' : 'internet', via)
-      sendCtl(L, {t: 'path', v: L.path, via: L.relayName || undefined})
+      L.myPath = relay ? 'relay' : lan ? 'lan' : 'internet'; L.myRelay = via
+      showPath(L)
+      // The other device hears this side's view once per connection, and again when it changes.
+      const said = L.myPath + ' ' + via
+      if (c._said !== said && sendCtl(L, {t: 'path', v: L.myPath, via: via || undefined})) c._said = said
       return
     }
   } catch (e) {}
@@ -2147,7 +2170,7 @@ async function checkPath(L, c, gen, tries) {
 
 // In a remembered device's room, only the handshake goes on a connection not yet shown to be its.
 const BEFORE_OK = new Set(['welcome', 'reject', 'bye', 'prove'])
-function sendCtl(L, obj) { const c = L && L.lanes[0]; try { if (c && c.open && (laneOk(c) || BEFORE_OK.has(obj.t))) c.send(JSON.stringify(obj)) } catch (e) {} }
+function sendCtl(L, obj) { const c = L && L.lanes[0]; try { if (c && c.open && (laneOk(c) || BEFORE_OK.has(obj.t))) { c.send(JSON.stringify(obj)); return true } } catch (e) {} return false }
 
 // ----- receiving direct -----
 // Each link keeps its own incoming transfers (L.inX: transfer number -> record), and the ids of
@@ -2187,11 +2210,10 @@ function onPeerData(d, gen, c) {
     switch (m.t) {
       case 'active': markActive(true); return
       case 'path':
-        if (m.v === 'lan' && L.path !== 'relay') showPath(L, 'lan')
-        if (m.v === 'relay' && typeof m.via === 'string') {
-          L.theirRelay = relayName(m.via.toLowerCase().replace(/ /g, '')) || ''
-          if (L.path === 'relay' && !L.relayName) showPath(L, 'relay', L.theirRelay)
-        }
+        if (c !== L.lanes[0] || !['lan', 'internet', 'relay'].includes(m.v)) break // an old connection's word doesn't count
+        L.theirPath = m.v
+        L.theirRelay = m.v === 'relay' && typeof m.via === 'string' ? relayName(m.via.toLowerCase().replace(/ /g, '')) || '' : ''
+        showPath(L)
         break
       case 'meta': if (!GAME) onMeta(L, m); break // a game room takes no files
       case 'bh': onBlockHash(L, m); break
