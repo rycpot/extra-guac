@@ -145,6 +145,12 @@
     if (flat) holes(F, fg, model, sigL, sigC);
 
     F.T = T;
+    // A photo's outline is feathered; a drawing's (flat fills: most neighbors inside it the
+    // same) stays crisp.
+    const inside = [];
+    for (let i = 0; i < N - 1; i += 3) if (fg[i] && fg[i + 1] && (i + 1) % W) inside.push(Math.abs(eL[i + 1] - eL[i]) + Math.abs(eR[i + 1] - eR[i]) + Math.abs(eG[i + 1] - eG[i]));
+    const grain = median(inside);
+    F.feather = grain > GRAINY ? FEATHER(F.fw, F.fh) : 0;
     let bgN = 0, fgN = 0, rim = 0;
     for (let i = 0; i < N; i++) {
       if (fg[i]) { fgN++; const x = i % W; if ((x > 0 && !fg[i - 1]) || (x < W - 1 && !fg[i + 1]) || (i >= W && !fg[i - W]) || (i < N - W && !fg[i + W])) rim++; } else bgN++;
@@ -160,7 +166,7 @@
   // The cut-out picture from a mask, into out (an ImageData the picture's size), within box
   // ([x0, y0, x1, y1] at full size; all of it when left out).
   function render(F, fg, out, box = [0, 0, F.fw, F.fh]) {
-    matte(F.orig, out.data, F.fw, F.fh, fg, F.W, F.H, F.R, F.G, F.B, box);
+    matte(F.orig, out.data, F.fw, F.fh, fg, F.W, F.H, F.R, F.G, F.B, box, F.feather || 0);
   }
 
   // A click at (fx, fy) (full-size pixels): "erase" takes away the shown part under it,
@@ -343,6 +349,8 @@
   // (where subjects are) against it; NEAR_STEP is a step between neighbors (on the smoothed
   // copy) that's grain, not an outline.
   const NEAR = 14, NEAR_STEP = 2;
+  const GRAINY = 0.03;
+  const FEATHER = (fw, fh) => Math.max(1, Math.round(Math.max(fw, fh) / 400)); // a photo's outline's blur, in its pixels
   function gradient(F) {
     const { W, H, N, R, G, B } = F, out = new Float32Array(N);
     const d = (i, j) => Math.hypot(R[i] - R[j], G[i] - G[j], B[i] - B[j]);
@@ -399,7 +407,7 @@
   // Alpha at full size. Away from the outline it's the mask; near it, each pixel is taken as
   // a blend of the background there and the subject there (each the average of its side of
   // the mask nearby), so no rim of background color is left around the subject.
-  function matte(src, d, fw, fh, fg, W, H, R, G, B, box) {
+  function matte(src, d, fw, fh, fg, W, H, R, G, B, box, feather = 0) {
     const N = W * H, [bx0, by0, bx1, by1] = box;
     const up = Math.max(1, Math.round(W / fw)); // a picture worked out bigger than it is: its pixels' size
     // Each side's color nearby (normalized box averages of the mask's two sides).
@@ -446,6 +454,27 @@
         if (a > 0.02 && a < 1) { // the subject's own color, without the background mixed in
           d[o] = clamp(br + (src[o] - br) / a); d[o + 1] = clamp(bgg + (src[o + 1] - bgg) / a); d[o + 2] = clamp(bb + (src[o + 2] - bb) / a);
         }
+      }
+    }
+    if (!feather) return;
+    // A photo's outline, feathered: the alpha blurred a little, so the grain along it doesn't
+    // leave it jagged or bitten. It only ever adds (a thin part, like an antenna, keeps all of
+    // its strength). A pixel that was clear and now shows a little takes the subject's color
+    // nearby (not the background's it holds).
+    const bw = bx1 - bx0, bh = by1 - by0, al = new Float32Array(bw * bh);
+    for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) al[y * bw + x] = d[((y + by0) * fw + x + bx0) * 4 + 3];
+    const was = al.slice();
+    blur(al, bw, bh, feather);
+    for (let y = 0; y < bh; y++) {
+      const sy = Math.min(H - 1.001, Math.max(0, (y + by0 + 0.5) * H / fh - 0.5));
+      for (let x = 0; x < bw; x++) {
+        const k = y * bw + x, o = ((y + by0) * fw + x + bx0) * 4, a = Math.min(src[o + 3], Math.max(was[k], Math.round(al[k])));
+        if (a === was[k]) continue;
+        if (!was[k] && a) {
+          const sx = Math.min(W - 1.001, Math.max(0, (x + bx0 + 0.5) * W / fw - 0.5));
+          d[o] = sample(F.r, sx, sy); d[o + 1] = sample(F.g, sx, sy); d[o + 2] = sample(F.b, sx, sy);
+        }
+        d[o + 3] = a;
       }
     }
   }
