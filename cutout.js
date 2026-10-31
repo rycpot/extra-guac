@@ -145,12 +145,12 @@
     if (flat) holes(F, fg, model, sigL, sigC);
 
     F.T = T;
-    // A photo's outline is feathered; a drawing's (flat fills: most neighbors inside it the
-    // same) stays crisp.
+    // A photo's outline is refitted to the photo's own edges (see matte); a drawing's (flat
+    // fills: most neighbors inside it the same) stays as it is.
     const inside = [];
     for (let i = 0; i < N - 1; i += 3) if (fg[i] && fg[i + 1] && (i + 1) % W) inside.push(Math.abs(eL[i + 1] - eL[i]) + Math.abs(eR[i + 1] - eR[i]) + Math.abs(eG[i + 1] - eG[i]));
     const grain = median(inside);
-    F.feather = grain > GRAINY ? FEATHER(F.fw, F.fh) : 0;
+    F.feather = grain > GRAINY ? 1 : 0;
     let bgN = 0, fgN = 0, rim = 0;
     for (let i = 0; i < N; i++) {
       if (fg[i]) { fgN++; const x = i % W; if ((x > 0 && !fg[i - 1]) || (x < W - 1 && !fg[i + 1]) || (i >= W && !fg[i - W]) || (i < N - W && !fg[i + W])) rim++; } else bgN++;
@@ -350,7 +350,6 @@
   // copy) that's grain, not an outline.
   const NEAR = 14, NEAR_STEP = 2;
   const GRAINY = 0.03;
-  const FEATHER = (fw, fh) => Math.max(1, Math.round(Math.max(fw, fh) / 400)); // a photo's outline's blur, in its pixels
   function gradient(F) {
     const { W, H, N, R, G, B } = F, out = new Float32Array(N);
     const d = (i, j) => Math.hypot(R[i] - R[j], G[i] - G[j], B[i] - B[j]);
@@ -457,26 +456,69 @@
       }
     }
     if (!feather) return;
-    // A photo's outline, feathered: the alpha blurred a little, so the grain along it doesn't
-    // leave it jagged or bitten. It only ever adds (a thin part, like an antenna, keeps all of
-    // its strength). A pixel that was clear and now shows a little takes the subject's color
-    // nearby (not the background's it holds).
-    const bw = bx1 - bx0, bh = by1 - by0, al = new Float32Array(bw * bh);
-    for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) al[y * bw + x] = d[((y + by0) * fw + x + bx0) * 4 + 3];
-    const was = al.slice();
-    blur(al, bw, bh, feather);
-    for (let y = 0; y < bh; y++) {
-      const sy = Math.min(H - 1.001, Math.max(0, (y + by0 + 0.5) * H / fh - 0.5));
-      for (let x = 0; x < bw; x++) {
-        const k = y * bw + x, o = ((y + by0) * fw + x + bx0) * 4, a = Math.min(src[o + 3], Math.max(was[k], Math.round(al[k])));
-        if (a === was[k]) continue;
-        if (!was[k] && a) {
-          const sx = Math.min(W - 1.001, Math.max(0, (x + bx0 + 0.5) * W / fw - 0.5));
-          d[o] = sample(F.r, sx, sy); d[o + 1] = sample(F.g, sx, sy); d[o + 2] = sample(F.b, sx, sy);
-        }
+    // A photo's outline follows the photo's own edges: the mask is refitted, a few pixels at a
+    // time, as a blend of the picture's colors there (a guided filter), so the grain along an
+    // edge doesn't leave it jagged or bitten. That would thin out a part only a few pixels wide
+    // (an antenna, a stalk): away from the wide parts, the alpha worked out above stays where
+    // it's stronger.
+    const r = Math.max(2, Math.round(Math.max(W, H) / 200)), q = guided(fg, R, G, B, W, H, r, 6.5), thin = thinParts(fg, W, H, r + 1);
+    for (let y = by0; y < by1; y++) {
+      const sy = Math.min(H - 1.001, Math.max(0, (y + 0.5) * H / fh - 0.5));
+      for (let x = bx0; x < bx1; x++) {
+        const sx = Math.min(W - 1.001, Math.max(0, (x + 0.5) * W / fw - 0.5)), o = (y * fw + x) * 4, was = d[o + 3];
+        let a = Math.round(sample(q, sx, sy) * src[o + 3]);
+        if (sample(thin, sx, sy) > 0.5) a = Math.max(a, was);
+        if (a === was) continue;
         d[o + 3] = a;
+        if (!a) continue;
+        // Its own color, without the background mixed in; one that was clear (it holds the
+        // background's color) takes the subject's nearby. Where a side has nothing nearby (its
+        // average would be black), the pixel keeps its own color.
+        const t = a / src[o + 3];
+        if (!was && sample(F.w, sx, sy) > 0.05) { d[o] = sample(F.r, sx, sy); d[o + 1] = sample(F.g, sx, sy); d[o + 2] = sample(F.b, sx, sy); }
+        else if (was && t < 1 && sample(Bk.w, sx, sy) > 0.05) {
+          const u = Math.max(0.3, t), br = sample(Bk.r, sx, sy), bgg = sample(Bk.g, sx, sy), bb = sample(Bk.b, sx, sy);
+          d[o] = clamp(br + (src[o] - br) / u); d[o + 1] = clamp(bgg + (src[o + 1] - bgg) / u); d[o + 2] = clamp(bb + (src[o + 2] - bb) / u);
+        } else { d[o] = src[o]; d[o + 1] = src[o + 1]; d[o + 2] = src[o + 2]; }
       }
     }
+  }
+  // Guided filter (color guide): the mask, refitted in each (2r+1)² window as a linear blend of
+  // the three channels there, then averaged; eps (in channel steps², 0-255) keeps flat parts
+  // from following their grain. Stretched (0.2 to 0.8 becomes 0 to 1) so the outline is crisp.
+  function guided(fg, R, G, B, W, H, r, eps) {
+    const N = W * H, mean = (a) => { const c = Float32Array.from(a); blur(c, W, H, r); return c; };
+    const p = Float32Array.from(fg), mp = mean(p), mr = mean(R), mg = mean(G), mb = mean(B);
+    const prod = (a, b) => { const c = new Float32Array(N); for (let i = 0; i < N; i++) c[i] = a[i] * b[i]; return mean(c); };
+    const pr = prod(R, p), pg = prod(G, p), pb = prod(B, p);
+    const rr = prod(R, R), rg = prod(R, G), rb = prod(R, B), gg = prod(G, G), gb = prod(G, B), bb = prod(B, B);
+    const ar = new Float32Array(N), ag = new Float32Array(N), ab = new Float32Array(N), bo = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const cr = pr[i] - mr[i] * mp[i], cg = pg[i] - mg[i] * mp[i], cb = pb[i] - mb[i] * mp[i];
+      const a11 = rr[i] - mr[i] * mr[i] + eps, a12 = rg[i] - mr[i] * mg[i], a13 = rb[i] - mr[i] * mb[i];
+      const a22 = gg[i] - mg[i] * mg[i] + eps, a23 = gb[i] - mg[i] * mb[i], a33 = bb[i] - mb[i] * mb[i] + eps;
+      // The symmetric 3×3 solved by its adjugate.
+      const i11 = a22 * a33 - a23 * a23, i12 = a13 * a23 - a12 * a33, i13 = a12 * a23 - a13 * a22;
+      const i22 = a11 * a33 - a13 * a13, i23 = a12 * a13 - a11 * a23, i33 = a11 * a22 - a12 * a12;
+      const det = a11 * i11 + a12 * i12 + a13 * i13 || 1e-9;
+      ar[i] = (i11 * cr + i12 * cg + i13 * cb) / det; ag[i] = (i12 * cr + i22 * cg + i23 * cb) / det; ab[i] = (i13 * cr + i23 * cg + i33 * cb) / det;
+      bo[i] = mp[i] - ar[i] * mr[i] - ag[i] * mg[i] - ab[i] * mb[i];
+    }
+    for (const a of [ar, ag, ab, bo]) blur(a, W, H, r);
+    const q = new Float32Array(N);
+    for (let i = 0; i < N; i++) q[i] = Math.min(1, Math.max(0, (ar[i] * R[i] + ag[i] * G[i] + ab[i] * B[i] + bo[i] - 0.2) / 0.6));
+    return q;
+  }
+  // Away from the mask's wide parts (more than reach pixels from what an opening, 5×5, keeps):
+  // what's there is only a few pixels wide (an antenna, a stalk, a strand) or nothing.
+  function thinParts(fg, W, H, reach) {
+    const N = W * H, op = Float32Array.from(fg);
+    blur(op, W, H, 2);
+    for (let i = 0; i < N; i++) op[i] = op[i] > 0.999 ? 1 : 0; // eroded...
+    blur(op, W, H, 2 + reach); // ...and grown back, and on by reach
+    const out = new Float32Array(N);
+    for (let i = 0; i < N; i++) out[i] = op[i] < 0.001 ? 1 : 0;
+    return out;
   }
   const clamp = (v) => (v < 0 ? 0 : v > 255 ? 255 : v);
 

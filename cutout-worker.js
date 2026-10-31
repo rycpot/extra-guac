@@ -37,7 +37,7 @@ self.onmessage = async ({ data: m }) => {
         const base = s?.base || null;
         const F = EGCutout.prepare(m.bitmap, base);
         if (s?.F.T) F.T = s.F.T; // the picture's own limits, learned when its background was removed
-        if (s?.F.feather) F.feather = s.F.feather; // and whether its outline is feathered (a photo)
+        if (s?.F.feather) F.feather = s.F.feather; // and whether its outline follows its edges (a photo)
         s = { F, fg: EGCutout.fromAlpha(F), base: base || new Uint8ClampedArray(F.orig), out: new ImageData(new Uint8ClampedArray(F.orig), F.fw, F.fh) };
         EGCutout.render(s.F, s.fg, s.out);
         parts.set(m.key, s);
