@@ -201,7 +201,10 @@ const saveItems = async (items) => {
   return files;
 };
 
-const MAX_PART_HEIGHT = 16000; // device pixels per image; Chrome canvases fail beyond ~32k
+// Device pixels per image. Chrome refuses a canvas taller than 32,767 px or bigger than
+// 268,435,456 px in all, so a very wide screen gets shorter parts.
+const MAX_PART_HEIGHT = 30000;
+const MAX_CANVAS_AREA = 268435456;
 const MAX_SCREENS = 80; // guards against infinite-scroll pages
 const CAPTURE_GAP_MS = 550; // Chrome allows ~2 captureVisibleTab calls per second
 
@@ -387,11 +390,12 @@ async function captureFullPage(tab) {
     : Math.round((last.y + page.viewHeight) * scale);
   const width = slices[0].bmp.width;
   const items = [];
-  const parts = Math.ceil(total / MAX_PART_HEIGHT);
+  const partH = Math.min(MAX_PART_HEIGHT, Math.floor(MAX_CANVAS_AREA / width));
+  const parts = Math.ceil(total / partH);
   let fill = null; // the row stretched down below the main panel (made once, if needed)
   for (let p = 0; p < parts; p++) {
-    const top = p * MAX_PART_HEIGHT;
-    const canvas = new OffscreenCanvas(width, Math.min(MAX_PART_HEIGHT, total - top));
+    const top = p * partH;
+    const canvas = new OffscreenCanvas(width, Math.min(partH, total - top));
     const ctx = canvas.getContext("2d");
     if (box) {
       ctx.fillStyle = "#fff"; // never transparent (JPEG would turn that black)
