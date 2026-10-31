@@ -1148,7 +1148,7 @@
 
     // ---- Keyboard ------------------------------------------------------------------------
     addEventListener("keydown", (e) => {
-      if (textEd || e.target.closest?.("input, textarea, [contenteditable]")) return;
+      if (textEd || e.target.closest?.("input, textarea, [contenteditable], dialog")) return; // (a question in the page: its keys are its own)
       const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
       if (mod && k === "z") { e.preventDefault(); return e.shiftKey ? redo() : undo(); }
       if (mod && k === "y") { e.preventDefault(); return redo(); }

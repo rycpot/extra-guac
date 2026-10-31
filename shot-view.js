@@ -65,6 +65,26 @@
       tell(`${item.name} opened in a new tab`, false);
     } catch (err) { tell(err.message); }
   }
+  // A question in the page, with plainly worded buttons. Resolves true for the first one;
+  // Esc or the second is false.
+  function ask(title, text, yes, no) {
+    return new Promise((resolve) => {
+      const d = document.createElement("dialog");
+      d.className = "ask";
+      d.innerHTML = `<h3></h3><p></p><div class="ask-btns"><button type="button" class="tbtn no"></button><button type="button" class="tbtn primary yes"></button></div>`;
+      d.querySelector("h3").textContent = title;
+      d.querySelector("p").textContent = text;
+      d.querySelector(".yes").textContent = yes;
+      d.querySelector(".no").textContent = no;
+      const done = (v) => { d.close(); d.remove(); resolve(v); };
+      d.querySelector(".yes").onclick = () => done(true);
+      d.querySelector(".no").onclick = () => done(false);
+      d.addEventListener("cancel", (e) => { e.preventDefault(); done(false); });
+      document.body.append(d);
+      d.showModal();
+      d.querySelector(".yes").focus();
+    });
+  }
   // Messages show in the drop box while it's there, else in the bottom bar.
   const tell = (text, bad = true) => {
     const note = document.querySelector(".drop .note");
@@ -150,8 +170,10 @@
   image = editor;
   document.body.classList.add("has-image");
   $("closeGrp").hidden = false;
-  $("closeImage").onclick = () => {
-    if (editor.edited() && !confirm("Close this image? Your marks on it haven't been saved.")) return;
+  $("closeImage").onclick = async () => {
+    // Asked in the page: after the browser's own confirm(), Chrome left the keyboard outside
+    // the page, so pasting the next image needed a click first.
+    if (editor.edited() && !(await ask("Close this image?", "Your marks on it haven't been saved.", "Close", "Keep editing"))) return;
     leavingOk = true;
     location.replace("#annotate");
     location.reload();
