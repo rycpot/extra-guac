@@ -77,6 +77,7 @@
     const { W, H, N, eL, eR, eG, logL, cr, cg } = F;
     let samples = borderSeeds(W, H, logL, cr, cg);
     const rl = new Float32Array(N), rc = new Float32Array(N); // brightness (log) and color off the model
+    const grad = gradient(F), near = new Float32Array(N); // how far off the background, in channel steps
     const fit = () => {
       let model;
       for (let round = 0; round < 4; round++) {
@@ -88,6 +89,7 @@
         samples = keep;
       }
       fillResiduals(model, W, H, logL, cr, cg, rl, rc);
+      fillNear(model, F, grad, near);
       return model;
     };
     let model = fit();
@@ -114,7 +116,7 @@
     // further than the edge did), and grown again, until it stops finding more.
     let bg, found = 0;
     for (let pass = 0; pass < 4; pass++) {
-      bg = grow(seeds, T, W, H, eL, eR, eG, rl, rc);
+      bg = grow(seeds, T, W, H, eL, eR, eG, rl, rc, near, F);
       let n = 0;
       for (let i = 0; i < N; i++) n += bg[i];
       if (pass && n < found * 1.01) break;
@@ -335,21 +337,53 @@
     }
   }
 
+  // Color in plain channel steps, a second chance next to color shares (which in low light
+  // swing on a step or two of each channel): NEAR is how far a pixel may be from the
+  // background's color there, counting a sharp change around it and being near the middle
+  // (where subjects are) against it; NEAR_STEP is a step between neighbors (on the smoothed
+  // copy) that's grain, not an outline.
+  const NEAR = 14, NEAR_STEP = 2;
+  function gradient(F) {
+    const { W, H, N, R, G, B } = F, out = new Float32Array(N);
+    const d = (i, j) => Math.hypot(R[i] - R[j], G[i] - G[j], B[i] - B[j]);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = y * W + x, l = y * W + Math.max(0, x - 2), r = y * W + Math.min(W - 1, x + 2);
+      const t = Math.max(0, y - 2) * W + x, b = Math.min(H - 1, y + 2) * W + x;
+      out[i] = Math.hypot(d(l, r), d(t, b)) / 2;
+    }
+    return out;
+  }
+  function fillNear(m, F, grad, out) {
+    const { W, H, R, G, B } = F, K = 8;
+    for (let y = 0, i = 0; y < H; y++) {
+      const v = (2 * y) / (H - 1) - 1;
+      for (let x = 0; x < W; x++, i++) {
+        const u = (2 * x) / (W - 1) - 1, f = [1, u, v, u * u, u * v, v * v];
+        let l = 0, r = 0, g = 0;
+        for (let a = 0; a < 6; a++) { l += m.l[a] * f[a]; r += m.r[a] * f[a]; g += m.g[a] * f[a]; }
+        const bs = 3 * Math.exp(l) - 3, b0 = r * (bs + 3 * K) - K, b1 = g * (bs + 3 * K) - K, b2 = bs - b0 - b1;
+        out[i] = Math.hypot(R[i] - b0, G[i] - b1, B[i] - b2) + 0.45 * grad[i] + 0.52 * NEAR * Math.exp(-(u * u + v * v) * 3.2);
+      }
+    }
+  }
+
   const shadeLeeway = (T, l) => Math.min(0.12, T.chroma * (1 + 6 * Math.max(0, -l)));
 
   // Grows the background from the seeds: a neighbor joins if its color is the background's
   // there, its brightness is the background's (or a shadow of it), and neither brightness nor
   // color changes sharply between them.
-  function grow(seeds, T, W, H, logL, cr, cg, rl, rc) {
+  function grow(seeds, T, W, H, logL, cr, cg, rl, rc, near, F) {
+    const { R, G, B } = F;
     const N = W * H, bg = new Uint8Array(N), q = new Int32Array(N);
     let head = 0, tail = 0;
     // The sharp-change test is what keeps it out of a dark subject.
-    const ok = (i) => rl[i] <= T.up && rl[i] >= T.down && rc[i] <= shadeLeeway(T, rl[i]);
+    // Its color: as a share of its light, or else in plain channel steps (NEAR).
+    const ok = (i) => rl[i] <= T.up && rl[i] >= T.down && (rc[i] <= shadeLeeway(T, rl[i]) || near[i] <= NEAR);
     for (const i of seeds) if (!bg[i] && ok(i)) { bg[i] = 1; q[tail++] = i; }
     const tryN = (i, j) => {
       if (bg[j] || !ok(j)) return;
       if (Math.abs(logL[j] - logL[i]) > T.step) return;
-      if (Math.abs(cr[j] - cr[i]) + Math.abs(cg[j] - cg[i]) > T.cstep) return;
+      if (Math.abs(cr[j] - cr[i]) + Math.abs(cg[j] - cg[i]) > T.cstep && Math.hypot(R[j] - R[i], G[j] - G[i], B[j] - B[i]) > NEAR_STEP) return;
       bg[j] = 1; q[tail++] = j;
     };
     while (head < tail) {
