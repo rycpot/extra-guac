@@ -84,4 +84,5 @@ Download the zip from [Releases](../../releases) and unzip it, then:
 
 - Privacy: everything stays in your browser unless a tool you use needs an outside service, and then it goes only there. See [PRIVACY.md](PRIVACY.md).
 - The interface font is [Inter](https://github.com/rsms/inter) (SIL Open Font License), trimmed to the characters Extra Guac shows (`tools/inter-trim.py`).
+- Remove background uses a small model for photos: U-2-Net's small model ([U-2-Net](https://github.com/xuebinqin/U-2-Net) by Xuebin Qin and others, Apache License 2.0), repacked by `tools/u2pack.py`. It's downloaded from the website the first time it's needed and runs on the graphics card; see [models/](models/).
 - License: [0BSD](LICENSE), use it for anything. The bundled libraries keep their own licenses, next to them in `vendor/` and `beam/lib/`.

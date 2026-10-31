@@ -2,12 +2,15 @@
 // Each part of the shot keeps what was worked out about it, so clicks of the clean-up tool
 // don't start over. Messages ({ id, ... }; answered with the same id):
 //   auto  { key, bitmap }             the background removed: { blob, quality } or { already }
+//         (on a photo, the model, cutout-model.js, may take away part of what cutout.js kept:
+//         then model: true; { note: "model" } is sent first, with the same id, when its file
+//         has to be downloaded)
 //   wand  { key, x, y, mode, bitmap? } a click (erase / restore): { blob }, { none }, or
 //         { stale } when it hasn't seen this part (it's asked again with bitmap)
 //         bitmap: the part as it shows now, when it's changed since this worker last saw it
 //         (undo, redo, a blur): what's see-through in it is taken from there.
 //   drop  { key }                     forget a part
-importScripts("cutout.js");
+importScripts("cutout.js", "cutout-net.js", "cutout-model.js");
 
 const parts = new Map(); // key → { F, fg, base, out }
 
@@ -25,10 +28,17 @@ self.onmessage = async ({ data: m }) => {
       const base = parts.get(m.key)?.base || null;
       const F = EGCutout.prepare(m.bitmap, base), r = EGCutout.autoMask(F);
       if (r.already) return reply({ already: true });
+      // On a photo, the model takes away what's well away from its subject (a shadow, a
+      // haze), when it agrees with cutout.js's; the outline is still drawn by cutout.js.
+      let model = false;
+      if (F.feather) {
+        const fg = await EGCutoutModel.subject(F, r.fg, () => self.postMessage({ id: m.id, note: "model" }), base ? null : m.bitmap);
+        if (fg) { r.fg = fg; model = true; }
+      }
       const s = { F, fg: r.fg, base: base || new Uint8ClampedArray(F.orig), out: new ImageData(new Uint8ClampedArray(F.orig), F.fw, F.fh) };
       EGCutout.render(F, s.fg, s.out);
       parts.set(m.key, s);
-      return reply({ blob: await png(s), quality: r.quality });
+      return reply({ blob: await png(s), quality: r.quality, model });
     }
     if (m.type === "wand") {
       let s = parts.get(m.key);

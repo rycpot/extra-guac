@@ -800,7 +800,10 @@
     function cutAsk(msg, transfer = []) {
       if (!cutWorker) {
         cutWorker = new Worker("cutout-worker.js");
-        cutWorker.onmessage = ({ data }) => { const w = cutWaits.get(data.id); cutWaits.delete(data.id); w?.(data); };
+        cutWorker.onmessage = ({ data }) => {
+          if (data.note === "model") return say("Downloading the photo model, just this once (2.3 MB)…");
+          const w = cutWaits.get(data.id); cutWaits.delete(data.id); w?.(data);
+        };
       }
       const id = ++cutSeq;
       return new Promise((resolve) => { cutWaits.set(id, resolve); cutWorker.postMessage({ ...msg, id }, transfer); });
