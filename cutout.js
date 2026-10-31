@@ -265,6 +265,7 @@
       like[p] = Math.abs(L[p] - l) <= tl && Math.hypot(cR[p] - r, cG[p] - g) <= tc ? 1 : 0;
     }
     const gone = new Uint8Array(n), q = new Int32Array(n), D = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    const reach = Math.max(2, Math.round(Math.min(fw, fh) / 100));
     let tail = 0;
     for (let s = 0; s < n; s++) {
       if (!like[s] || gone[s]) continue;
@@ -279,10 +280,19 @@
           const j = ny * fw + nx;
           if (like[j]) { if (!gone[j]) { gone[j] = 1; q[tail++] = j; } continue; }
           if (!on[j]) continue; // the background found already
-          // Across the outline, two pixels on: past any blending.
-          rim++;
-          const fx = Math.min(fw - 1, Math.max(0, x + 2 * dx)), fy = Math.min(fh - 1, Math.max(0, y + 2 * dy)), k = fy * fw + fx;
-          if (Math.abs(L[k] - L[i]) > 0.25 || Math.abs(cR[k] - cR[i]) + Math.abs(cG[k] - cG[i]) > 0.05) crisp++;
+          // Across the outline, up to a few pixels on: past any blending, and past the faint
+          // ripples a saved (compressed) picture leaves beside an outline. A speck of that grain
+          // inside the patch (background again just past it) isn't an outline at all.
+          let end = 0;
+          for (let t = 1; t <= reach && !end; t++) {
+            const fx = x + t * dx, fy = y + t * dy;
+            if (fx < 0 || fy < 0 || fx >= fw || fy >= fh) break;
+            const k = fy * fw + fx;
+            if (like[k] || !on[k]) end = 2;
+            else if (Math.abs(L[k] - L[i]) > 0.25 || Math.abs(cR[k] - cR[i]) + Math.abs(cG[k] - cG[i]) > 0.05) end = 1;
+          }
+          if (end !== 2) rim++;
+          if (end === 1) crisp++;
         }
       }
       if (crisp < 0.9 * rim) { for (let m = from; m < tail; m++) gone[q[m]] = 2; tail = from; } // kept
@@ -290,6 +300,7 @@
     for (let m = 0; m < tail; m++) gone[q[m]] = 1;
     if (!tail) return;
     // The blended pixels around: nearer the background's color than the subject's beside them.
+    const grain = new Uint8Array(n); // steps of grain from the patch
     let head = 0;
     while (head < tail) {
       const i = q[head++], x = i % fw, y = (i / fw) | 0;
@@ -305,7 +316,9 @@
           if (d > far) { far = d; f0 = orig[u]; f1 = orig[u + 1]; f2 = orig[u + 2]; }
         }
         const v0 = f0 - b0, v1 = f1 - b1, v2 = f2 - b2, len = v0 * v0 + v1 * v1 + v2 * v2;
-        if (len < 900) continue;
+        // Nothing nearby is far from the background: the grain of a saved picture, it goes too,
+        // up to a few pixels from the patch (a faint part of the subject further on stays).
+        if (len < 900) { if (grain[i] < reach) { grain[j] = grain[i] + 1; gone[j] = 1; q[tail++] = j; } continue; }
         const t = ((orig[o] - b0) * v0 + (orig[o + 1] - b1) * v1 + (orig[o + 2] - b2) * v2) / len;
         if (t < 0.5) { gone[j] = 1; q[tail++] = j; }
       }
