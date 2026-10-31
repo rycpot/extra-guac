@@ -1,6 +1,6 @@
 # Extra Guac privacy policy
 
-_Last updated: October 25, 2026_
+_Last updated: October 31, 2026_
 
 Extra Guac is a browser extension with tools for the page you're on: screenshots, privacy blur, dark mode, auto-refresh, word highlighting, clipboard history, image saving, sending files between your devices (Beam) and similar tools. This policy covers what it handles and where that goes.
 
