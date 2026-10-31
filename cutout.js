@@ -300,7 +300,7 @@
     for (let m = 0; m < tail; m++) gone[q[m]] = 1;
     if (!tail) return;
     // The blended pixels around: nearer the background's color than the subject's beside them.
-    const grain = new Uint8Array(n); // steps of grain from the patch
+    const step = new Uint8Array(n); // steps from the patch
     let head = 0;
     while (head < tail) {
       const i = q[head++], x = i % fw, y = (i / fw) | 0;
@@ -316,11 +316,15 @@
           if (d > far) { far = d; f0 = orig[u]; f1 = orig[u + 1]; f2 = orig[u + 2]; }
         }
         const v0 = f0 - b0, v1 = f1 - b1, v2 = f2 - b2, len = v0 * v0 + v1 * v1 + v2 * v2;
-        // Nothing nearby is far from the background: the grain of a saved picture, it goes too,
-        // up to a few pixels from the patch (a faint part of the subject further on stays).
-        if (len < 900) { if (grain[i] < reach) { grain[j] = grain[i] + 1; gone[j] = 1; q[tail++] = j; } continue; }
-        const t = ((orig[o] - b0) * v0 + (orig[o + 1] - b1) * v1 + (orig[o + 2] - b2) * v2) / len;
-        if (t < 0.5) { gone[j] = 1; q[tail++] = j; }
+        // Nothing nearby is far from the background: the grain of a saved picture, it goes too.
+        if (len >= 900) {
+          const t = ((orig[o] - b0) * v0 + (orig[o + 1] - b1) * v1 + (orig[o + 2] - b2) * v2) / len;
+          if (t >= 0.5) continue;
+        }
+        // Blending and ripples are only a few pixels wide: further on, a dark or speckled part
+        // of the subject (its specks taken for its color) stays.
+        if (step[i] >= reach) continue;
+        step[j] = step[i] + 1; gone[j] = 1; q[tail++] = j;
       }
     }
     for (let m = 0; m < tail; m++) {
