@@ -843,11 +843,13 @@
       } catch (err) { busy(false); return say(`Couldn't remove the background: ${err.message}`, true); }
       busy(false);
       if (!done) return say(already ? "Its background is see-through already" : "There was no background to remove");
-      $("cleanBtn").hidden = false;
+      if ($("cleanBtn").getAttribute("aria-disabled") === "true") {
+        $("cleanBtn").setAttribute("aria-disabled", "false");
+        $("cleanBtn").title = "Clean up: click leftover background to remove it (Alt-click to bring back)";
+      }
       commit();
-      setTool("clean");
       wandTip();
-      say(rough ? "Background removed, roughly: it looks busy · click what's left of it to clean up" : "Background removed · anything left? Click it to clean it up");
+      say(rough ? "Background removed, roughly: it looks busy · pick the magic wand to clean up what's left" : "Background removed · anything left? Pick the magic wand to clean it up");
     }
     async function cleanClick(p, pt, back) {
       if (cutting) return;
@@ -869,7 +871,7 @@
       } catch (err) { say(`Couldn't clean up: ${err.message}`, true); }
       finally { busy(false); }
     }
-    // A note under the wand for 2 s, then it fades: the wand cleans up leftovers by hand.
+    // A note under the wand for 6 s, then it fades: the wand cleans up leftovers by hand.
     // Going on (a click anywhere, a resize) takes it away sooner.
     let tipGone = null;
     function wandTip() {
@@ -885,7 +887,7 @@
       tip.style.top = `${b.bottom + 9}px`;
       tip.style.setProperty("--x", `${Math.max(12, Math.min(w - 12, mid - left))}px`);
       const early = () => tipGone?.();
-      const timer = setTimeout(early, 2000);
+      const timer = setTimeout(early, 6000);
       tipGone = (now) => {
         tipGone = null;
         clearTimeout(timer);
@@ -913,7 +915,8 @@
     // ---- Header: tools, color, width, and what the tool needs ---------------------------
     const toolBtns = [...document.querySelectorAll(".b[data-tool]")];
     // Clicking the tool that's on switches it off (then clicks only select marks).
-    for (const b of toolBtns) b.onclick = () => setTool(tool === b.dataset.tool ? "none" : b.dataset.tool);
+    // The clean up wand stays in its spot, grayed out until remove background has been used.
+    for (const b of toolBtns) b.onclick = () => b.getAttribute("aria-disabled") !== "true" && setTool(tool === b.dataset.tool ? "none" : b.dataset.tool);
     // The highlighter's pointer: an outlined capsule as tall as the stroke it will draw.
     function markerCursor() {
       if (tool !== "marker" || !parts.length) return document.body.style.removeProperty("--marker-cursor");
