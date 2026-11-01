@@ -1036,7 +1036,8 @@
     const ctx = $("ctx");
     function paintBar() {
       const o = selected() || textEd?.o;
-      const marks = tool !== "crop" && tool !== "blur" && tool !== "clean";
+      // Color and width stay put while the magic wand is on (only crop and blur set them aside).
+      const marks = tool !== "crop" && tool !== "blur";
       $("colorWrap").hidden = !marks;
       $("colorNow").style.setProperty("--c", o?.color ?? color);
       // Widths for lines, shapes and dots; text is sized by dragging its corners, and a
