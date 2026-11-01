@@ -143,6 +143,15 @@
     .status { flex-shrink: 0; max-width: 75%; color: rgba(255,255,255,.75) !important; overflow: hidden; text-overflow: ellipsis; }
     .status.bad { color: #ff8a80 !important; }
     .status a { color: #8ab4ff; }
+    /* After remove background: a short note under the clean up wand, over the picture (the
+       layout never moves), gone by itself. */
+    .tip { position: fixed; z-index: 20; max-width: calc(100vw - 16px); box-sizing: border-box; display: flex; padding: 7px 11px; border-radius: 9px; background: #0a84ff; color: #fff;
+      font-size: 12.5px; font-weight: 500; line-height: 1.35; box-shadow: 0 6px 18px rgba(0,0,0,.4); pointer-events: none;
+      animation: tip-in .18s ease-out; transition: opacity .4s; }
+    .tip::before { content: ""; position: absolute; top: -5px; left: var(--x, 50%); width: 10px; height: 10px; margin-left: -5px; background: inherit; transform: rotate(45deg); border-radius: 2px; }
+    .tip span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .tip.out { opacity: 0; }
+    @keyframes tip-in { from { opacity: 0; transform: translateY(-4px); } }
   </style>
 </head>
 <body data-tool="none">

@@ -846,6 +846,7 @@
       $("cleanBtn").hidden = false;
       commit();
       setTool("clean");
+      wandTip();
       say(rough ? "Background removed, roughly: it looks busy · click what's left of it to clean up" : "Background removed · anything left? Click it to clean it up");
     }
     async function cleanClick(p, pt, back) {
@@ -867,6 +868,35 @@
         say(cleanMode === "erase" ? "Taken away · undo puts it back" : "Brought back");
       } catch (err) { say(`Couldn't clean up: ${err.message}`, true); }
       finally { busy(false); }
+    }
+    // A note under the wand for 2 s, then it fades: the wand cleans up leftovers by hand.
+    // Going on (a click anywhere, a resize) takes it away sooner.
+    let tipGone = null;
+    function wandTip() {
+      tipGone?.(true);
+      const b = $("cleanBtn").getBoundingClientRect();
+      if (!b.width) return;
+      const tip = Object.assign(document.createElement("div"), { className: "tip", role: "status" });
+      tip.append(Object.assign(document.createElement("span"), { textContent: "Tip: use the magic wand to clean up leftovers by hand" }));
+      document.body.append(tip);
+      const mid = b.left + b.width / 2, w = tip.offsetWidth;
+      const left = Math.max(8, Math.min(innerWidth - w - 8, mid - w / 2));
+      tip.style.left = `${left}px`;
+      tip.style.top = `${b.bottom + 9}px`;
+      tip.style.setProperty("--x", `${Math.max(12, Math.min(w - 12, mid - left))}px`);
+      const early = () => tipGone?.();
+      const timer = setTimeout(early, 2000);
+      tipGone = (now) => {
+        tipGone = null;
+        clearTimeout(timer);
+        removeEventListener("pointerdown", early, true);
+        removeEventListener("resize", early);
+        if (now) return tip.remove();
+        tip.classList.add("out");
+        setTimeout(() => tip.remove(), 400);
+      };
+      addEventListener("pointerdown", early, true);
+      addEventListener("resize", early);
     }
     $("cutBtn").onclick = () => removeBackground();
     // While Alt is held with clean up on, what was taken away shows faintly, to click it back
