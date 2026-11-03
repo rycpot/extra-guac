@@ -1028,7 +1028,8 @@
         ...profileRows, group("Your sites", rows.length), ...(rows.length ? rows : [empty]), add,
         group("Sites on any ending", nameRows.length), ...nameRows, hint, addName)];
       if (full()) kids.push(el("p", { className: "hint", textContent: "Everything goes through the proxy except these, which use your own connection (banks, or sites that block proxies). Webshare's own site always does." }));
-      else if (free()) kids.push(el("div", { className: "px-note" }, "Only these sites use the proxy; everything else uses your own connection, so the data lasts. ", el("b", { textContent: "Every site through the proxy" }), " comes with Webshare's paid plans."));
+      else kids.push(el("p", { className: "hint", textContent: "Other services these sites call (one that looks up your IP address, for example) use your own connection unless they're listed too." }));
+      if (!full() && free()) kids.push(el("div", { className: "px-note" }, "Only these sites use the proxy; everything else uses your own connection, so the data lasts. ", el("b", { textContent: "Every site through the proxy" }), " comes with Webshare's paid plans."));
       return section("", ...kids);
     }
 
@@ -1052,7 +1053,7 @@
         row("location", "pxLocation", " Location: sites that ask where you are get a spot in the proxy's country"),
         row("time", "pxTime", " Time zone: dates and times on the page follow the proxy's time zone"),
         row("language", "pxLanguage", " Language: sites see the proxy country's language, with English after it"),
-        el("p", { className: "hint", textContent: "Only on sites going through a proxy, while they do. The place comes from each proxy's country and city, with a list built into Extra Guac: nothing is looked up. Sites still need your OK to use your location, and get nothing if you say no. A page's background workers keep your own time zone and language." }));
+        el("p", { className: "hint", textContent: "Only on sites going through a proxy, while they do. The place comes from each proxy's country and city, with a list built into Extra Guac: nothing is looked up. Sites still need your OK to use your location, and get nothing if you say no. Most background workers a page starts get the same time zone and language; shared and service workers keep your own." }));
     }
 
     function render() {

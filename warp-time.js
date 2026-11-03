@@ -1,7 +1,7 @@
 // On sites going through a proxy (see warp.js): the page's dates and times follow the proxy's time
 // zone. A date's local hours, days and offset, how it's written out, dates made from local parts or
-// text without a zone, and every date format that doesn't name its own time zone. Scripts in the
-// page's background workers aren't reached and still see the computer's own.
+// text without a zone, and every date format that doesn't name its own time zone. The workers the
+// page starts get the same (warp.js); its service and shared workers aren't reached.
 window.__egWarp?.patches.push((win, { zone }, h) => {
   const D = win.Date, P = D.prototype;
   const DTF = win.Intl.DateTimeFormat;

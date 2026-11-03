@@ -1,11 +1,12 @@
-// On sites going through a proxy (see warp.js): the page sees the proxy country's language, with
+// On sites going through a proxy (see warp.js): the page (and the workers it starts) sees the proxy country's language, with
 // English after it, as the browser's languages and as the default for formatting dates, numbers
 // and lists. The language sites are sent with each request is set to match (bg-proxy.js).
 window.__egWarp?.patches.push((win, { lang }, h) => {
   const base = lang.split("-")[0];
   const languages = Object.freeze([...new Set([lang, base, "en-US", "en"])]);
-  h.getter(win.Navigator.prototype, "language", () => lang);
-  h.getter(win.Navigator.prototype, "languages", () => languages);
+  const nav = (win.Navigator || win.WorkerNavigator).prototype; // a page's, or a worker's
+  h.getter(nav, "language", () => lang);
+  h.getter(nav, "languages", () => languages);
 
   const locale = (locales) => (locales === undefined ? lang : locales);
   for (const name of ["DateTimeFormat", "NumberFormat", "Collator", "PluralRules", "RelativeTimeFormat", "ListFormat", "Segmenter", "DisplayNames", "DurationFormat"]) {
