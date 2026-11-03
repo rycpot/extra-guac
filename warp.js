@@ -196,13 +196,16 @@
         return; // a window of another origin: it isn't the page's to use
       }
       const h = helpers(win);
+      let reach = false; // a patch that workers must have too (time zone, language)
       for (const patch of patches) {
         try {
-          patch(win, place, h);
+          if (patch(win, place, h) === "workers") reach = true;
         } catch {
-          // A browser without that part: the rest still apply.
+          // A browser without that part: the rest still apply (and workers get what this one did).
+          reach = true;
         }
       }
+      if (!reach) return;
       try {
         workers(win, h);
       } catch {
@@ -215,7 +218,9 @@
     // the worker's own address is a blob's, and it's shown the page's instead (located below). Left
     // alone, so they run as before: workers from another origin or a data: address (which can't
     // start from a blob), blobs made outside this window, and pages whose rules forbid blob workers.
-    // Shared workers aren't wrapped: each page would get one of its own, and stop sharing it.
+    // A shared worker is shared by the window's own scripts, but no longer with the site's other
+    // tabs or frames (each window's blob is its own). Service workers are the site's own script
+    // installed in the browser, which nothing here can reach: they keep the computer's own.
     function workers(win, h) {
       const Native = win.Worker;
       if (typeof Native !== "function" || typeof win.Blob !== "function") return;
@@ -236,9 +241,10 @@
       });
       let refused = false; // a page whose rules turned a blob worker away
 
-      const blobURL = (text) => {
+      // keep: for a shared worker, whose start is looked for again (and a module's imports reread).
+      const blobURL = (text, keep = false) => {
         const url = create(new win.Blob([text], { type: "text/javascript" }));
-        later(() => revoke(url), 60e3); // the worker has long since read it
+        if (!keep) later(() => revoke(url), 60e3); // the worker has long since read it
         return url;
       };
       // Whether the page's rules let a blob start a worker, which it only says by turning one away
@@ -260,33 +266,42 @@
         }
       };
       if (win === win.top) probe();
-      const start = (args) => {
+      // A shared worker's start is kept for the page's lifetime, so each new one for the same script
+      // finds the one already running, as it would have.
+      const kept = new Map();
+      const start = (args, shared) => {
         const [script, options] = args;
         const module = options !== null && typeof options === "object" && options.type === "module";
         const own = new win.URL(`${script}`, base || win.document.baseURI);
         const origin = win.origin; // the window's or worker's own (a blank frame's address has none)
+        const keep = `${module}|${own.href}`;
+        // (Before the blob check: a running shared worker is found by its address even after the
+        // page lets go of it, as it would have been.)
+        if (shared && kept.has(keep)) return [kept.get(keep), ...args.slice(1)];
         let from;
         if (own.protocol === "blob:") {
           const blob = blobs.get(own.href);
           if (!blob) return null;
           from = create(blob); // the page's blob, under an address of ours that stays until it's read
-          later(() => revoke(from), 60e3);
+          if (!shared) later(() => revoke(from), 60e3);
         } else if (/^https?:$/.test(own.protocol) && own.origin === origin && origin !== "null") {
           from = own.href;
         } else {
           return null;
         }
         const head = `${kit()}${JSON.stringify(own.href)});\n`;
-        const text = module ? `import ${JSON.stringify(blobURL(head))};\nimport ${JSON.stringify(from)};\n` : `${head}importScripts(${JSON.stringify(from)});\n`;
-        return [blobURL(text), ...args.slice(1)];
+        const text = module ? `import ${JSON.stringify(blobURL(head, shared))};\nimport ${JSON.stringify(from)};\n` : `${head}importScripts(${JSON.stringify(from)});\n`;
+        const url = blobURL(text, shared);
+        if (shared) kept.set(keep, url);
+        return [url, ...args.slice(1)];
       };
-      h.ctor(win, "Worker", (orig, args, target) => {
+      const wrap = (name, shared) => h.ctor(win, name, (orig, args, target) => {
         if (!target) return Reflect.apply(orig, undefined, args); // throws, as it must be called with new
         probe();
         let wrapped = null;
         if (blobsAllowed && !refused) {
           try {
-            wrapped = start(args);
+            wrapped = start(args, shared);
           } catch {
             wrapped = null;
           }
@@ -302,6 +317,8 @@
         }
         return Reflect.construct(orig, args, target);
       });
+      wrap("Worker", false);
+      if (typeof win.SharedWorker === "function") wrap("SharedWorker", true);
     }
 
     // In a worker started above: its address, and what's found from it, are those of the page's

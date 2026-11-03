@@ -22,4 +22,5 @@ window.__egWarp?.patches.push((win, { lang }, h) => {
     for (const name of names) if (proto) h.method(proto, name, (fn) => function (locales, ...rest) { return fn.call(this, locale(locales), ...rest); });
   }
   h.method(win.String.prototype, "localeCompare", (fn) => function (that, locales, ...rest) { return fn.call(this, that, locale(locales), ...rest); });
+  return "workers"; // warp.js: the page's workers need this too
 });

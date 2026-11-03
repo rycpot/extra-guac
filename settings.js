@@ -1053,7 +1053,7 @@
         row("location", "pxLocation", " Location: sites that ask where you are get a spot in the proxy's country"),
         row("time", "pxTime", " Time zone: dates and times on the page follow the proxy's time zone"),
         row("language", "pxLanguage", " Language: sites see the proxy country's language, with English after it"),
-        el("p", { className: "hint", textContent: "Only on sites going through a proxy, while they do. The place comes from each proxy's country and city, with a list built into Extra Guac: nothing is looked up. Sites still need your OK to use your location, and get nothing if you say no. Most background workers a page starts get the same time zone and language; shared and service workers keep your own." }));
+        el("p", { className: "hint", textContent: "Only on sites going through a proxy, while they do. The place comes from each proxy's country and city, with a list built into Extra Guac: nothing is looked up. Sites still need your OK to use your location, and get nothing if you say no. Background workers a page starts get the same time zone and language; service workers (used for offline use and notifications) keep your own." }));
     }
 
     function render() {
