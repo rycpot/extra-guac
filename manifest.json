@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Extra Guac",
-  "version": "352",
+  "version": "353",
   "description": "~30 tools in a side panel: screenshots, privacy blur, dark mode, auto-refresh, highlights, clipboard history, image saving & more.",
   "permissions": [
     "alarms",

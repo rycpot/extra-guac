@@ -255,7 +255,10 @@
         if (probed || base) return;
         probed = true;
         try {
-          const test = Reflect.construct(Native, [blobURL("postMessage(0)")]);
+          // It loads a second (empty) blob the way a worker's start loads the page's script: a
+          // page can allow blob workers but not scripts loaded into them (its script rules, as on
+          // many challenge pages), and then a wrapped worker would never run.
+          const test = Reflect.construct(Native, [blobURL(`importScripts(${JSON.stringify(blobURL(""))});postMessage(0)`)]);
           test.onmessage = () => {
             blobsAllowed = true;
             test.terminate();
